@@ -262,7 +262,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
 
     if (outDir !== "lib") {
       // Create a temporary tsconfig for different output directory
-      const tempTsConfig = {
+      const tempTsConfig: any = {
         extends: "./tsconfig.json",
         compilerOptions: {
           outDir: `./${outDir}`,

@@ -10,8 +10,8 @@ importers:
   .:
     dependencies:
       '@daml/types':
-        specifier: 3.3.0-snapshot.20250502.13767.0.v2fc6c7e2
-        version: 3.3.0-snapshot.20250502.13767.0.v2fc6c7e2
+        specifier: 3.4.8
+        version: 3.4.8
       ajv:
         specifier: ^6.12.6
         version: 6.12.6
@@ -229,8 +229,8 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
-  '@daml/types@3.3.0-snapshot.20250502.13767.0.v2fc6c7e2':
-    resolution: {integrity: sha512-cL1Mum1/u6EZ39ad4frzvSBtyg9BsWI/YscslCHwyzpw1r/Cwt5ShMmoKag+oBa5yFZDPeia6GMV0sSS6Mgh5A==}
+  '@daml/types@3.4.8':
+    resolution: {integrity: sha512-w9rxMJsG8+1T/R15r+FmBJl5Oci29A6KugMmVW6mCY2y5WlcRTs57xiIOHinY8tXgog+D5Lu0uam0yQCqU6prQ==}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -629,6 +629,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/lodash@4.17.20':
+    resolution: {integrity: sha512-H3MHACvFUEiujabxhaI/ImO6gUrd8oOurg7LQtS7mbwIXA/cUqWrvBsaeJ23aZEPk1TAYkurjfMbSELfoCXlGA==}
 
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
@@ -1410,6 +1413,9 @@ packages:
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
 
+  lodash@4.17.21:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
@@ -2047,9 +2053,11 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
-  '@daml/types@3.3.0-snapshot.20250502.13767.0.v2fc6c7e2':
+  '@daml/types@3.4.8':
     dependencies:
       '@mojotech/json-type-validation': 3.1.0
+      '@types/lodash': 4.17.20
+      lodash: 4.17.21
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
@@ -2500,6 +2508,8 @@ snapshots:
       pretty-format: 30.2.0
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/lodash@4.17.20': {}
 
   '@types/node@18.19.130':
     dependencies:
@@ -3514,6 +3524,8 @@ snapshots:
   lodash.isequal@4.5.0: {}
 
   lodash.merge@4.6.2: {}
+
+  lodash@4.17.21: {}
 
   lru-cache@5.1.1:
     dependencies:

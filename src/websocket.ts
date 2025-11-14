@@ -55,6 +55,7 @@ const SCHEMA_MAP: Record<ChannelEndpoint, string> = {
   "/v2/commands/completions": "#/components/schemas/Either_JsCantonError_CompletionStreamResponse",
   "/v2/state/active-contracts":
     "#/components/schemas/Either_JsCantonError_JsGetActiveContractsResponse",
+  "/v2/updates": "#/components/schemas/Either_JsCantonError_JsGetUpdatesResponse",
   "/v2/updates/flats": "#/components/schemas/Either_JsCantonError_JsGetUpdatesResponse",
   "/v2/updates/trees": "#/components/schemas/Either_JsCantonError_JsGetUpdateTreesResponse",
 } as const;
@@ -247,7 +248,7 @@ export class WebSocketClient {
     onClose?: (code: number, reason: string) => void
   ): StopClient {
     return this.stream(
-      "/v2/updates/flats",
+      "/v2/updates",
       request,
       rawMessage =>
         onMessage(parseStreamResponse<components["schemas"]["JsGetUpdatesResponse"]>(rawMessage)),
