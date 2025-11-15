@@ -31,6 +31,7 @@
     "compile": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "watch": "tsc --watch",
     "clean": "rm -rf lib lib-lite src/generated",
+    "prepare": "pnpm build",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "lint": "eslint --ext .ts src/"
   },
