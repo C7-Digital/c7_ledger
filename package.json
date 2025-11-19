@@ -43,6 +43,14 @@
     "isomorphic-ws": "^5.0.0",
     "jose": "^6.0.10"
   },
+  "peerDependencies": {
+    "yaml": "^2.8.1"
+  },
+  "peerDependenciesMeta": {
+    "yaml": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
