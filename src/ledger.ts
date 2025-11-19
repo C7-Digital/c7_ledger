@@ -710,8 +710,8 @@ export class Ledger {
   }
 
   // Choice exercise
-  async exercise<T extends object, C, R>(
-    choice: Choice<T, C, R>,
+  async exercise<T extends object, C, R, K = unknown>(
+    choice: Choice<T, C, R, K>,
     contractId: ContractId<T>,
     argument: C,
     actAs?: Party[]
@@ -894,6 +894,8 @@ export class Ledger {
         ? createPartyIdString(request.partyIdHint)
         : createPartyIdString(""),
       identityProviderId: "default", // Use default identity provider
+      synchronizerId: "", 
+      userId: "", // Do not assign to user.
       ...(request.displayName && {
         localMetadata: {
           resourceVersion: "",

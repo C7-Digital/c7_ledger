@@ -8,7 +8,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readdir, writeFile, mkdir, unlink } from "fs/promises";
+import { readdir, writeFile, mkdir, unlink, copyFile } from "fs/promises";
 import { existsSync } from "fs";
 
 import { brandTypes } from "./enhance-types.js";
@@ -240,7 +240,7 @@ async function createStubSchemaFiles(): Promise<void> {
 export const OPENAPI_SCHEMA = "";
 `;
 
-  const asyncApiStub = `// Stub file for lite build - no schema content  
+  const asyncApiStub = `// Stub file for lite build - no schema content
 export const ASYNCAPI_SCHEMA = "";
 `;
 
@@ -248,6 +248,46 @@ export const ASYNCAPI_SCHEMA = "";
   await writeFile(join(outputDir, "asyncapi-schema.ts"), asyncApiStub, "utf-8");
 
   console.log("✅ Created stub schema files");
+}
+
+/**
+ * Replace validation module with lite version in lib-lite
+ */
+async function useLiteValidation(): Promise<void> {
+  console.log("🔄 Replacing validation with lite version...");
+  const libLiteDir = join(projectRoot, "lib-lite", "src");
+
+  // Copy validation-lite.js over validation.js
+  const liteValidationJs = join(libLiteDir, "validation-lite.js");
+  const validationJs = join(libLiteDir, "validation.js");
+
+  if (existsSync(liteValidationJs)) {
+    await copyFile(liteValidationJs, validationJs);
+    await unlink(liteValidationJs);
+    console.log("✅ Replaced validation.js with lite version");
+  }
+
+  // Copy validation-lite.d.ts over validation.d.ts
+  const liteValidationDts = join(libLiteDir, "validation-lite.d.ts");
+  const validationDts = join(libLiteDir, "validation.d.ts");
+
+  if (existsSync(liteValidationDts)) {
+    await copyFile(liteValidationDts, validationDts);
+    await unlink(liteValidationDts);
+    console.log("✅ Replaced validation.d.ts with lite version");
+  }
+
+  // Also remove validation-lite files from lib/ (they shouldn't be there)
+  const libDir = join(projectRoot, "lib", "src");
+  const libLiteValidationJs = join(libDir, "validation-lite.js");
+  const libLiteValidationDts = join(libDir, "validation-lite.d.ts");
+
+  if (existsSync(libLiteValidationJs)) {
+    await unlink(libLiteValidationJs);
+  }
+  if (existsSync(libLiteValidationDts)) {
+    await unlink(libLiteValidationDts);
+  }
 }
 
 /**
@@ -262,7 +302,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
 
     if (outDir !== "lib") {
       // Create a temporary tsconfig for different output directory
-      const tempTsConfig = {
+      const tempTsConfig: any = {
         extends: "./tsconfig.json",
         compilerOptions: {
           outDir: `./${outDir}`,
@@ -383,6 +423,9 @@ async function build(): Promise<void> {
 
     // Step 7b: Compile lite TypeScript to separate directory
     await compileTypeScript("lib-lite");
+
+    // Step 7c: Replace validation with lite version (no yaml dependency)
+    await useLiteValidation();
 
     // Step 8: Clean up any temporary files
     await cleanupTempFiles();

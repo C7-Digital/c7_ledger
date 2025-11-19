@@ -4,9 +4,8 @@
  * Uses embedded schema strings instead of file system access for browser compatibility.
  */
 import * as Ajv from "ajv";
-import * as yaml from "yaml";
 import { logger } from "./logger";
-// Dynamic imports for tree shaking - schemas only loaded when validation is used
+// Dynamic imports for tree shaking - yaml and schemas only loaded when validation is used
 
 export type ValidationMode = "throwOnError" | "logErrors";
 
@@ -49,11 +48,11 @@ export class SchemaValidator {
       switch (schemaType) {
         case "openapi":
           const { OPENAPI_SCHEMA } = await import("./generated/openapi-schema");
-          this.loadSchemasFromContent(OPENAPI_SCHEMA);
+          await this.loadSchemasFromContent(OPENAPI_SCHEMA);
           break;
         case "asyncapi":
           const { ASYNCAPI_SCHEMA } = await import("./generated/asyncapi-schema");
-          this.loadSchemasFromContent(ASYNCAPI_SCHEMA);
+          await this.loadSchemasFromContent(ASYNCAPI_SCHEMA);
           break;
       }
     } catch (error) {
@@ -115,10 +114,12 @@ export class SchemaValidator {
     }
   }
 
-  private loadSchemasFromContent(yamlContent: string) {
+  private async loadSchemasFromContent(yamlContent: string): Promise<void> {
     if (!this.ajv) return;
 
     try {
+      // Dynamically import yaml only when needed for tree-shaking
+      const yaml = await import("yaml");
       const spec = yaml.parse(yamlContent);
 
       // Load the complete schema document first to enable reference resolution
