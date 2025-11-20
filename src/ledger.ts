@@ -52,7 +52,7 @@ import {
   MultiStream,
   TemplateMapping,
 } from "./types";
-import { matchesPartiallyQualified, partiallyQualified } from "./util";
+import { matchesPartiallyQualified } from "./util";
 import { ValidationMode } from "./validation";
 import * as translate from "./translate";
 import {
@@ -62,7 +62,6 @@ import {
   createUserIdString,
   LedgerString,
   PackageIdString,
-  createPackageIdString,
 } from "./valueTypes";
 
 type Schemas = components["schemas"];
@@ -330,16 +329,15 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     const request = {
       beginExclusive: this.offset,
       verbose: false,
-      filter: {
-        filtersByParty: this.filtersByParty,
-        verbose: true,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: {
+            filtersByParty: this.filtersByParty,
+            verbose: true,
+          },
+          transactionShape: "TRANSACTION_SHAPE_ACS_DELTA" as const,
+        },
       },
-      // At what point do we end up needing this?
-      // updateFormat: {
-      //   includeTransactions: {
-      //     transactionShape: "TRANSACTION_SHAPE_ACS_DELTA",
-      //   },
-      // },
     };
 
     logger.debug(`Starting updates stream from offset ${this.offset}`);
@@ -375,7 +373,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
           this.offset = Math.max(this.offset, event.ArchivedEvent.offset);
           this.eventEmitter.emit("archive", archiveEvent_(event.ArchivedEvent));
         } else {
-          logger.warn(`Unexpected event type in transaction stream: ${event}`);
+          logger.warn(`Unexpected event type in transaction stream: ${JSON.stringify(event)}`);
         }
       }
     } else {
