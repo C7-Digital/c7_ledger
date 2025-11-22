@@ -28,7 +28,7 @@
     "react": "^18.0.0"
   },
   "dependencies": {
-    "@c7/ledger": "workspace:*",
+    "@c7/ledger": "file:../ledger",
     "@daml/types": "3.4.8"
   },
   "devDependencies": {
