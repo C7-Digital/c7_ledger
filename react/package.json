@@ -28,7 +28,7 @@
     "react": "^18.0.0"
   },
   "dependencies": {
-    "@c7/ledger": "github:C7-Digital/c7_ledger#v3.4.7"
+    "@c7/ledger": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
