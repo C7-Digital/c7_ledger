@@ -66,13 +66,13 @@ importers:
 
   react:
     dependencies:
-      '@c7/ledger':
-        specifier: workspace:*
-        version: link:../ledger
       '@daml/types':
         specifier: 3.4.8
         version: 3.4.8
     devDependencies:
+      '@c7/ledger':
+        specifier: file:../ledger
+        version: link:../ledger
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
