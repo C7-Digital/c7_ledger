@@ -3,11 +3,17 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  injectWorkspacePackages: true
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: ^18.15.11
+        version: 18.19.130
+      tsx:
+        specifier: ^4.11.0
+        version: 4.20.6
 
   ledger:
     dependencies:
