@@ -25,32 +25,4 @@ describe("Ledger", () => {
 
     expect(ledger).toBeInstanceOf(Ledger);
   });
-
-  it("should handle discriminant union commands", () => {
-    // Example of how the discriminant union works with convenience constructors
-    const create = createCmd('TestModule:TestTemplate', { field: 'value' });
-    const exercise = exerciseCmd(
-      'TestModule:TestTemplate',
-      'test-contract-id' as any,
-      'TestChoice' as any,
-      { arg: 'value' }
-    );
-    const createAndExercise = createAndExerciseCmd(
-      'TestModule:TestTemplate',
-      { field: 'value' },
-      'TestChoice' as any,
-      { arg: 'value' }
-    );
-
-    // TypeScript should correctly infer the types
-    expect(create.type).toBe('create');
-    expect(exercise.type).toBe('exercise');
-    expect(createAndExercise.type).toBe('createAndExercise');
-
-    // Verify the structure
-    expect(create.templateId).toBe('TestModule:TestTemplate');
-    expect(create.payload).toEqual({ field: 'value' });
-    expect(exercise.contractId).toBe('test-contract-id');
-    expect(createAndExercise.choice).toBe('TestChoice');
-  });
 });

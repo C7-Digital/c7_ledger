@@ -171,68 +171,66 @@ function interfaceFilter(
 }
 
 // Convenience constructors for commands
-export function createCmd<T>(templateId: string, payload: T): CreateCommand<T> {
+export function createCmd<T extends object, K = unknown>(template: Template<T, K, string>, payload: T): CreateCommand<T, K> {
   return {
     type: 'create',
-    templateId,
+    template,
     payload,
   };
 }
 
-export function createAndExerciseCmd<T, R>(
-  templateId: string,
+export function createAndExerciseCmd<T extends object, C, R, K = unknown>(
+  template: Template<T, K, string>,
   payload: T,
-  choice: NameString,
+  choice: Choice<T, C, R, K>,
   argument: R
-): CreateAndExerciseCommand<T, R> {
+): CreateAndExerciseCommand<T, C, R, K> {
   return {
     type: 'createAndExercise',
-    templateId,
+    template,
     payload,
     choice,
     argument,
   };
 }
 
-export function exerciseCmd<T, R>(
-  templateId: string,
+export function exerciseCmd<T extends object, C, R, K = unknown>(
   contractId: ContractId<T>,
-  choice: NameString,
+  choice: Choice<T, C, R, K>,
   argument: R
-): ExerciseCommand<T, R> {
+): ExerciseCommand<T, C, R, K> {
   return {
     type: 'exercise',
-    templateId,
     contractId,
     choice,
     argument,
   };
 }
 
-function convertCommand(command: Command<any>) : JsCommand {
+function convertCommand(command: Command<any, any>) : JsCommand {
   switch (command.type) {
     case 'create':
       return {
         CreateCommand: {
-          templateId: command.templateId,
+          templateId: command.template.templateId,
           createArguments: command.payload,
         }
       };
     case 'createAndExercise':
       return {
         CreateAndExerciseCommand: {
-          templateId: command.templateId,
+          templateId: command.template.templateId,
           createArguments: command.payload,
-          choice: command.choice,
+          choice: createNameString(command.choice.choiceName),
           choiceArgument: command.argument,
         }
       };
     case 'exercise':
       return {
         ExerciseCommand: {
-          templateId: command.templateId,
+          templateId: command.choice.template().templateId,
           contractId: createLedgerString(command.contractId),
-          choice: command.choice,
+          choice: createNameString(command.choice.choiceName),
           choiceArgument: command.argument,
         }
       };
@@ -870,7 +868,7 @@ export class Ledger {
   }
 
   async submit(
-    commands: Command<any>[],
+    commands: Command<any, any>[],
     actAs?: Party[]
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));

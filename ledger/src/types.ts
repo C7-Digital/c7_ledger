@@ -1,5 +1,5 @@
 // Basic types for the new ledger implementation branded with value.proto string formats
-import { ContractId, Party, List } from "@daml/types";
+import { ContractId, Party, List, Choice, Template } from "@daml/types";
 import {
   LedgerString,
   PartyIdString,
@@ -150,32 +150,31 @@ export interface Query<T = unknown> {
 }
 
 // Command submission types with proper value.proto string formats
-export type CreateCommand<T = unknown> = {
+export type CreateCommand<T extends object, K = unknown> = {
   type: 'create';
-  templateId: string; // This would be a template identifier format
+  template: Template<T, K, string>;
   payload: T;
 };
 
-export type CreateAndExerciseCommand<T = unknown, R = unknown> = {
+export type CreateAndExerciseCommand<T extends object, C, R, K = unknown> = {
   type: 'createAndExercise';
-  templateId: string;
+  template: Template<T, K, string>;
   payload: T;
-  choice: NameString;
+  choice: Choice<T, C, R, K>;
   argument: R;
 };
 
-export type ExerciseCommand<T = unknown, R = unknown> = {
+export type ExerciseCommand<T extends object, C, R, K = unknown> = {
   type: 'exercise';
-  templateId: string;
+  choice: Choice<T, C, R, K>
   contractId: ContractId<T>;
-  choice: NameString;
   argument: R;
 };
 
-export type Command<T = unknown, R = unknown> 
-  = CreateCommand<T> 
-  | CreateAndExerciseCommand<T, R> 
-  | ExerciseCommand<T, R>;
+export type Command<T extends object, C, R = unknown, K = unknown> 
+  = CreateCommand<T, K> 
+  | CreateAndExerciseCommand<T, C, R, K> 
+  | ExerciseCommand<T, C, R, K>;
 
 // Party management types with proper string formats
 export interface AllocatePartyRequest {
