@@ -38,11 +38,14 @@ import {
 } from "./websocket";
 import { MultiStreamAdapter } from "./multistream";
 import {
+  CreateCommand,
   CreateEvent,
   ArchiveEvent,
+  ExerciseCommand,
   Event,
   Stream,
   StreamState,
+  Command,
   AllocatePartyRequest,
   AllocatePartyResponse,
   PartyDetails,
@@ -51,6 +54,7 @@ import {
   StreamCloseEvent,
   MultiStream,
   TemplateMapping,
+  CreateAndExerciseCommand,
 } from "./types";
 import { matchesPartiallyQualified } from "./util";
 import { ValidationMode } from "./validation";
@@ -62,11 +66,13 @@ import {
   createUserIdString,
   LedgerString,
   PackageIdString,
+  NameString,
 } from "./valueTypes";
 
-type Schemas = components["schemas"];
-type JsCommands = Schemas["JsCommands"];
 type Filters = components["schemas"]["Filters"];
+type JsCommands = Schemas["JsCommands"];
+type JsCommand = Schemas["Command"];
+type Schemas = components["schemas"];
 
 export type LedgerOffset = "start" | "end" | number;
 
@@ -163,6 +169,80 @@ function interfaceFilter(
     },
   };
 }
+
+// Convenience constructors for commands
+export function createCmd<T>(templateId: string, payload: T): CreateCommand<T> {
+  return {
+    type: 'create',
+    templateId,
+    payload,
+  };
+}
+
+export function createAndExerciseCmd<T, R>(
+  templateId: string,
+  payload: T,
+  choice: NameString,
+  argument: R
+): CreateAndExerciseCommand<T, R> {
+  return {
+    type: 'createAndExercise',
+    templateId,
+    payload,
+    choice,
+    argument,
+  };
+}
+
+export function exerciseCmd<T, R>(
+  templateId: string,
+  contractId: ContractId<T>,
+  choice: NameString,
+  argument: R
+): ExerciseCommand<T, R> {
+  return {
+    type: 'exercise',
+    templateId,
+    contractId,
+    choice,
+    argument,
+  };
+}
+
+function convertCommand(command: Command<any>) : JsCommand {
+  switch (command.type) {
+    case 'create':
+      return {
+        CreateCommand: {
+          templateId: command.templateId,
+          createArguments: command.payload,
+        }
+      };
+    case 'createAndExercise':
+      return {
+        CreateAndExerciseCommand: {
+          templateId: command.templateId,
+          createArguments: command.payload,
+          choice: command.choice,
+          choiceArgument: command.argument,
+        }
+      };
+    case 'exercise':
+      return {
+        ExerciseCommand: {
+          templateId: command.templateId,
+          contractId: createLedgerString(command.contractId),
+          choice: command.choice,
+          choiceArgument: command.argument,
+        }
+      };
+    default:
+      // TypeScript exhaustiveness check
+      const _exhaustive: never = command;
+      throw new Error(`Unknown command type: ${JSON.stringify(_exhaustive)}`);
+  }
+}
+
 
 /**
  * Type guard to check if a TemplateOrInterface object is an interface.
@@ -772,6 +852,44 @@ export class Ledger {
 
     // TODO: Convert this to the other transaction format to capture the
     // exercise result and the resulting events.
+    for (const event of transaction.events || []) {
+      logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
+      if ("CreatedEvent" in event) {
+        // Convert to our Event format
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedTemplateRegistry));
+      } else if ("ArchivedEvent" in event) {
+        // Convert to our Event format
+        events.push(archiveEvent_(event.ArchivedEvent));
+      } else {
+        // Since we are using ACS_DELTA we can ignore ExercisedEvent
+        throw new Error(`Unexpected event type: ${JSON.stringify(event)}`);
+      }
+    }
+
+    return events;
+  }
+
+  async submit(
+    commands: Command<any>[],
+    actAs?: Party[]
+  ): Promise<Event<object, unknown>[]> {
+    const jsCommands = commands.map((command) => convertCommand(command));
+
+    // Extract actAs from meta or use a default
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+    const requestCommands: JsCommands = {
+      commands: jsCommands,
+      commandId: this.generateCommandId(),
+      actAs: actAs_.map(party => createPartyIdString(party)),
+      // Ends up being not optional
+      userId: createUserIdString(this.tokenUserId),
+    };
+
+    const request = { commands: requestCommands };
+    const response = await this.client.submitAndWaitForTransaction(request);
+    const transaction = response.transaction;
+    const events: Event<object>[] = [];
+
     for (const event of transaction.events || []) {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {

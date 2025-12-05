@@ -150,34 +150,32 @@ export interface Query<T = unknown> {
 }
 
 // Command submission types with proper value.proto string formats
-export interface CreateCommand<T = unknown> {
+export type CreateCommand<T = unknown> = {
+  type: 'create';
   templateId: string; // This would be a template identifier format
   payload: T;
-}
+};
 
-export interface ExerciseCommand<T = unknown, R = unknown> {
+export type CreateAndExerciseCommand<T = unknown, R = unknown> = {
+  type: 'createAndExercise';
+  templateId: string;
+  payload: T;
+  choice: NameString;
+  argument: R;
+};
+
+export type ExerciseCommand<T = unknown, R = unknown> = {
+  type: 'exercise';
   templateId: string;
   contractId: ContractId<T>;
   choice: NameString;
   argument: R;
-}
+};
 
-export interface SubmitCommandsRequest {
-  commands: (CreateCommand | ExerciseCommand)[];
-  actAs: PartyIdString[];
-  readAs?: PartyIdString[];
-  commandId?: LedgerString;
-  submissionId?: LedgerString;
-  applicationId?: LedgerString;
-  workflowId?: LedgerString;
-  deduplicationTime?: string;
-}
-
-export interface CommandsResponse {
-  transactionId: LedgerString;
-  commandId: LedgerString;
-  offset: string;
-}
+export type Command<T = unknown, R = unknown> 
+  = CreateCommand<T> 
+  | CreateAndExerciseCommand<T, R> 
+  | ExerciseCommand<T, R>;
 
 // Party management types with proper string formats
 export interface AllocatePartyRequest {
