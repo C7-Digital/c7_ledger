@@ -149,6 +149,38 @@ function templateFilter(
   };
 }
 
+function interfaceFilter(
+  interfaceId: PackageIdString,
+  includeCreatedEventBlob: boolean
+): IdentifierFilter {
+  return {
+    InterfaceFilter: {
+      value: {
+        interfaceId: interfaceId,
+        includeInterfaceView: false,
+        includeCreatedEventBlob,
+      },
+    },
+  };
+}
+
+/**
+ * Type guard to check if a TemplateOrInterface object is an interface.
+ * 
+ * Simple detection based on Daml codegen patterns:
+ * - Templates have keyEncode function (from Template interface)
+ * - Interfaces don't have keyEncode (InterfaceCompanion doesn't extend Template)
+ * 
+ * @param template - The template or interface object to check
+ * @returns true if it's an interface, false if it's a template
+ */
+function isInterface<T extends object, K>(
+  template: TemplateOrInterface<T, K, PackageIdString>
+): boolean {
+  // Templates have keyEncode, interfaces don't - simple and reliable
+  return !(template as any).keyEncode || typeof (template as any).keyEncode !== 'function';
+}
+
 /**
  * Options for the Ledger constructor
  */
@@ -598,7 +630,9 @@ export class Ledger {
       acc[key as string] = {
         cumulative: [
           {
-            identifierFilter: templateFilter(template.templateId, includeCreatedEventBlob),
+            identifierFilter: isInterface(template)
+              ? interfaceFilter(template.templateId, includeCreatedEventBlob)
+              : templateFilter(template.templateId, includeCreatedEventBlob),
           },
         ],
       };
