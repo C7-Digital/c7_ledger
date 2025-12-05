@@ -197,7 +197,7 @@ export function createAndExerciseCmd<T extends object, C, R, K = unknown>(
 export function exerciseCmd<T extends object, C, R, K = unknown>(
   contractId: ContractId<T>,
   choice: Choice<T, C, R, K>,
-  argument: R
+  argument: C
 ): ExerciseCommand<T, C, R, K> {
   return {
     type: 'exercise',

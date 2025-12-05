@@ -168,7 +168,7 @@ export type ExerciseCommand<T extends object, C, R, K = unknown> = {
   type: 'exercise';
   choice: Choice<T, C, R, K>
   contractId: ContractId<T>;
-  argument: R;
+  argument: C;
 };
 
 export type Command<T extends object, C, R = unknown, K = unknown> 
