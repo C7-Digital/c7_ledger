@@ -13,11 +13,12 @@ import {
   useRef,
 } from "react";
 import type { Context, FunctionComponent } from "react";
-import type { TemplateOrInterface, ContractId } from "@daml/types";
+import type { InterfaceCompanion, Template, TemplateOrInterface, ContractId } from "@daml/types";
 import {
   Ledger,
   type LedgerOptions,
   type CreateEvent,
+  type Interface,
   type PackageIdString,
   type Stream,
   type StreamState,
@@ -30,6 +31,7 @@ import type {
   DamlLedgerConfig,
   QueryOptions,
   QueryResult,
+  InterfaceQueryResult,
   StreamQueryResult,
   UserResult,
   MultiStreamQueryResult,
@@ -41,7 +43,7 @@ type ToLedgerTemplate<
   TKey,
   // @ts-ignore
   TTemplateId extends string,
-> = TemplateOrInterface<TContract, TKey, PackageIdString>;
+> = Template<TContract, TKey, PackageIdString>;
 
 const DamlLedgerContext: Context<DamlLedgerConfig | null> = createContext<DamlLedgerConfig | null>(
   null
@@ -204,7 +206,7 @@ export function useQuery<
   TKey = any,
   TTemplateId extends string = string,
 >(
-  template: TemplateOrInterface<TContract, TKey, TTemplateId>,
+  template: Template<TContract, TKey, TTemplateId>,
   options: QueryOptions = {}
 ): QueryResult<TContract, TKey> {
   const { ledger, reloadTrigger } = useDamlLedgerContext();
@@ -250,6 +252,66 @@ export function useQuery<
     reload,
   };
 }
+
+/**
+ * Hook to query interface views for a specific interface
+ * @param interface_ - The Daml interface to query
+ * @param options - Query options
+ * @returns Query result with contracts, loading state, and reload function
+ */
+export function useQueryInterface<
+  TInterface extends object = object,
+  TKey = unknown,
+  TInterfaceId extends string = string,
+>(
+  interface_: InterfaceCompanion<TInterface, TKey, TInterfaceId>,
+  options: QueryOptions = {}
+): InterfaceQueryResult<TInterface> {
+  const { ledger, reloadTrigger } = useDamlLedgerContext();
+  const [interfaces, setInterfaces] = useState<readonly Interface<TInterface>[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Extract options values to avoid object reference issues in useEffect
+  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
+
+  const reload = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result: Interface<TInterface>[] = await ledger.queryInterface(
+        interface_ as unknown as ToLedgerTemplate<TInterface, TKey, TInterfaceId>,
+        atOffset,
+        includeCreatedEventBlob,
+        false, // do not care about verbose stream
+        readAsParties
+      );
+
+      setInterfaces(result);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err : new Error("Failed to query contracts");
+      setError(errorMessage);
+      setInterfaces([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [ledger, interface_, atOffset, includeCreatedEventBlob]);
+
+  // Initial load and reload when trigger changes
+  useEffect(() => {
+    reload();
+  }, [reload, reloadTrigger]);
+
+  return {
+    interfaces,
+    loading,
+    error,
+    reload,
+  };
+}
+
+
 
 /**
  * Hook to stream active contracts for a single template with real-time updates
@@ -536,6 +598,7 @@ export function createLedgerContext() {
     useUser,
     useReload,
     useQuery,
+    useQueryInterface,
     useStreamQuery,
     useMultiStreamQuery,
     useRightsAs,

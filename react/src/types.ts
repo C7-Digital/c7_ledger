@@ -7,6 +7,7 @@ import {
   type MultiStream,
   type TemplateMapping,
   CantonError,
+  Interface,
 } from "@c7/ledger/lite";
 
 // Brand template ID strings for type safety
@@ -32,6 +33,17 @@ export interface QueryOptions {
 export interface QueryResult<TContract extends object = object, TKey = any> {
   /** Array of matching contracts */
   readonly contracts: readonly CreateEvent<TContract, TKey>[];
+  /** Loading state */
+  readonly loading: boolean;
+  /** Error if query failed */
+  readonly error: Error | null;
+  /** Function to manually reload the query */
+  readonly reload: () => void;
+}
+
+export interface InterfaceQueryResult<TInterface extends object = object> {
+  /** Array of matching interface contracts */
+  readonly interfaces: readonly Interface<TInterface>[];
   /** Loading state */
   readonly loading: boolean;
   /** Error if query failed */

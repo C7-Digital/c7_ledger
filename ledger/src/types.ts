@@ -1,5 +1,5 @@
 // Basic types for the new ledger implementation branded with value.proto string formats
-import { ContractId, Party, List, Choice, Template } from "@daml/types";
+import { ContractId, Party, Choice, Template } from "@daml/types";
 import {
   LedgerString,
   PartyIdString,
@@ -15,8 +15,8 @@ export type CreateEvent<T extends object, K = unknown> = {
   templateId: PackageIdString;
   contractId: ContractId<T>;
   payload: T;
-  signatories: List<Party>;
-  observers: List<Party>;
+  signatories: Party[];
+  observers: Party[];
   key?: K;
   createdEventBlob: string;
   /**
@@ -37,6 +37,23 @@ export type ArchiveEvent<T extends object> = {
 };
 
 export type Event<T extends object, K = unknown> = CreateEvent<T, K> | ArchiveEvent<T>;
+
+export type Interface<I extends object> = {
+  type: "interface";
+  templateId: PackageIdString;
+  contractId: ContractId<I>;
+  payload?: any;
+  signatories: Party[];
+  observers: Party[];
+  key?: any;
+  createdEventBlob: string;
+  interfaceView: I;
+  /**
+   * Package version string (e.g., "0.0.6")
+   * Only present if using versionedTemplateRegistry
+   */
+  packageVersion?: string;
+};
 
 export type CantonError = JsCantonError;
 
