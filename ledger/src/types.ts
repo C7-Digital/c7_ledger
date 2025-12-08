@@ -1,5 +1,5 @@
 // Basic types for the new ledger implementation branded with value.proto string formats
-import { ContractId, Party, Choice, Template } from "@daml/types";
+import { ContractId, Party, Choice, Template, InterfaceCompanion } from "@daml/types";
 import {
   LedgerString,
   PartyIdString,
@@ -21,13 +21,14 @@ export type CreateEvent<T extends object, K = unknown> = {
   createdEventBlob: string;
   /**
    * Package version string (e.g., "0.0.6")
-   * Only present if using versionedTemplateRegistry
+   * Only present if using VersionedRegistry
    */
   packageVersion?: string;
 };
 
-// Event types for compatibility
-// export type ArchiveEvent<T extends object, I extends string = string> = {
+/** 
+ * An ArchiveEvent of a given template
+ */
 export type ArchiveEvent<T extends object> = {
   type: "archive";
   templateId: PackageIdString;
@@ -38,6 +39,12 @@ export type ArchiveEvent<T extends object> = {
 
 export type Event<T extends object, K = unknown> = CreateEvent<T, K> | ArchiveEvent<T>;
 
+/**
+ * The Daml interface of the subscribed 'interfaceId'
+ * 
+ * We use 'templateId' here because the name specified in the codegen field,
+ * though this is specified as 'interfaceId' in the OpenAPI spec.
+ */
 export type Interface<I extends object> = {
   type: "interface";
   templateId: PackageIdString;
@@ -50,10 +57,31 @@ export type Interface<I extends object> = {
   interfaceView: I;
   /**
    * Package version string (e.g., "0.0.6")
-   * Only present if using versionedTemplateRegistry
+   * Only present if using VersionedRegistry
    */
   packageVersion?: string;
 };
+
+export type VersionedLookupResult
+  = { type: "template", template: Template<object, unknown, string>, version: string }
+  | { type: "interface", interface_: InterfaceCompanion<object, unknown, string>, version: string };
+
+/**
+ * By default the codegen models use @daml/types registerTemplate function to
+ * add the Template instance to a map. This is insufficient on two counts; it
+ * does not track the packageId of the containing dar, which is what the stream
+ * returns. Furthermore, it does not register the InterfaceView instance which
+ * one can also get from the stream.
+ * 
+ * This type can be passed into our Ledger so that we can use it instead. We
+ * overload the name of the lookup parameter 'templateId' even though in the
+ * interface we really mean the interfaceId as in the spec OpenAPI spec.
+ */
+export type VersionedRegistry = (
+  templateId: string
+) => VersionedLookupResult | undefined;
+
+export type LedgerOffset = "start" | "end" | number;
 
 export type CantonError = JsCantonError;
 
