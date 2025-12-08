@@ -3,7 +3,6 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  injectWorkspacePackages: true
 
 importers:
 
@@ -15,6 +14,9 @@ importers:
       tsx:
         specifier: ^4.11.0
         version: 4.20.6
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ledger:
     dependencies:
