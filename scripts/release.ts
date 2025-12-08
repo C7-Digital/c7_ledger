@@ -25,7 +25,7 @@ function writePackageJson(path: string, content: any) {
 }
 
 function getNextVersion(currentVersion: string): string {
-  const match = currentVersion.match(/^(\d+\.\d+\.\d+)(?:-(\d+))?$/);
+  const match = currentVersion.match(/^(\d+\.\d+\.\d+)(?:_(\d+))?$/);
   if (!match) {
     throw new Error(`Invalid version format: ${currentVersion}`);
   }
@@ -81,7 +81,7 @@ async function main() {
     console.error('✗ Tests failed');
     process.exit(1);
   }
-  
+
   // Update package.json files
   console.log('Updating package versions...');
 
