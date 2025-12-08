@@ -165,7 +165,6 @@ async function main() {
   }
 
   console.log(`Done! Published version ${nextVersion}`);
-  // Leo - how do you feel about pushing automatically? My gut instinct was to just prompt the user with the next steps. 
   console.log(`\nTo push the tag to remote, run:`);
   console.log(`  git push && git push origin v${nextVersion}`);
 }
