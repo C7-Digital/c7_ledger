@@ -1,12 +1,13 @@
 {
   "name": "@c7/monorepo",
-  "version": "3.4.7",
+  "version": "0.0.1",
   "private": true,
   "description": "Monorepo containing @c7/ledger and @c7/react packages",
   "scripts": {
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "release": "pnpm exec tsx scripts/release.ts"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -14,5 +15,10 @@
   },
   "keywords": [],
   "author": "",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "tsx": "^4.11.0",
+    "typescript": "^5.8.3"
+  }
 }

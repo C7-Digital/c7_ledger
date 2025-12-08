@@ -15,6 +15,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
+    "composite": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "types": ["node", "jest"]
   },

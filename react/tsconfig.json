@@ -21,6 +21,7 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    "composite": true,
     "jsx": "react-jsx",
     "types": ["react"]
   },
