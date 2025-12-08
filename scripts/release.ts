@@ -61,16 +61,7 @@ async function main() {
   console.log(`Current version: ${currentVersion}`);
   console.log(`Next version: ${nextVersion}\n`);
 
-  // Run tests
-  console.log('Running tests...');
-  try {
-    exec('pnpm test');
-    console.log('✓ All tests passed\n');
-  } catch (error) {
-    console.error('✗ Tests failed');
-    process.exit(1);
-  }
-
+  
   // Run build
   console.log('Running build...');
   try {
@@ -80,7 +71,17 @@ async function main() {
     console.error('✗ Build failed');
     process.exit(1);
   }
-
+  
+  // Run tests
+  console.log('Running tests...');
+  try {
+    exec('pnpm test');
+    console.log('✓ All tests passed\n');
+  } catch (error) {
+    console.error('✗ Tests failed');
+    process.exit(1);
+  }
+  
   // Update package.json files
   console.log('Updating package versions...');
 
