@@ -3,12 +3,9 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import * as readline from 'readline';
 
-const PACKAGES = [
-  { name: '@c7/ledger', path: 'ledger/package.json' },
-  { name: '@c7/react', path: 'react/package.json' },
-];
-
-const ROOT_PACKAGE = 'package.json';
+const LEDGER_PACKAGE_PATH = 'ledger/package.json';
+const REACT_PACKAGE_PATH = 'react/package.json';
+const ROOT_PACKAGE_PATH = 'package.json';
 
 function exec(command: string, options = {}) {
   return execSync(command, { stdio: 'inherit', ...options });
@@ -54,7 +51,7 @@ async function main() {
   console.log('C7 Ledger Release Script\n');
 
   // Read current version
-  const ledgerPkg = readPackageJson(PACKAGES[0].path);
+  const ledgerPkg = readPackageJson(LEDGER_PACKAGE_PATH);
   const currentVersion = ledgerPkg.version;
   const nextVersion = getNextVersion(currentVersion);
 
@@ -87,10 +84,10 @@ async function main() {
 
   // Update ledger package
   const updatedLedgerPkg = { ...ledgerPkg, version: nextVersion };
-  writePackageJson(PACKAGES[0].path, updatedLedgerPkg);
+  writePackageJson(LEDGER_PACKAGE_PATH, updatedLedgerPkg);
 
   // Update react package (including peer dependency)
-  const reactPkg = readPackageJson(PACKAGES[1].path);
+  const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
   const updatedReactPkg = {
     ...reactPkg,
     version: nextVersion,
@@ -99,19 +96,18 @@ async function main() {
       '@c7/ledger': `^${nextVersion}`,
     },
   };
-  writePackageJson(PACKAGES[1].path, updatedReactPkg);
+  writePackageJson(REACT_PACKAGE_PATH, updatedReactPkg);
 
   // Update root package
-  const rootPkg = readPackageJson(ROOT_PACKAGE);
-  writePackageJson(ROOT_PACKAGE, { ...rootPkg, version: nextVersion });
+  const rootPkg = readPackageJson(ROOT_PACKAGE_PATH);
+  writePackageJson(ROOT_PACKAGE_PATH, { ...rootPkg, version: nextVersion });
 
   console.log('✓ Package versions updated\n');
 
   // Show what will be published
   console.log('Ready to publish:');
-  PACKAGES.forEach((pkg) => {
-    console.log(`  - ${pkg.name}@${nextVersion}`);
-  });
+  console.log(`  - @c7/ledger@${nextVersion}`);
+  console.log(`  - @c7/react@${nextVersion}`);
   console.log('');
 
   // Confirm with user
@@ -121,9 +117,9 @@ async function main() {
     console.log('\nRelease cancelled. Reverting changes...');
 
     // Revert changes
-    writePackageJson(PACKAGES[0].path, ledgerPkg);
-    writePackageJson(PACKAGES[1].path, reactPkg);
-    writePackageJson(ROOT_PACKAGE, rootPkg);
+    writePackageJson(LEDGER_PACKAGE_PATH, ledgerPkg);
+    writePackageJson(REACT_PACKAGE_PATH, reactPkg);
+    writePackageJson(ROOT_PACKAGE_PATH, rootPkg);
 
     console.log('✓ Changes reverted');
     process.exit(0);
@@ -132,22 +128,30 @@ async function main() {
   console.log('');
 
   // Publish packages
-  for (const pkg of PACKAGES) {
-    console.log(`Publishing ${pkg.name}@${nextVersion}...`);
-    try {
-      const pkgDir = pkg.path.replace('/package.json', '');
-      exec(`npm publish --access public`, { cwd: resolve(process.cwd(), pkgDir) });
-      console.log(`✓ Published ${pkg.name}\n`);
-    } catch (error) {
-      console.error(`✗ Failed to publish ${pkg.name}`);
-      process.exit(1);
-    }
+  console.log(`Publishing @c7/ledger@${nextVersion}...`);
+  try {
+    exec(`npm publish --access public`, { cwd: resolve(process.cwd(),
+  'ledger') });
+    console.log(`✓ Published @c7/ledger\n`);
+  } catch (error) {
+    console.error(`✗ Failed to publish @c7/ledger`);
+    process.exit(1);
+  }
+
+  console.log(`Publishing @c7/react@${nextVersion}...`);
+  try {
+    exec(`npm publish --access public`, { cwd: resolve(process.cwd(),
+  'react') });
+    console.log(`✓ Published @c7/react\n`);
+  } catch (error) {
+    console.error(`✗ Failed to publish @c7/react`);
+    process.exit(1);
   }
 
   // Commit version changes
   console.log('Committing version changes...');
   try {
-    exec(`git add ${ROOT_PACKAGE} ${PACKAGES.map(p => p.path).join(' ')}`);
+    exec(`git add ${ROOT_PACKAGE_PATH} ${LEDGER_PACKAGE_PATH} ${REACT_PACKAGE_PATH}`);
     exec(`git commit -m "Release v${nextVersion}"`);
     console.log('✓ Changes committed\n');
   } catch (error) {
