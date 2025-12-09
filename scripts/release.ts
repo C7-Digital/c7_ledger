@@ -21,18 +21,6 @@ function writePackageJson(path: string, content: any) {
   writeFileSync(fullPath, JSON.stringify(content, null, 2) + '\n');
 }
 
-function getNextVersion(currentVersion: string): string {
-  const match = currentVersion.match(/^(\d+\.\d+\.\d+)(?:_(\d+))?$/);
-  if (!match) {
-    throw new Error(`Invalid version format: ${currentVersion}`);
-  }
-
-  const baseVersion = match[1];
-  const preRelease = match[2] ? parseInt(match[2], 10) : -1;
-
-  return `${baseVersion}-${preRelease + 1}`;
-}
-
 function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -49,15 +37,17 @@ function prompt(question: string): Promise<string> {
 
 async function main() {
   console.log('C7 Ledger Release Script\n');
-
-  // Read current version
+  
+  const confirmation = await prompt('Have you updated the version to release before running this script? (y/n) ');
+  if (confirmation.toLowerCase() !== 'y') {
+    console.log('Please update the version in package.json files before running the release script.');
+    process.exit(1);
+  }
+  
   const ledgerPkg = readPackageJson(LEDGER_PACKAGE_PATH);
-  const currentVersion = ledgerPkg.version;
-  const nextVersion = getNextVersion(currentVersion);
+  const nextVersion = ledgerPkg.version;
 
-  console.log(`Current version: ${currentVersion}`);
-  console.log(`Next version: ${nextVersion}\n`);
-
+  console.log(`Releasing version: ${nextVersion}\n`);
   
   // Run build
   console.log('Running build...');
@@ -148,30 +138,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Commit version changes
-  console.log('Committing version changes...');
-  try {
-    exec(`git add ${ROOT_PACKAGE_PATH} ${LEDGER_PACKAGE_PATH} ${REACT_PACKAGE_PATH}`);
-    exec(`git commit -m "Release v${nextVersion}"`);
-    console.log('✓ Changes committed\n');
-  } catch (error) {
-    console.error('✗ Failed to commit changes');
-    process.exit(1);
-  }
-
-  // Create git tag
-  console.log(`Creating git tag v${nextVersion}...`);
-  try {
-    exec(`git tag v${nextVersion}`);
-    console.log('✓ Tag created\n');
-  } catch (error) {
-    console.error('✗ Failed to create tag');
-    process.exit(1);
-  }
-
   console.log(`Done! Published version ${nextVersion}`);
-  console.log(`\nTo push the tag to remote, run:`);
-  console.log(`  git push && git push origin v${nextVersion}`);
 }
 
 main().catch((error) => {
