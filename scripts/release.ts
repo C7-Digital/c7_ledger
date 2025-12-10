@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import * as readline from 'readline';
 
@@ -15,11 +15,6 @@ function exec(command: string, options = {}) {
 function readPackageJson(path: string) {
   const fullPath = resolve(process.cwd(), path);
   return JSON.parse(readFileSync(fullPath, 'utf-8'));
-}
-
-function writePackageJson(path: string, content: any) {
-  const fullPath = resolve(process.cwd(), path);
-  writeFileSync(fullPath, JSON.stringify(content, null, 2) + '\n');
 }
 
 function prompt(question: string): Promise<string> {
@@ -55,6 +50,19 @@ function parsePackageSelection(): PackageSelection {
   return value;
 }
 
+function validatePeerDependency(reactPkg: any, ledgerVersion: string): void {
+  const peerDep = reactPkg.peerDependencies?.['@c7/ledger'];
+  const expectedPeerDep = `^${ledgerVersion}`;
+
+  if (peerDep !== expectedPeerDep) {
+    console.error('\n✗ Validation failed: React peer dependency mismatch');
+    console.error(`  Expected: "@c7/ledger": "${expectedPeerDep}"`);
+    console.error(`  Found:    "@c7/ledger": "${peerDep || '(not set)'}"`);
+    console.error('\nPlease update the peer dependency in react/package.json to match the ledger version.');
+    process.exit(1);
+  }
+}
+
 async function main() {
   console.log('C7 Ledger Release Script\n');
 
@@ -77,12 +85,19 @@ async function main() {
   const ledgerVersion = ledgerPkg.version;
   const reactVersion = reactPkg.version;
 
+  
   // Confirm versions have been updated
   const packagesToUpdate = packageSelection === 'all' ? 'both packages' : `@c7/${packageSelection}`;
   const confirmation = await prompt(`Have you updated the version for ${packagesToUpdate}? (y/n) `);
   if (confirmation.toLowerCase() !== 'y') {
     console.log('Please update the version(s) in the appropriate package.json file(s) before running the release script.');
     process.exit(1);
+  }
+  
+  // Validate peer dependency if releasing ledger
+  if (releasingLedger) {
+    validatePeerDependency(reactPkg, ledgerVersion);
+    console.log('✓ React peer dependency matches ledger version\n');
   }
 
   // Run build
@@ -105,24 +120,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Track if we made any changes (for revert functionality)
-  let reactPkgModified = false;
-
-  // Update react package peer dependency if ledger is being released
-  if (releasingLedger) {
-    console.log('Updating react peer dependency...');
-    const updatedReactPkg = {
-      ...reactPkg,
-      peerDependencies: {
-        ...reactPkg.peerDependencies,
-        '@c7/ledger': `^${ledgerVersion}`,
-      },
-    };
-    writePackageJson(REACT_PACKAGE_PATH, updatedReactPkg);
-    reactPkgModified = true;
-    console.log('✓ React peer dependency updated\n');
-  }
-
   // Show what will be published
   console.log('Ready to publish:');
   if (releasingLedger) {
@@ -137,14 +134,7 @@ async function main() {
   const answer = await prompt('Continue with publish? (y/n) ');
 
   if (answer.toLowerCase() !== 'y') {
-    console.log('\nRelease canceled. Reverting changes...');
-
-    // Only revert what we actually changed
-    if (reactPkgModified) {
-      writePackageJson(REACT_PACKAGE_PATH, reactPkg);
-    }
-
-    console.log('✓ Changes reverted');
+    console.log('\nRelease canceled.');
     process.exit(0);
   }
 
