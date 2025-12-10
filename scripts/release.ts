@@ -46,7 +46,6 @@ async function main() {
   
   const ledgerPkg = readPackageJson(LEDGER_PACKAGE_PATH);
   const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
-  const rootPkg = readPackageJson(ROOT_PACKAGE_PATH);
 
   const nextVersion = ledgerPkg.version;
 
