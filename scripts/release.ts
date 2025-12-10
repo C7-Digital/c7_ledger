@@ -45,6 +45,9 @@ async function main() {
   }
   
   const ledgerPkg = readPackageJson(LEDGER_PACKAGE_PATH);
+  const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
+  const rootPkg = readPackageJson(ROOT_PACKAGE_PATH);
+
   const nextVersion = ledgerPkg.version;
 
   console.log(`Releasing version: ${nextVersion}\n`);
@@ -72,12 +75,7 @@ async function main() {
   // Update package.json files
   console.log('Updating package versions...');
 
-  // Update ledger package
-  const updatedLedgerPkg = { ...ledgerPkg, version: nextVersion };
-  writePackageJson(LEDGER_PACKAGE_PATH, updatedLedgerPkg);
-
   // Update react package (including peer dependency)
-  const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
   const updatedReactPkg = {
     ...reactPkg,
     version: nextVersion,
@@ -88,9 +86,6 @@ async function main() {
   };
   writePackageJson(REACT_PACKAGE_PATH, updatedReactPkg);
 
-  // Update root package
-  const rootPkg = readPackageJson(ROOT_PACKAGE_PATH);
-  writePackageJson(ROOT_PACKAGE_PATH, { ...rootPkg, version: nextVersion });
 
   console.log('✓ Package versions updated\n');
 
