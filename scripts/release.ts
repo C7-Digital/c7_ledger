@@ -102,9 +102,7 @@ async function main() {
     console.log('\nRelease cancelled. Reverting changes...');
 
     // Revert changes
-    writePackageJson(LEDGER_PACKAGE_PATH, ledgerPkg);
     writePackageJson(REACT_PACKAGE_PATH, reactPkg);
-    writePackageJson(ROOT_PACKAGE_PATH, rootPkg);
 
     console.log('✓ Changes reverted');
     process.exit(0);
