@@ -38,16 +38,16 @@ function prompt(question: string): Promise<string> {
 
 function parsePackageSelection(): PackageSelection {
   const args = process.argv.slice(2);
-  const packageArg = args.find(arg => arg.startsWith('--package='));
+  const packageIndex = args.findIndex(arg => arg === '--package');
 
-  if (!packageArg) {
+  if (packageIndex === -1) {
     return 'all';
   }
 
-  const value = packageArg.split('=')[1] as PackageSelection;
+  const value = args[packageIndex + 1] as PackageSelection;
 
-  if (!['ledger', 'react', 'all'].includes(value)) {
-    console.error(`Invalid --package value: ${value}`);
+  if (!value || !['ledger', 'react', 'all'].includes(value)) {
+    console.error(`Invalid --package value: ${value || 'none'}`);
     console.error('Valid options: ledger, react, all');
     process.exit(1);
   }
