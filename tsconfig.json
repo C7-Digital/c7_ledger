@@ -8,8 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
   "include": ["scripts/**/*"],
   "exclude": ["node_modules", "**/node_modules", "**/dist", "**/lib", "**/lib-lite"],
