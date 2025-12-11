@@ -220,7 +220,7 @@ export function createAndExerciseCmd<T extends object, C, R, K = unknown>(
   template: Template<T, K, string>,
   payload: T,
   choice: Choice<T, C, R, K>,
-  argument: R
+  argument: C
 ): CreateAndExerciseCommand<T, C, R, K> {
   return {
     type: 'createAndExercise',

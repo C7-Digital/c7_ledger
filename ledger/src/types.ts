@@ -206,7 +206,7 @@ export type CreateAndExerciseCommand<T extends object, C, R, K = unknown> = {
   template: Template<T, K, string>;
   payload: T;
   choice: Choice<T, C, R, K>;
-  argument: R;
+  argument: C;
 };
 
 export type ExerciseCommand<T extends object, C, R, K = unknown> = {
