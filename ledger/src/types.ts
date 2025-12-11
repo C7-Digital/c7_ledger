@@ -211,7 +211,7 @@ export type CreateAndExerciseCommand<T extends object, C, R, K = unknown> = {
 
 export type ExerciseCommand<T extends object, C, R, K = unknown> = {
   type: 'exercise';
-  choice: Choice<T, C, R, K>
+  choice: Choice<T, C, R, K>;
   contractId: ContractId<T>;
   argument: C;
 };
