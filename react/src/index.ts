@@ -16,6 +16,7 @@ export {
   useUser,
   useReload,
   useQuery,
+  useQueryInterface,
   useStreamQuery,
   useMultiStreamQuery,
   useRightsAs,
@@ -26,10 +27,11 @@ export type {
   DamlLedgerConfig,
   QueryOptions,
   QueryResult,
+  InterfaceQueryResult,
   StreamQueryResult,
   UserResult,
   TemplateId,
 } from "./types";
 
 // Re-export commonly used types from the ledger package
-export type { Ledger, User, CreateEvent, ArchiveEvent, Event } from "@c7/ledger/lite";
+export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7/ledger/lite";

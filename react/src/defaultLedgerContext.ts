@@ -11,6 +11,7 @@ export const {
   useUser,
   useReload,
   useQuery,
+  useQueryInterface,
   useStreamQuery,
   useMultiStreamQuery,
   useRightsAs,

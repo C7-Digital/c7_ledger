@@ -68,9 +68,23 @@ function brandApiTypes(inputPath: string, outputPath: string, label: string): nu
 
   // This regex captures JSDoc comments followed by field declarations
   // We're looking for: /** JSDoc comment */ fieldName?: fieldType;
-  // Pattern that captures JSDoc block + any field, we'll check types separately
+  // 
+  // Regex breakdown:
+  // /\/\*\*                           - Match opening /** (literal forward slash, asterisk, asterisk)
+  // ([^*]|[\r\n]|(\*+([^*/]|[\r\n])))* - Match JSDoc content (non-greedy):
+  //   [^*]                            - Any character except asterisk
+  //   |[\r\n]                         - OR newline characters (carriage return or line feed)
+  //   |(\*+([^*/]|[\r\n]))            - OR one or more asterisks followed by non-closing chars
+  // \*+\/                             - Match closing */ (one or more asterisks + forward slash)
+  // \s*                               - Match optional whitespace after JSDoc
+  // (\w+)                             - Capture group 4: field name (word characters)
+  // (\?)?                             - Capture group 5: optional question mark for optional fields
+  // \s*:\s*                           - Match colon with optional whitespace around it
+  // ([^;,\}\n]+)                      - Capture group 6: field type (everything except semicolon, comma, closing brace, newline)
+  //
+  // The regex handles multi-line JSDoc with @description tags and indented fields within object types
   const fieldRegex =
-    /\/\*\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+\/\s*(\w+)(\?)?\s*:\s*([^;,]+)\s*[;,]?/g;
+    /\/\*\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+\/\s*(\w+)(\?)?\s*:\s*([^;,\}\n]+)/g;
 
   // Use a more compatible approach for regex matching
   const matches: RegExpExecArray[] = [];
@@ -78,6 +92,7 @@ function brandApiTypes(inputPath: string, outputPath: string, label: string): nu
   while ((match = fieldRegex.exec(content)) !== null) {
     matches.push(match);
   }
+
 
   // Process each match
   for (const match of matches) {
@@ -88,6 +103,7 @@ function brandApiTypes(inputPath: string, outputPath: string, label: string): nu
     const fieldName = match[4]; // Field name
     const isOptional = match[5] === "?"; // Optional marker
     const fieldType = match[6]; // Field type (could be anything)
+
 
     // Skip if we don't have the necessary data
     if (!fullMatch || !fieldName || !fieldType) continue;

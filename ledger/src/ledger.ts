@@ -19,8 +19,9 @@
 import {
   ContractId,
   Party,
-  Template,
   Choice,
+  InterfaceCompanion,
+  Template,
   TemplateOrInterface,
   lookupTemplate,
 } from "@daml/types";
@@ -38,19 +39,26 @@ import {
 } from "./websocket";
 import { MultiStreamAdapter } from "./multistream";
 import {
-  CreateEvent,
-  ArchiveEvent,
-  Event,
-  Stream,
-  StreamState,
   AllocatePartyRequest,
   AllocatePartyResponse,
+  ArchiveEvent,
+  CantonError,
+  Command,
+  CreateCommand,
+  CreateAndExerciseCommand,
+  CreateEvent,
+  ExerciseCommand,
+  Event,
+  Interface,
+  LedgerOffset,
+  Stream,
+  StreamState,
   PartyDetails,
   User,
-  CantonError,
   StreamCloseEvent,
   MultiStream,
   TemplateMapping,
+  VersionedRegistry,
 } from "./types";
 import { matchesPartiallyQualified } from "./util";
 import { ValidationMode } from "./validation";
@@ -62,13 +70,13 @@ import {
   createUserIdString,
   LedgerString,
   PackageIdString,
+  NameString,
 } from "./valueTypes";
 
-type Schemas = components["schemas"];
-type JsCommands = Schemas["JsCommands"];
 type Filters = components["schemas"]["Filters"];
-
-export type LedgerOffset = "start" | "end" | number;
+type JsCommands = Schemas["JsCommands"];
+type JsCommand = Schemas["Command"];
+type Schemas = components["schemas"];
 
 // Type guard to check if an event is a CreatedEvent
 function isCreateEvent(
@@ -77,33 +85,29 @@ function isCreateEvent(
   return "CreatedEvent" in event;
 }
 
-export type VersionedRegistry = (
-  templateId: string
-) => [Template<object, unknown, string>, string] | Template<object, unknown, string> | undefined;
-
 // This term is so overloaded, lets add a '_' to help differentiate
 function createEvent_<T extends object, K = unknown>(
   cantonEvent: Schemas["CreatedEvent"],
-  versionedTemplateRegistry?: VersionedRegistry
+  versionedRegistry?: VersionedRegistry
 ): CreateEvent<T, K> {
   let t: Template<T, K>;
   let packageVersion: string | undefined;
 
   // Use custom registry if provided, otherwise fall back to default lookupTemplate
-  if (versionedTemplateRegistry) {
-    const result = versionedTemplateRegistry(cantonEvent.templateId);
+  if (versionedRegistry) {
+    const result = versionedRegistry(cantonEvent.templateId);
 
     if (!result) {
       throw new Error(`Template not found in registry: ${cantonEvent.templateId}`);
     }
 
     // Check if result is a tuple [Template, version] or just Template
-    if (Array.isArray(result)) {
-      const [template, version] = result;
+    if (result.type === "template") {
+      const { template, version} = result;
       t = template as unknown as Template<T, K>;
       packageVersion = version;
     } else {
-      t = result as unknown as Template<T, K>;
+      throw new Error(`Expected template in registry not: ${JSON.stringify(result)}`);
     }
   } else {
     t = lookupTemplate(cantonEvent.templateId) as unknown as Template<T, K>;
@@ -134,6 +138,45 @@ function archiveEvent_<T extends object>(cantonEvent: Schemas["ArchivedEvent"]):
   };
 }
 
+// It is possible that we query for a given interview that we are interested in,
+// but the underlying contract has multiple interview implementations that we are NOT
+// interested in, and consequently not registered in our versionedRegistry.
+// In this case we return null.
+function interfaceEvent_<I extends object, K = unknown>(
+  cantonEvent: Schemas["CreatedEvent"],
+  interfaceView: Schemas["JsInterfaceView"], 
+  versionedRegistry: VersionedRegistry
+): Interface<I> | null{
+
+  const result = versionedRegistry(interfaceView.interfaceId);
+
+  if (!result) {
+    logger.warn(`Interface not found in registry: ${interfaceView.interfaceId}`);
+    return null;
+  }
+
+  if (result.type === "template") {
+    throw new Error(`Expected template in registry not: ${JSON.stringify(result)}`);
+  }
+  const { interface_, version} = result;
+  const i = interface_ as unknown as InterfaceCompanion<I, K>;
+  const decodedInterfaceView = i.decoder.runWithException(interfaceView.viewValue);
+  const packageVersion = version;
+
+  return {
+    type: "interface",
+    templateId: cantonEvent.templateId,
+    contractId: cantonEvent.contractId as unknown as ContractId<I>,
+    payload: cantonEvent.createArgument,
+    signatories: (cantonEvent.signatories || []) as Party[],
+    observers: (cantonEvent.observers || []) as Party[],
+    key: cantonEvent.contractKey,
+    createdEventBlob: cantonEvent.createdEventBlob || "",
+    interfaceView: decodedInterfaceView,
+    packageVersion,
+  }
+}
+
 type IdentifierFilter = components["schemas"]["IdentifierFilter"];
 function templateFilter(
   templateId: PackageIdString,
@@ -147,6 +190,92 @@ function templateFilter(
       },
     },
   };
+}
+
+function interfaceFilter(
+  interfaceId: PackageIdString,
+  includeCreatedEventBlob: boolean
+): IdentifierFilter {
+  return {
+    InterfaceFilter: {
+      value: {
+        interfaceId: interfaceId,
+        includeInterfaceView: true,
+        includeCreatedEventBlob,
+      },
+    },
+  };
+}
+
+// Convenience constructors for commands
+export function createCmd<T extends object, K = unknown>(template: Template<T, K, string>, payload: T): CreateCommand<T, K> {
+  return {
+    type: 'create',
+    template,
+    payload,
+  };
+}
+
+export function createAndExerciseCmd<T extends object, C, R, K = unknown>(
+  template: Template<T, K, string>,
+  payload: T,
+  choice: Choice<T, C, R, K>,
+  argument: C
+): CreateAndExerciseCommand<T, C, R, K> {
+  return {
+    type: 'createAndExercise',
+    template,
+    payload,
+    choice,
+    argument,
+  };
+}
+
+export function exerciseCmd<T extends object, C, R, K = unknown>(
+  contractId: ContractId<T>,
+  choice: Choice<T, C, R, K>,
+  argument: C
+): ExerciseCommand<T, C, R, K> {
+  return {
+    type: 'exercise',
+    contractId,
+    choice,
+    argument,
+  };
+}
+
+function convertCommand(command: Command<any, any>) : JsCommand {
+  switch (command.type) {
+    case 'create':
+      return {
+        CreateCommand: {
+          templateId: command.template.templateId,
+          createArguments: command.payload,
+        }
+      };
+    case 'createAndExercise':
+      return {
+        CreateAndExerciseCommand: {
+          templateId: command.template.templateId,
+          createArguments: command.payload,
+          choice: createNameString(command.choice.choiceName),
+          choiceArgument: command.argument,
+        }
+      };
+    case 'exercise':
+      return {
+        ExerciseCommand: {
+          templateId: command.choice.template().templateId,
+          contractId: createLedgerString(command.contractId),
+          choice: createNameString(command.choice.choiceName),
+          choiceArgument: command.argument,
+        }
+      };
+    default:
+      // TypeScript exhaustiveness check
+      const _exhaustive: never = command;
+      throw new Error(`Unknown command type: ${JSON.stringify(_exhaustive)}`);
+  }
 }
 
 /**
@@ -183,13 +312,12 @@ export interface LedgerOptions {
    */
   asyncApiSchemaPath?: string;
   /**
-   * Optional version-aware template registry.
+   * Semi-optional version-aware template/interface registry.
    * If provided, this function will be used instead of the default lookupTemplate.
-   * Should return [Template, version] tuple or just Template for backward compatibility.
+   * Should return VersionedLookupResult or undefined. This is required for
+   * querying and decoding interfaces views.
    */
-  versionedTemplateRegistry?: (
-    templateId: string
-  ) => [Template<object, unknown, string>, string] | Template<object, unknown, string> | undefined;
+  versionedRegistry?: VersionedRegistry;
 }
 
 /**
@@ -204,9 +332,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   private skipAcs: boolean;
   private state_: StreamState = "start";
   private filtersByParty: Record<string, any>;
-  private versionedTemplateRegistry?: (
-    templateId: string
-  ) => [Template<object, unknown, string>, string] | Template<object, unknown, string> | undefined;
+  private versionedRegistry?: VersionedRegistry;
 
   /**
    * Creates a new stream for active contracts
@@ -223,15 +349,13 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     startOffset: number,
     skipAcs: boolean = false,
     includeCreatedEventBlob: boolean = true,
-    versionedTemplateRegistry?: (
-      templateId: string
-    ) => [Template<object, unknown, string>, string] | Template<object, unknown, string> | undefined
+    versionedRegistry?: VersionedRegistry
   ) {
     this.parties = parties;
     this.wsClient = wsClient;
     this.offset = startOffset;
     this.skipAcs = skipAcs;
-    this.versionedTemplateRegistry = versionedTemplateRegistry;
+    this.versionedRegistry = versionedRegistry;
     let cumulative = templateIds.map(templateId => {
       return {
         identifierFilter: templateFilter(templateId, includeCreatedEventBlob),
@@ -296,7 +420,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
       }
       this.eventEmitter.emit(
         "create",
-        createEvent_(activeContract.createdEvent, this.versionedTemplateRegistry)
+        createEvent_(activeContract.createdEvent, this.versionedRegistry)
       );
     }
   }
@@ -367,7 +491,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
           this.offset = Math.max(this.offset, event.CreatedEvent.offset);
           this.eventEmitter.emit(
             "create",
-            createEvent_(event.CreatedEvent, this.versionedTemplateRegistry)
+            createEvent_(event.CreatedEvent, this.versionedRegistry)
           );
         } else if ("ArchivedEvent" in event) {
           this.offset = Math.max(this.offset, event.ArchivedEvent.offset);
@@ -582,9 +706,18 @@ export class Ledger {
     );
   }
 
-  // Core querying functionality
+  /**
+   * Query for the Active Contract Set of a specific template.
+   * @param template a Template instance as generated by the codegen
+   * @param atOffset Whether we want to get historical or just the current
+   *  state, default.
+   * @param includeCreatedEventBlob 
+   * @param verbose 
+   * @param readAsParties 
+   * @returns 
+   */
   async query<T extends object, K = unknown>(
-    template: TemplateOrInterface<T, K, PackageIdString>,
+    template: Template<T, K, PackageIdString>,
     atOffset: LedgerOffset = "end",
     includeCreatedEventBlob: boolean = false,
     verbose: boolean = false,
@@ -592,13 +725,14 @@ export class Ledger {
   ): Promise<CreateEvent<T, K>[]> {
     const activeAtOffset = await this.resolveOffset(atOffset);
 
-    let readAsParties_ = readAsParties || (await this.getTokenActAsParties());
+    const readAsParties_ = readAsParties || (await this.getTokenActAsParties());
 
     let filtersByParty = readAsParties_.reduce((acc: Record<string, Filters>, key: Party) => {
       acc[key as string] = {
         cumulative: [
           {
-            identifierFilter: templateFilter(template.templateId, includeCreatedEventBlob),
+            identifierFilter: 
+              templateFilter(template.templateId, includeCreatedEventBlob),
           },
         ],
       };
@@ -628,24 +762,107 @@ export class Ledger {
         const contractEntry = item.contractEntry as {
           JsActiveContract: Schemas["JsActiveContract"];
         };
-        const contract = contractEntry.JsActiveContract.createdEvent;
+        const createEvent = contractEntry.JsActiveContract.createdEvent;
 
         // Verify we got the correct template
-        if (contract.templateId !== template.templateId) {
+        if (!matchesPartiallyQualified(createEvent.templateId, template.templateId)) {
           logger.warn(
-            `Template ID mismatch: expected ${template.templateId}, got ${contract.templateId}`
+            `Template ID mismatch: expected ${template.templateId}, got ${createEvent.templateId}`
           );
           return acc; // Skip contracts with mismatched template IDs
         }
 
-        acc.push(createEvent_(contract, this.options.versionedTemplateRegistry));
+        acc.push(createEvent_(createEvent, this.options.versionedRegistry));
         return acc;
       },
       []
     );
   }
 
-  // Contract creation
+  /**
+   * Query for instances of a given interface.
+   * @param interface_ 
+   * @param atOffset 
+   * @param includeCreatedEventBlob 
+   * @param verbose 
+   * @param readAsParties 
+   * @returns 
+   */
+  async queryInterface<I extends object, K = unknown>(
+    interface_: InterfaceCompanion<I, K, PackageIdString>,
+    atOffset: LedgerOffset = "end",
+    includeCreatedEventBlob: boolean = false,
+    verbose: boolean = false,
+    readAsParties?: Party[]
+  ): Promise<Interface<I>[]> {
+    if (this.options.versionedRegistry === undefined) {
+      throw new Error("Versioned registry is required for interface queries.");
+    }
+    const versionedRegistry = this.options.versionedRegistry;
+    const activeAtOffset = await this.resolveOffset(atOffset);
+
+    const readAsParties_ = readAsParties || (await this.getTokenActAsParties());
+
+    let filtersByParty = readAsParties_.reduce((acc: Record<string, Filters>, key: Party) => {
+      acc[key as string] = {
+        cumulative: [
+          {
+            identifierFilter: 
+              interfaceFilter(interface_.templateId, includeCreatedEventBlob),
+          },
+        ],
+      };
+      return acc;
+    }, {});
+
+    const queryRequest: Schemas["GetActiveContractsRequest"] = {
+      verbose: false, // To be deprecated do not rely
+      activeAtOffset,
+      eventFormat: {
+        filtersByParty,
+        verbose,
+      },
+    };
+
+    const response = await this.client.queryActiveContracts(queryRequest);
+
+    // Convert the response to our CreateEvent format
+    return response.reduce(
+      (acc: Interface<I>[], item: Schemas["JsGetActiveContractsResponse"]) => {
+        // Skip non-active contract entries
+        if (!("JsActiveContract" in item.contractEntry)) {
+          logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
+          return acc;
+        }
+
+        const contractEntry = item.contractEntry as {
+          JsActiveContract: Schemas["JsActiveContract"];
+        };
+        const createEvent = contractEntry.JsActiveContract.createdEvent;
+
+        for (const interfaceView of createEvent.interfaceViews ?? []){
+          if (matchesPartiallyQualified(interfaceView.interfaceId, interface_.templateId)){
+            const interfaceEvent = interfaceEvent_<I>(createEvent, interfaceView, versionedRegistry);
+            if (interfaceEvent !== null) {
+              acc.push(interfaceEvent);
+            }
+          } else {
+            logger.debug(`Ignoring interface ${interfaceView.interfaceId} as it does not match ${interface_.templateId}.`);
+          }
+        }
+        return acc;
+      },
+      []
+    );
+  }
+
+  /**
+   * Create a template
+   * @param template 
+   * @param payload 
+   * @param actAs 
+   * @returns 
+   */
   async create<T extends object, K = unknown, TTemplateId extends string = string>(
     template: Template<T, K, TTemplateId>,
     payload: T,
@@ -678,7 +895,7 @@ export class Ledger {
           );
           if (matchesTemplate) {
             logger.debug(`Event matches template, adding to results`);
-            acc.push(createEvent_(event.CreatedEvent, this.options.versionedTemplateRegistry));
+            acc.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
           } else {
             logger.debug(
               `Event templateId: ${event.CreatedEvent.templateId}, ` +
@@ -707,7 +924,14 @@ export class Ledger {
     return createdEvents[0]!;
   }
 
-  // Choice exercise
+  /**
+   * Exercise a choice of a given contract
+   * @param choice 
+   * @param contractId 
+   * @param argument 
+   * @param actAs 
+   * @returns 
+   */
   async exercise<T extends object, C, R, K = unknown>(
     choice: Choice<T, C, R, K>,
     contractId: ContractId<T>,
@@ -742,7 +966,54 @@ export class Ledger {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
         // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedTemplateRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+      } else if ("ArchivedEvent" in event) {
+        // Convert to our Event format
+        events.push(archiveEvent_(event.ArchivedEvent));
+      } else {
+        // Since we are using ACS_DELTA we can ignore ExercisedEvent
+        throw new Error(`Unexpected event type: ${JSON.stringify(event)}`);
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * `submit` allows combining multiple commands into a single Canton
+   * transaction. Similar to `create` and `exercise` one can use `createCmd`
+   * and `exerciseCmd` to create commands, that are then passed to `submit`.
+   * 
+   * @param commands 
+   * @param actAs Defaults to the actAs parties of the user in the token.
+   * @returns Stream of events resulting from the submitted commands.
+   */
+  async submit(
+    commands: Command<any, any>[],
+    actAs?: Party[]
+  ): Promise<Event<object, unknown>[]> {
+    const jsCommands = commands.map((command) => convertCommand(command));
+
+    // Extract actAs from meta or use a default
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+    const requestCommands: JsCommands = {
+      commands: jsCommands,
+      commandId: this.generateCommandId(),
+      actAs: actAs_.map(party => createPartyIdString(party)),
+      // Ends up being not optional
+      userId: createUserIdString(this.tokenUserId),
+    };
+
+    const request = { commands: requestCommands };
+    const response = await this.client.submitAndWaitForTransaction(request);
+    const transaction = response.transaction;
+    const events: Event<object>[] = [];
+
+    for (const event of transaction.events || []) {
+      logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
+      if ("CreatedEvent" in event) {
+        // Convert to our Event format
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
       } else if ("ArchivedEvent" in event) {
         // Convert to our Event format
         events.push(archiveEvent_(event.ArchivedEvent));
@@ -794,7 +1065,7 @@ export class Ledger {
       activeAtOffset,
       skipAcs,
       includeCreatedEventBlob,
-      this.options.versionedTemplateRegistry
+      this.options.versionedRegistry
     );
   }
 
@@ -854,7 +1125,7 @@ export class Ledger {
       activeAtOffset,
       skipAcs,
       includeCreatedEventBlob,
-      this.options.versionedTemplateRegistry
+      this.options.versionedRegistry
     );
 
     return new MultiStreamAdapter<TM>(stream);

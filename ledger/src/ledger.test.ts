@@ -1,5 +1,5 @@
 // Basic tests for the new ledger implementation
-import { Ledger } from "./ledger";
+import { Ledger, createCmd, createAndExerciseCmd, exerciseCmd } from "./ledger";
 
 // Valid JWT token for testing with sub field
 // Header: {"alg":"HS256","typ":"JWT"}
