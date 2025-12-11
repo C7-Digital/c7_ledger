@@ -1,6 +1,6 @@
 {
   "name": "@c7/monorepo",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Monorepo containing @c7/ledger and @c7/react packages",
   "scripts": {
