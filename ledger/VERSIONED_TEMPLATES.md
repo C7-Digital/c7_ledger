@@ -4,7 +4,7 @@ This document explains how to use the opt-in version-aware template registry fea
 
 ## Overview
 
-The Ledger class now supports an optional `versionedTemplateRegistry` that allows you to work with multiple versions of DAML templates simultaneously. When enabled, `CreateEvent` objects will include version information that indicates whether a contract was created with the latest version or an older version.
+The Ledger class now supports an optional `versionedRegistry` that allows you to work with multiple versions of DAML templates simultaneously. When enabled, `CreateEvent` objects will include version information that indicates whether a contract was created with the latest version or an older version. We rely on this to decode the interface view as well, and this is required for `queryInterface`.
 
 ## Configuration
 
@@ -23,7 +23,7 @@ const ledger = new Ledger({
   token: authToken,
   httpBaseUrl: "https://api.example.com",
   // Opt-in to version-aware templates
-  versionedTemplateRegistry: lookupTemplate,
+  versionedRegistry: lookupTemplate,
 });
 ```
 
@@ -60,7 +60,7 @@ import {
 const ledger = new Ledger({
   token: process.env.AUTH_TOKEN!,
   httpBaseUrl: process.env.API_URL!,
-  versionedTemplateRegistry: lookupTemplate,
+  versionedRegistry: lookupTemplate,
 });
 
 // Stream contracts
@@ -108,7 +108,7 @@ async function findContractsNeedingUpgrade(ledger: Ledger) {
 
 ## Backward Compatibility
 
-If you **don't** provide `versionedTemplateRegistry`, the Ledger class will:
+If you **don't** provide `versionedRegistry`, the Ledger class will:
 
 - Use the default `lookupTemplate` from `@daml/types`
 - The `packageVersion` field will be `undefined` in all `CreateEvent` objects
@@ -124,12 +124,7 @@ If you **don't** provide `versionedTemplateRegistry`, the Ledger class will:
 
 ## How It Works
 
-1. The `versionedTemplateRegistry` function returns `[Template, version]` tuples
+1. The `versionedRegistry` function returns `VersionedLookupResult` or `undefined`
 2. The Ledger extracts the version string and stores it in `CreateEvent.packageVersion`
 3. Your application code can compare this against `getCurrentPackageVersion()` to detect outdated contracts
 4. This keeps the Ledger package simple and decoupled from version policy
-
-## See Also
-
-- `/apps/codegen/VERSION_REGISTRY.md` - Details on the version-aware registry implementation
-- `/apps/codegen/example-usage.js` - Examples of using the registry directly

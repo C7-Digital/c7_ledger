@@ -88,14 +88,14 @@ function isCreateEvent(
 // This term is so overloaded, lets add a '_' to help differentiate
 function createEvent_<T extends object, K = unknown>(
   cantonEvent: Schemas["CreatedEvent"],
-  versionedTemplateRegistry?: VersionedRegistry
+  versionedRegistry?: VersionedRegistry
 ): CreateEvent<T, K> {
   let t: Template<T, K>;
   let packageVersion: string | undefined;
 
   // Use custom registry if provided, otherwise fall back to default lookupTemplate
-  if (versionedTemplateRegistry) {
-    const result = versionedTemplateRegistry(cantonEvent.templateId);
+  if (versionedRegistry) {
+    const result = versionedRegistry(cantonEvent.templateId);
 
     if (!result) {
       throw new Error(`Template not found in registry: ${cantonEvent.templateId}`);
@@ -138,16 +138,21 @@ function archiveEvent_<T extends object>(cantonEvent: Schemas["ArchivedEvent"]):
   };
 }
 
+// It is possible that we query for a given interview that we are interested in,
+// but the underlying contract has multiple interview implementations that we are NOT
+// interested in, and consequently not registered in our versionedRegistry.
+// In this case we return null.
 function interfaceEvent_<I extends object, K = unknown>(
   cantonEvent: Schemas["CreatedEvent"],
   interfaceView: Schemas["JsInterfaceView"], 
-  versionedTemplateRegistry: VersionedRegistry
-): Interface<I> {
+  versionedRegistry: VersionedRegistry
+): Interface<I> | null{
 
-  const result = versionedTemplateRegistry(interfaceView.interfaceId);
+  const result = versionedRegistry(interfaceView.interfaceId);
 
   if (!result) {
-    throw new Error(`Interface not found in registry: ${interfaceView.interfaceId}`);
+    logger.warn(`Interface not found in registry: ${interfaceView.interfaceId}`);
+    return null;
   }
 
   if (result.type === "template") {
@@ -307,9 +312,10 @@ export interface LedgerOptions {
    */
   asyncApiSchemaPath?: string;
   /**
-   * Optional version-aware template/interface registry.
+   * Semi-optional version-aware template/interface registry.
    * If provided, this function will be used instead of the default lookupTemplate.
-   * Should return VersionedLookupResult or undefined.
+   * Should return VersionedLookupResult or undefined. This is required for
+   * querying and decoding interfaces views.
    */
   versionedRegistry?: VersionedRegistry;
 }
@@ -759,7 +765,7 @@ export class Ledger {
         const createEvent = contractEntry.JsActiveContract.createdEvent;
 
         // Verify we got the correct template
-        if (createEvent.templateId !== template.templateId) {
+        if (!matchesPartiallyQualified(createEvent.templateId, template.templateId)) {
           logger.warn(
             `Template ID mismatch: expected ${template.templateId}, got ${createEvent.templateId}`
           );
@@ -790,7 +796,7 @@ export class Ledger {
     readAsParties?: Party[]
   ): Promise<Interface<I>[]> {
     if (this.options.versionedRegistry === undefined) {
-      throw new Error("Versioned registry is not initialized");
+      throw new Error("Versioned registry is required for interface queries.");
     }
     const versionedRegistry = this.options.versionedRegistry;
     const activeAtOffset = await this.resolveOffset(atOffset);
@@ -835,7 +841,14 @@ export class Ledger {
         const createEvent = contractEntry.JsActiveContract.createdEvent;
 
         for (const interfaceView of createEvent.interfaceViews ?? []){
-          acc.push(interfaceEvent_(createEvent, interfaceView, versionedRegistry));
+          if (matchesPartiallyQualified(interfaceView.interfaceId, interface_.templateId)){
+            const interfaceEvent = interfaceEvent_<I>(createEvent, interfaceView, versionedRegistry);
+            if (interfaceEvent !== null) {
+              acc.push(interfaceEvent);
+            }
+          } else {
+            logger.debug(`Ignoring interface ${interfaceView.interfaceId} as it does not match ${interface_.templateId}.`);
+          }
         }
         return acc;
       },
