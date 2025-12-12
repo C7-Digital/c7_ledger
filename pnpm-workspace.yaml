@@ -1,3 +1,6 @@
 packages:
   - 'ledger'
   - 'react'
+
+settings:
+  inject-workspace-packages: true
