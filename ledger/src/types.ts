@@ -75,7 +75,7 @@ export type VersionedLookupResult
  * 
  * This type can be passed into our Ledger so that we can use it instead. We
  * overload the name of the lookup parameter 'templateId' even though in the
- * interface we really mean the interfaceId as in the spec OpenAPI spec.
+ * interface we really mean the interfaceId as in the OpenAPI spec.
  */
 export type VersionedRegistry = (
   templateId: string
