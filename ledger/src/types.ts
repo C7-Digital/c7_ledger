@@ -111,6 +111,7 @@ export interface Stream<T extends object, K> {
   start(): void;
   state(): StreamState;
   close(): void;
+  updateToken(newToken: string): void;
 }
 
 /**
@@ -188,6 +189,7 @@ export interface MultiStream<TM extends TemplateMapping> {
   start(): void;
   state(): StreamState;
   close(): void;
+  updateToken(newToken: string): void;
 }
 
 export interface Query<T = unknown> {

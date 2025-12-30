@@ -63,6 +63,8 @@ export interface StreamQueryResult<TContract extends object = object, TKey = any
   readonly reload: () => void;
   /** Whether the stream is connected */
   readonly connected: boolean;
+  /** Function to update the authentication token */
+  readonly updateToken: (newToken: string) => void;
 }
 
 export interface UserResult {
@@ -85,4 +87,6 @@ export interface MultiStreamQueryResult<TM extends TemplateMapping> {
   readonly reload: () => void;
   /** Whether the stream is connected */
   readonly connected: boolean;
+  /** Function to update the authentication token */
+  readonly updateToken: (newToken: string) => void;
 }

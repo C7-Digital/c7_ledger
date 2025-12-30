@@ -163,4 +163,8 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     this.errorEmitter.removeAllListeners();
     this.stateEmitter.removeAllListeners();
   }
+
+  updateToken(newToken: string): void {
+    this.stream.updateToken(newToken);
+  }
 }

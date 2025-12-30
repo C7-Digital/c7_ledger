@@ -8,6 +8,7 @@
 import type { channels, components } from "./generated/async-api";
 import { SchemaValidator, ValidationMode } from "./validation";
 import { logger } from "./logger";
+import { logTokenExpiration } from "./token";
 import WebSocket from "isomorphic-ws";
 
 export interface StreamConfig {
@@ -129,6 +130,21 @@ export class WebSocketClient {
   }
 
   /**
+   * Get the current token (for logging and validation purposes)
+   */
+  getToken(): string {
+    return this.token;
+  }
+
+  /**
+   * Update the token used for authentication
+   * Note: This only updates the stored token. Active connections need to be recreated.
+   */
+  setToken(newToken: string): void {
+    this.token = newToken;
+  }
+
+  /**
    * Generic streaming method with full type safety
    * This method enforces that request/response types match the endpoint
    */
@@ -189,6 +205,10 @@ export class WebSocketClient {
     const url = endpoint.startsWith("/")
       ? `${baseUrl}${endpoint.slice(1)}`
       : `${baseUrl}/${endpoint}`;
+    
+    // Log token expiration info before connecting
+    logTokenExpiration(this.token, `WebSocket connection to ${endpoint}`);
+    
     // WebSocket authentication via Sec-WebSocket-Protocol header
     const protocols = [`jwt.token.${this.token}`, "daml.ws.auth"];
     logger.debug(`Connecting websocket to ${url} with protocols: ${protocols}`);
