@@ -28,6 +28,7 @@ import {
 import { decodeJwt } from "jose";
 import { EventEmitter } from "eventemitter3";
 import { logger } from "./logger";
+import { logTokenExpiration } from "./token";
 import { components } from "./generated/api";
 import { TypedHttpClient } from "./client";
 import {
@@ -318,6 +319,11 @@ export interface LedgerOptions {
    * querying and decoding interfaces views.
    */
   versionedRegistry?: VersionedRegistry;
+  /**
+   * Whether to automatically reconnect WebSocket streams on abnormal close (1006).
+   * Defaults to true for backward compatibility.
+   */
+  autoReconnect?: boolean;
 }
 
 /**
@@ -333,6 +339,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   private state_: StreamState = "start";
   private filtersByParty: Record<string, any>;
   private versionedRegistry?: VersionedRegistry;
+  private autoReconnect: boolean;
 
   /**
    * Creates a new stream for active contracts
@@ -349,13 +356,15 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     startOffset: number,
     skipAcs: boolean = false,
     includeCreatedEventBlob: boolean = true,
-    versionedRegistry?: VersionedRegistry
+    versionedRegistry?: VersionedRegistry,
+    autoReconnect: boolean = false,
   ) {
     this.parties = parties;
     this.wsClient = wsClient;
     this.offset = startOffset;
     this.skipAcs = skipAcs;
     this.versionedRegistry = versionedRegistry;
+    this.autoReconnect = autoReconnect;
     let cumulative = templateIds.map(templateId => {
       return {
         identifierFilter: templateFilter(templateId, includeCreatedEventBlob),
@@ -517,16 +526,20 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     const closeEvent: StreamCloseEvent = { code, reason };
     this.eventEmitter.emit("close", closeEvent);
 
-    // Auto-reconnect on abnormal close (1006) if stream is still active
-    if (code === 1006 && this.state_ === "live") {
+    // Auto-reconnect on abnormal close (1006) if stream is still active and auto-reconnect is enabled
+    if (code === 1006 && this.state_ === "live" && this.autoReconnect) {
       logger.log(`WebSocket closed abnormally (1006), reconnecting in 3 seconds...`);
       setTimeout(() => {
         if (this.state_ === "live") {
           // Double-check we're still active
           logger.log(`Attempting to reconnect stream...`);
+          // Log token expiration info before reconnection attempt
+          logTokenExpiration(this.wsClient.getToken(), "WebSocket reconnection attempt");
           this.startUpdatesStream();
         }
       }, 3000);
+    } else if (code === 1006 && this.state_ === "live" && !this.autoReconnect) {
+      logger.log(`WebSocket closed abnormally (1006), but auto-reconnect is disabled`);
     }
   }
 
@@ -604,6 +617,52 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     // Clean up event listeners
     this.eventEmitter.removeAllListeners();
   }
+
+  /**
+   * Update the authentication token and restart the stream
+   */
+  public updateToken(newToken: string): void {
+    logger.debug(`🔄 Stream token update requested for state: ${this.state_}`);
+    logTokenExpiration(newToken, "Stream updateToken()");
+
+    // Update the token in the WebSocket client
+    this.wsClient.setToken(newToken);
+    logger.debug("WebSocket client token updated");
+
+    // Handle token update based on current stream state
+    switch (this.state_) {
+      case "live":
+        logger.debug(`Restarting live stream with new token`);
+        
+        // Close current connection
+        if (this.stopClient) {
+          this.stopClient();
+          this.stopClient = undefined;
+        }
+        
+        // Restart the updates stream with the new token
+        this.startUpdatesStream();
+        break;
+        
+      case "init":
+        logger.debug(`Stream is in init state, will use new token when transitioning to live`);
+        // Stream is still in ACS phase, new token will be used when it transitions to updates
+        break;
+        
+      case "start":
+        logger.debug(`Stream is in start state, token updated but no restart needed`);
+        break;
+        
+      case "stop":
+        logger.debug(`Stream is stopped, token updated but no restart needed`);
+        break;
+        
+      default:
+        // TypeScript exhaustiveness check
+        const _exhaustive: never = this.state_;
+        throw new Error(`Unknown stream state: ${_exhaustive}`);
+    }
+  }
 }
 
 /**
@@ -621,12 +680,9 @@ export class Ledger {
   constructor(options: LedgerOptions) {
     this.httpBaseUrl = options.httpBaseUrl;
 
-    const payload = decodeJwt(options.token);
-    logger.debug(`Token payload: ${JSON.stringify(payload)}`);
-    if (payload.sub === undefined) {
-      throw new Error(`Token payload missing 'sub' field`);
-    }
-    this.tokenUserId = payload.sub;
+    // Log token expiration info during ledger initialization
+    const tokenInfo = logTokenExpiration(options.token, `Ledger initialization`);
+    this.tokenUserId = tokenInfo.userId;
 
     this.client = new TypedHttpClient({
       token: options.token,
@@ -1065,7 +1121,8 @@ export class Ledger {
       activeAtOffset,
       skipAcs,
       includeCreatedEventBlob,
-      this.options.versionedRegistry
+      this.options.versionedRegistry,
+      this.options.autoReconnect ?? true,
     );
   }
 
@@ -1125,7 +1182,8 @@ export class Ledger {
       activeAtOffset,
       skipAcs,
       includeCreatedEventBlob,
-      this.options.versionedRegistry
+      this.options.versionedRegistry,
+      this.options.autoReconnect ?? true,
     );
 
     return new MultiStreamAdapter<TM>(stream);

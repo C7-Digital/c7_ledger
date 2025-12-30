@@ -57,13 +57,20 @@ export interface DamlLedgerProps extends LedgerOptions {
  * Provider component that wraps your app and provides ledger access to hooks
  */
 export const DamlLedger: FunctionComponent<DamlLedgerProps> = props => {
-  const { children, ...otherProps } = props;
+  const { children, token, ...otherOptions } = props;
 
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
+  // Capture initial options on first render and never change them
+  // These options should be static for the lifetime of the component
+  const initialOptionsRef = useRef(otherOptions);
+
+  // Create ledger with initial token, but don't recreate when token changes
+  // Token updates are handled via updateToken() on streams
+  // Only recreate when reloadTrigger changes (explicit reload requested)
   const ledger = useMemo(() => {
-    return new Ledger(otherProps);
-  }, [reloadTrigger, otherProps]);
+    return new Ledger({ ...initialOptionsRef.current, token });
+  }, [reloadTrigger]);
 
   const triggerReload = useCallback(() => {
     setReloadTrigger(prev => prev + 1);
@@ -351,6 +358,12 @@ export function useStreamQuery<
     setContractsMap(new Map());
   }, []);
 
+  const updateToken = useCallback((newToken: string): void => {
+    if (streamRef.current) {
+      streamRef.current.updateToken(newToken);
+    }
+  }, []);
+
   // Setup real streaming connection
   useEffect(() => {
     isCleanedUpRef.current = false;
@@ -451,6 +464,7 @@ export function useStreamQuery<
     connected,
     error,
     reload,
+    updateToken,
   };
 }
 
@@ -483,6 +497,12 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
     setLoading(true);
     setError(null);
     setMultiStream(null);
+  }, []);
+
+  const updateToken = useCallback((newToken: string): void => {
+    if (streamRef.current) {
+      streamRef.current.updateToken(newToken);
+    }
   }, []);
 
   // Setup real streaming connection
@@ -520,8 +540,8 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
 
         // Handle errors
         streamRef.current.onError((err: CantonError) => {
+          console.debug("[useMultiStreamQuery] Stream error:", err);
           setError(err.cause);
-          setConnected(false);
         });
 
         setMultiStream(streamRef.current);
@@ -584,6 +604,7 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
     connected,
     error,
     reload,
+    updateToken,
   };
 }
 
