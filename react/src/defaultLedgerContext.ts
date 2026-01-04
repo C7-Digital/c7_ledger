@@ -13,6 +13,7 @@ export const {
   useQuery,
   useQueryInterface,
   useStreamQuery,
+  useStreamQueryInterface,
   useMultiStreamQuery,
   useRightsAs,
 } = createLedgerContext();

@@ -67,6 +67,10 @@ export interface StreamQueryResult<TContract extends object = object, TKey = any
   readonly updateToken: (newToken: string) => void;
 }
 
+export interface StreamQueryInterfaceResult<IContract extends object> extends StreamQueryResult<object, unknown> {
+  readonly interfacesMap: ReadonlyMap<ContractId<IContract>, Interface<IContract>>;
+}
+
 export interface UserResult {
   /** The user information from the token */
   readonly user: User | null;

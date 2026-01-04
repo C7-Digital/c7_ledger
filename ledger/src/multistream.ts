@@ -87,7 +87,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
 
   // MultiStream interface implementation
 
-  onCreate<TID extends keyof TM>(
+  onCreate<TID extends keyof TM & PackageIdString>(
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"] & object, TM[TID]["keyType"]>) => void
   ): void {
@@ -98,7 +98,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     });
   }
 
-  onArchive<TID extends keyof TM>(
+  onArchive<TID extends keyof TM & PackageIdString>(
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
@@ -117,7 +117,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     this.stream.on("state", listener);
   }
 
-  offCreate<TID extends keyof TM>(
+  offCreate<TID extends keyof TM & PackageIdString>(
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>) => void
   ): void {
@@ -126,7 +126,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     }
   }
 
-  offArchive<TID extends keyof TM>(
+  offArchive<TID extends keyof TM & PackageIdString>(
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
