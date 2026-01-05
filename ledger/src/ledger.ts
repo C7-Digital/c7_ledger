@@ -22,10 +22,8 @@ import {
   Choice,
   InterfaceCompanion,
   Template,
-  TemplateOrInterface,
   lookupTemplate,
 } from "@daml/types";
-import { decodeJwt } from "jose";
 import { EventEmitter } from "eventemitter3";
 import { logger } from "./logger";
 import { logTokenExpiration } from "./token";
@@ -38,7 +36,7 @@ import {
   UpdatesResponse,
   isTransaction,
 } from "./websocket";
-import { MultiStreamAdapter } from "./multistream";
+import { MultiStreamAdapter, InterfaceMultiStreamImpl } from "./multistream";
 import {
   AllocatePartyRequest,
   AllocatePartyResponse,
@@ -54,6 +52,8 @@ import {
   LedgerOffset,
   Stream,
   InterfaceStream,
+  InterfaceMapping,
+  InterfaceMultiStream,
   StreamState,
   PartyDetails,
   User,
@@ -1258,8 +1258,9 @@ export class Ledger {
    * stream.start();
    * ```
    *
-   * @param templates Array of templates to stream
+   * @param tm Template mapping for the streams
    * @param offset Optional offset to start streaming from
+   * @param skipAcs Whether to skip loading the initial active contract set
    * @param includeCreatedEventBlob Whether to include created event blobs
    * @param readAsParties Array of parties to stream for, if not specified default to
    *          the actAs parties of the user in the token.
@@ -1274,10 +1275,8 @@ export class Ledger {
   ): Promise<MultiStream<TM>> {
     const activeAtOffset = await this.resolveOffset(offset);
 
-    const filters : FilterSpec[] = Object.entries(tm).map(([id, {type}]) => {
-      return type === "template" || type === undefined 
-          ? {type: 'template', templateId: id as PackageIdString }
-          : {type: 'interface', interfaceId: id as PackageIdString};
+    const filters : FilterSpec[] = Object.keys(tm).map((id) => {
+      return {type: 'template', templateId: id as PackageIdString };
     });
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     const stream = new LedgerStream<object, unknown>(
@@ -1294,6 +1293,37 @@ export class Ledger {
     return new MultiStreamAdapter<TM>(stream);
   }
 
+  async createMultiInterfaceStream<IM extends InterfaceMapping>(
+    im: IM,
+    offset: LedgerOffset = "end",
+    skipAcs: boolean = false,
+    includeCreatedEventBlob: boolean = false,
+    readAsParties?: Party[]
+  ): Promise<InterfaceMultiStream<IM>> {
+    const activeAtOffset = await this.resolveOffset(offset);
+
+    const filters : FilterSpec[] = Object.keys(im).map((id) => {
+      return {type: 'interface', interfaceId: id as PackageIdString };
+    });
+    const parties_ = readAsParties || (await this.getTokenActAsParties());
+    
+    if (!this.options.versionedRegistry) {
+      throw new Error("VersionedRegistry expected for createMultiInterfaceStream");
+    }
+    
+    const stream = new InterfaceStreamImpl<object>(
+      filters,
+      parties_,
+      this.initClient(),
+      activeAtOffset,
+      this.options.versionedRegistry,
+      skipAcs,
+      includeCreatedEventBlob,
+      this.options.autoReconnect ?? true,
+    );
+
+    return new InterfaceMultiStreamImpl<IM>(stream);
+  }
   // User information
   async getUserInfo(userId: string): Promise<User | null> {
     const response = await this.client.getUserInfo(userId);

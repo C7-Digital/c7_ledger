@@ -3,6 +3,10 @@ import {
   ArchiveEvent,
   CantonError,
   CreateEvent,
+  Interface,
+  InterfaceMapping,
+  InterfaceMultiStream,
+  InterfaceStream,
   MultiStream,
   Stream,
   StreamState,
@@ -10,15 +14,15 @@ import {
 } from "./types";
 import { PackageIdString } from "./valueTypes";
 import { logger } from "./logger";
-import { TemplateEmitterMap } from "./TemplateEmitterMap";
+import { PackageIdEmitterMap, } from "./PackageIdEmitterMap";
 
 /**
  * Adapts a Stream instance to the MultiStream interface
  * Provides template-specific event handlers with proper typing
  */
 export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStream<TM> {
-  private stream: Stream<object, unknown>;
-  private templateEmitters = new TemplateEmitterMap();
+  protected stream: Stream<object, unknown>;
+  protected packageIdEmitters = new PackageIdEmitterMap();
   private errorEmitter: EventEmitter = new EventEmitter(); // Dedicated error emitter
   private stateEmitter: EventEmitter = new EventEmitter(); // Dedicated state emitter
 
@@ -37,38 +41,38 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
   }
 
   /**
-   * Get or create an EventEmitter for a specific template
+   * Get or create an EventEmitter for a specific package ID
    */
-  private getEmitterForTemplate(templateId: PackageIdString): EventEmitter {
-    if (!this.templateEmitters.has(templateId)) {
-      this.templateEmitters.set(templateId, new EventEmitter());
+  protected getEmitterForPackageId(packageId: PackageIdString): EventEmitter {
+    if (!this.packageIdEmitters.has(packageId)) {
+      this.packageIdEmitters.set(packageId, new EventEmitter());
     }
-    return this.templateEmitters.get(templateId)!;
+    return this.packageIdEmitters.get(packageId)!;
   }
 
   /**
    * Handle create events from the underlying stream
-   * and route them to the appropriate template emitter
+   * and route them to the appropriate package ID emitter
    */
   private handleCreateEvent(event: CreateEvent<object, unknown>): void {
-    const templateId = event.templateId;
-    if (this.templateEmitters.has(templateId)) {
-      this.templateEmitters.get(templateId)!.emit("create", event);
+    const packageId = event.templateId;
+    if (this.packageIdEmitters.has(packageId)) {
+      this.packageIdEmitters.get(packageId)!.emit("create", event);
     } else {
-      logger.warn(`Received create event for unknown template ${templateId}`);
+      logger.warn(`Received create event for unknown template ${packageId}`);
     }
   }
 
   /**
    * Handle archive events from the underlying stream
-   * and route them to the appropriate template emitter
+   * and route them to the appropriate package ID emitter
    */
   private handleArchiveEvent(event: ArchiveEvent<object>): void {
-    const templateId = event.templateId;
-    if (this.templateEmitters.has(templateId)) {
-      this.templateEmitters.get(templateId)!.emit("archive", event);
+    const packageId = event.templateId;
+    if (this.packageIdEmitters.has(packageId)) {
+      this.packageIdEmitters.get(packageId)!.emit("archive", event);
     } else {
-      logger.warn(`Received archive event for unknown template ${templateId}`);
+      logger.warn(`Received archive event for unknown template ${packageId}`);
     }
   }
 
@@ -91,7 +95,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"] & object, TM[TID]["keyType"]>) => void
   ): void {
-    const emitter = this.getEmitterForTemplate(templateId as PackageIdString);
+    const emitter = this.getEmitterForPackageId(templateId as PackageIdString);
     emitter.on("create", (event: CreateEvent<object, unknown>) => {
       // Type assertion: we know the event has the correct type based on templateId
       listener(event as CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>);
@@ -102,7 +106,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
-    const emitter = this.getEmitterForTemplate(templateId as PackageIdString);
+    const emitter = this.getEmitterForPackageId(templateId as PackageIdString);
     emitter.on("archive", (event: ArchiveEvent<object>) => {
       // Type assertion: we know the event has the correct type based on templateId
       listener(event as ArchiveEvent<TM[TID]["contractType"]>);
@@ -121,8 +125,8 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>) => void
   ): void {
-    if (this.templateEmitters.has(templateId as PackageIdString)) {
-      this.templateEmitters.get(templateId as PackageIdString)!.off("create", listener);
+    if (this.packageIdEmitters.has(templateId as PackageIdString)) {
+      this.packageIdEmitters.get(templateId as PackageIdString)!.off("create", listener);
     }
   }
 
@@ -130,8 +134,8 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
-    if (this.templateEmitters.has(templateId as PackageIdString)) {
-      this.templateEmitters.get(templateId as PackageIdString)!.off("archive", listener);
+    if (this.packageIdEmitters.has(templateId as PackageIdString)) {
+      this.packageIdEmitters.get(templateId as PackageIdString)!.off("archive", listener);
     }
   }
 
@@ -154,10 +158,10 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
   close(): void {
     this.stream.close();
 
-    for (const emitter of this.templateEmitters.values()) {
+    for (const emitter of this.packageIdEmitters.values()) {
       emitter.removeAllListeners();
     }
-    this.templateEmitters.clear();
+    this.packageIdEmitters.clear();
 
     // Clean up the error emitter too
     this.errorEmitter.removeAllListeners();
@@ -166,5 +170,59 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
 
   updateToken(newToken: string): void {
     this.stream.updateToken(newToken);
+  }
+}
+
+/**
+ * Extends MultiStreamAdapter to add interface-specific event handling
+ * Provides both template-specific and interface-specific event handlers with proper typing
+ */
+export class InterfaceMultiStreamImpl<IM extends InterfaceMapping> extends MultiStreamAdapter<{[K in keyof IM]: {contractType: object; keyType: unknown}}> implements InterfaceMultiStream<IM> {
+  private interfaceStream: InterfaceStream<object>;
+
+  /**
+   * Create a new InterfaceMultiStream adapter
+   * @param stream The underlying InterfaceStream instance
+   */
+  constructor(stream: InterfaceStream<object>) {
+    // Pass the stream to the parent MultiStreamAdapter
+    super(stream);
+    this.interfaceStream = stream;
+
+    // Set up interface-specific event listener
+    this.interfaceStream.on("interfaceView", this.handleInterfaceViewEvent.bind(this));
+  }
+
+  /**
+   * Handle interfaceView events from the underlying stream
+   */
+  private handleInterfaceViewEvent(event: Interface<object>): void {
+    const interfaceId = event.templateId; // Interface uses templateId field
+    if (this.packageIdEmitters.has(interfaceId)) {
+      this.packageIdEmitters.get(interfaceId)!.emit("interfaceView", event);
+    } else {
+      logger.warn(`Received interfaceView event for unknown interface ${interfaceId}`);
+    }
+  }
+
+  // InterfaceMultiStreamMethods implementation
+
+  onInterfaceView<IID extends keyof IM & PackageIdString>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void {
+    const emitter = this.getEmitterForPackageId(interfaceId as PackageIdString);
+    emitter.on("interfaceView", (event: Interface<object>) => {
+      listener(event as Interface<IM[IID]["contractType"]>);
+    });
+  }
+
+  offInterfaceView<IID extends keyof IM & PackageIdString>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void {
+    if (this.packageIdEmitters.has(interfaceId as PackageIdString)) {
+      this.packageIdEmitters.get(interfaceId as PackageIdString)!.off("interfaceView", listener);
+    }
   }
 }

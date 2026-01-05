@@ -135,17 +135,50 @@ export type InterfaceStream<I extends object> = Stream<object, unknown> & Interf
 /**
  * Template mapping type for MultiStream:
  * template IDs to their corresponding contract and key types
- * Supports both templates and interfaces with optional type field
- * If type is undefined, defaults to 'template' for backwards compatibility
  */
 export type TemplateMapping = Record<
   PackageIdString,
   {
     contractType: object;
     keyType: unknown;
-    type?: 'template' | 'interface';
   }
 >;
+
+/**
+ * Interface mapping type for InterfaceMultiStream:
+ * interface IDs to their corresponding contract types
+ */
+export type InterfaceMapping = Record<
+  PackageIdString,
+  {
+    contractType: object;
+  }
+>;
+
+/**
+ * Interface-specific methods for MultiStream
+ */
+export interface InterfaceMultiStreamMethods<IM extends InterfaceMapping> {
+  /**
+   * Register a listener for interfaceView events for a specific interface
+   * @param interfaceId The interface ID to listen for
+   * @param listener The callback function that will receive properly typed interface events
+   */
+  onInterfaceView<IID extends keyof IM & PackageIdString>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void;
+
+  /**
+   * Remove an interfaceView event listener for a specific interface
+   * @param interfaceId The interface ID to stop listening for
+   * @param listener The callback function to remove
+   */
+  offInterfaceView<IID extends keyof IM & PackageIdString>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void;
+}
 
 /**
  * Provides template-specific event handlers.
@@ -212,6 +245,24 @@ export interface MultiStream<TM extends TemplateMapping> {
   close(): void;
   updateToken(newToken: string): void;
 }
+
+/**
+ * Derives a TemplateMapping from an InterfaceMapping
+ * Templates underlying interfaces have generic object contractType and unknown keyType
+ */
+type DerivedTemplateMapping<IM extends InterfaceMapping> = {
+  [K in keyof IM]: {
+    contractType: object;
+    keyType: unknown;
+  }
+};
+
+/**
+ * Extended MultiStream interface that includes interface-specific event handlers
+ * Similar to how InterfaceStream extends Stream
+ * Derives the template mapping from the interface mapping since interfaces are implemented for templates
+ */
+export type InterfaceMultiStream<IM extends InterfaceMapping> = MultiStream<DerivedTemplateMapping<IM>> & InterfaceMultiStreamMethods<IM>;
 
 export interface Query<T = unknown> {
   [key: string]: unknown;
