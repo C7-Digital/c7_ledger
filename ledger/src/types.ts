@@ -137,7 +137,7 @@ export type InterfaceStream<I extends object> = Stream<object, unknown> & Interf
  * template IDs to their corresponding contract and key types
  */
 export type TemplateMapping = Record<
-  PackageIdString,
+  string,
   {
     contractType: object;
     keyType: unknown;
@@ -149,7 +149,7 @@ export type TemplateMapping = Record<
  * interface IDs to their corresponding contract types
  */
 export type InterfaceMapping = Record<
-  PackageIdString,
+  string,
   {
     contractType: object;
   }
@@ -164,7 +164,7 @@ export interface InterfaceMultiStreamMethods<IM extends InterfaceMapping> {
    * @param interfaceId The interface ID to listen for
    * @param listener The callback function that will receive properly typed interface events
    */
-  onInterfaceView<IID extends keyof IM & PackageIdString>(
+  onInterfaceView<IID extends keyof IM>(
     interfaceId: IID,
     listener: (event: Interface<IM[IID]["contractType"]>) => void
   ): void;
@@ -174,7 +174,7 @@ export interface InterfaceMultiStreamMethods<IM extends InterfaceMapping> {
    * @param interfaceId The interface ID to stop listening for
    * @param listener The callback function to remove
    */
-  offInterfaceView<IID extends keyof IM & PackageIdString>(
+  offInterfaceView<IID extends keyof IM>(
     interfaceId: IID,
     listener: (event: Interface<IM[IID]["contractType"]>) => void
   ): void;
@@ -189,7 +189,7 @@ export interface MultiStream<TM extends TemplateMapping> {
    * @param templateId The template ID to listen for
    * @param listener The callback function that will receive properly typed events
    */
-  onCreate<TID extends keyof TM & PackageIdString>(
+  onCreate<TID extends keyof TM>(
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>) => void
   ): void;
@@ -199,7 +199,7 @@ export interface MultiStream<TM extends TemplateMapping> {
    * @param templateId The template ID to listen for
    * @param listener The callback function that will receive properly typed events
    */
-  onArchive<TID extends keyof TM & PackageIdString>(
+  onArchive<TID extends keyof TM>(
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void;
@@ -217,7 +217,7 @@ export interface MultiStream<TM extends TemplateMapping> {
    * @param templateId The template ID to stop listening for
    * @param listener The callback function to remove
    */
-  offCreate<TID extends keyof TM & PackageIdString>(
+  offCreate<TID extends keyof TM>(
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>) => void
   ): void;
@@ -227,7 +227,7 @@ export interface MultiStream<TM extends TemplateMapping> {
    * @param templateId The template ID to stop listening for
    * @param listener The callback function to remove
    */
-  offArchive<TID extends keyof TM & PackageIdString>(
+  offArchive<TID extends keyof TM>(
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void;
