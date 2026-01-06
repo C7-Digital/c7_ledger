@@ -193,6 +193,7 @@ function interfaceEvent_<I extends object, K = unknown>(
     key: cantonEvent.contractKey,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     interfaceView: decodedInterfaceView,
+    interfaceId: interfaceView.interfaceId,
     packageVersion,
   }
 }

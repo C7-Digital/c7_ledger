@@ -197,7 +197,7 @@ export class InterfaceMultiStreamImpl<IM extends InterfaceMapping> extends Multi
    * Handle interfaceView events from the underlying stream
    */
   private handleInterfaceViewEvent(event: Interface<object>): void {
-    const interfaceId = event.templateId; // Interface uses templateId field
+    const interfaceId = event.interfaceId;
     if (this.packageIdEmitters.has(interfaceId)) {
       this.packageIdEmitters.get(interfaceId)!.emit("interfaceView", event);
     } else {

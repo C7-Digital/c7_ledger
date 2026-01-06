@@ -1,10 +1,8 @@
 // Basic types for the new ledger implementation branded with value.proto string formats
 import { ContractId, Party, Choice, Template, InterfaceCompanion } from "@daml/types";
 import {
-  LedgerString,
   PartyIdString,
   UserIdString,
-  NameString,
   PackageIdString,
 } from "./valueTypes";
 import { JsCantonError } from "./websocket";
@@ -55,6 +53,7 @@ export type Interface<I extends object> = {
   key?: any;
   createdEventBlob: string;
   interfaceView: I;
+  interfaceId: PackageIdString;
   /**
    * Package version string (e.g., "0.0.6")
    * Only present if using VersionedRegistry
