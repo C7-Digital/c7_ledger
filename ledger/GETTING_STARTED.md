@@ -1,6 +1,6 @@
-# Getting Started with @c7/ledger
+# Getting Started with @c7-digital/ledger
 
-This guide will help you set up and start using the @c7/ledger package.
+This guide will help you set up and start using the @c7-digital/ledger package.
 
 ## Prerequisites
 
@@ -89,7 +89,7 @@ pnpm publish
 pnpm link --global
 
 # In your project directory
-pnpm link --global @c7/ledger
+pnpm link --global @c7-digital/ledger
 ```
 
 ### Option 3: Use as File Dependency
@@ -99,7 +99,7 @@ In your project's `package.json`:
 ```json
 {
   "dependencies": {
-    "@c7/ledger": "file:../c7_ledger"
+    "@c7-digital/ledger": "file:../c7_ledger"
   }
 }
 ```

@@ -3,7 +3,6 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  injectWorkspacePackages: true
 
 importers:
 
@@ -83,7 +82,7 @@ importers:
         specifier: 3.4.8
         version: 3.4.8
     devDependencies:
-      '@c7/ledger':
+      '@c7-digital/ledger':
         specifier: file:../ledger
         version: link:../ledger
       '@types/react':

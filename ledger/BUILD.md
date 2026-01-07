@@ -30,7 +30,7 @@ pnpm exec ledger-build --sdk-version=3.4.0    # Target specific SDK version
 ### Programmatic Usage
 
 ```typescript
-import { build } from "@c7/ledger/scripts/build";
+import { build } from "@c7-digital/ledger/scripts/build";
 
 await build();
 ```
@@ -89,7 +89,7 @@ To use this build system in other projects:
 1. **Install the package**:
 
    ```bash
-   pnpm install @c7/ledger
+   pnpm install @c7-digital/ledger
    ```
 
 2. **Add to package.json**:

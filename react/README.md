@@ -1,4 +1,4 @@
-# @c7/react
+# @c7-digital/react
 
 React hooks for Daml ledger integration using Canton JSON API v2
 
@@ -12,11 +12,11 @@ React hooks for Daml ledger integration using Canton JSON API v2
 
 ## Versioning
 
-This package follows the Canton SDK versioning scheme, matching the `@c7/ledger` package it depends on.
+This package follows the Canton SDK versioning scheme, matching the `@c7-digital/ledger` package it depends on.
 
 **Current version**: `3.3.0-snapshot.20250507.0`
 
-- Versioned to match the Canton SDK and `@c7/ledger` package
+- Versioned to match the Canton SDK and `@c7-digital/ledger` package
 - Ensures compatibility with the specific Canton OpenAPI types
 - When Canton releases a new version, both packages will be updated together
 
@@ -25,7 +25,7 @@ This package follows the Canton SDK versioning scheme, matching the `@c7/ledger`
 ## Installation
 
 ```bash
-pnpm install @c7/react @c7/ledger
+pnpm install @c7-digital/react @c7-digital/ledger
 ```
 
 ## Build Output
@@ -43,8 +43,8 @@ The library builds to the `dist/` folder with:
 Wrap your app with `DamlLedger` provider:
 
 ```tsx
-import { DamlLedger } from "@c7/react";
-import { Ledger } from "@c7/ledger";
+import { DamlLedger } from "@c7-digital/react";
+import { Ledger } from "@c7-digital/ledger";
 
 const ledger = new Ledger({
   baseUrl: "http://localhost:7575",
@@ -66,7 +66,7 @@ function App() {
 Use `useQuery` to fetch active contracts:
 
 ```tsx
-import { useQuery } from "@c7/react";
+import { useQuery } from "@c7-digital/react";
 
 function MyComponent() {
   const { contracts, loading, error, reload } = useQuery(
@@ -96,7 +96,7 @@ function MyComponent() {
 Use `useLedger` to get the ledger instance and `useUser` for the current user information:
 
 ```tsx
-import { useLedger, useUser } from "@c7/react";
+import { useLedger, useUser } from "@c7-digital/react";
 
 function ApprovalComponent({ contractId }: { contractId: string }) {
   const ledger = useLedger();
@@ -129,7 +129,7 @@ function ApprovalComponent({ contractId }: { contractId: string }) {
 Use `useStreamQuery` for live updates:
 
 ```tsx
-import { useStreamQuery } from "@c7/react";
+import { useStreamQuery } from "@c7-digital/react";
 
 function LiveContracts() {
   const { contracts, loading, connected, error } = useStreamQuery(
@@ -239,7 +239,7 @@ function useReload(): () => void;
 
 This package provides a compatible API with `@daml/react` but uses the newer Canton JSON API v2:
 
-| @daml/react        | @c7/react            | Notes                          |
+| @daml/react        | @c7-digital/react            | Notes                          |
 | ------------------ | -------------------- | ------------------------------ |
 | `DamlLedger`       | `DamlLedger`         | Same API, different backend    |
 | `useParty()`       | `useParty()`         | Identical                      |

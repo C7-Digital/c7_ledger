@@ -1,5 +1,5 @@
 /**
- * @c7/react - React hooks for Daml ledger integration
+ * @c7-digital/react - React hooks for Daml ledger integration
  *
  * A replacement for @daml/react that uses the Canton JSON API v2
  * with TypeScript support and modern React patterns.
@@ -36,4 +36,4 @@ export type {
 } from "./types";
 
 // Re-export commonly used types from the ledger package
-export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7/ledger/lite";
+export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7-digital/ledger/lite";

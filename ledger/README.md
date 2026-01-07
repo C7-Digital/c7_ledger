@@ -1,4 +1,4 @@
-# @c7/ledger
+# @c7-digital/ledger
 
 OpenAPI v2 compatible Daml ledger client (that could replace `@daml/ledger`) for the new Canton JSON API v2.
 
@@ -27,7 +27,7 @@ This package follows the Canton SDK versioning scheme. The package version match
 ## Installation
 
 ```bash
-pnpm install @c7/ledger
+pnpm install @c7-digital/ledger
 ```
 
 Or build from source:
@@ -40,7 +40,7 @@ pnpm build
 ## Usage
 
 ```typescript
-import { Ledger } from "@c7/ledger";
+import { Ledger } from "@c7-digital/ledger";
 
 const ledger = new Ledger({
   token: "your-jwt-token",
