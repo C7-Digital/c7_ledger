@@ -28,7 +28,7 @@ import {
   type InterfaceMultiStream,
   type PackageIdString,
   type Interface,
-} from "@c7/ledger/lite";
+} from "@c7-digital/ledger/lite";
 import type {
   DamlLedgerConfig,
   QueryOptions,

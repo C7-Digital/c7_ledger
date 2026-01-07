@@ -1,5 +1,5 @@
 {
-  "name": "@c7/react",
+  "name": "@c7-digital/react",
   "version": "0.0.4",
   "description": "React hooks for Daml ledger integration using Canton JSON API v2",
   "main": "dist/index.js",
@@ -25,14 +25,14 @@
   "author": "",
   "license": "Apache-2.0",
   "peerDependencies": {
-    "@c7/ledger": "0.0.4",
+    "@c7/ledger": "^0.0.4",
     "react": "^18.0.0"
   },
   "dependencies": {
     "@daml/types": "3.4.8"
   },
   "devDependencies": {
-    "@c7/ledger": "file:../ledger",
+    "@c7-digital/ledger": "file:../ledger",
     "@types/react": "^18.3.12",
     "react": "^18.3.1",
     "typescript": "^5.8.3"

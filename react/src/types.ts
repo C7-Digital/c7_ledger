@@ -10,7 +10,7 @@ import {
   type InterfaceMultiStream,
   CantonError,
   Interface,
-} from "@c7/ledger/lite";
+} from "@c7-digital/ledger/lite";
 
 // Brand template ID strings for type safety
 export type TemplateId = string & { readonly __templateId: unique symbol };

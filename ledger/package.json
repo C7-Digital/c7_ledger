@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@c7/ledger",
+  "name": "@c7-digital/ledger",
   "version": "0.0.4",
   "type": "module",
   "main": "lib/src/index.js",

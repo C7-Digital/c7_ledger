@@ -36,4 +36,4 @@ export type {
 } from "./types";
 
 // Re-export commonly used types from the ledger package
-export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7/ledger/lite";
+export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7-digital/ledger/lite";
