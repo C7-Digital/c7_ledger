@@ -1,10 +1,8 @@
 // Basic types for the new ledger implementation branded with value.proto string formats
 import { ContractId, Party, Choice, Template, InterfaceCompanion } from "@daml/types";
 import {
-  LedgerString,
   PartyIdString,
   UserIdString,
-  NameString,
   PackageIdString,
 } from "./valueTypes";
 import { JsCantonError } from "./websocket";
@@ -55,6 +53,7 @@ export type Interface<I extends object> = {
   key?: any;
   createdEventBlob: string;
   interfaceView: I;
+  interfaceId: PackageIdString;
   /**
    * Package version string (e.g., "0.0.6")
    * Only present if using VersionedRegistry
@@ -97,7 +96,7 @@ export type StreamState =
   | "stop"; // Stop called, cleaning up
 
 /**
- * The return interface of streamQuery and streamQueries.
+ * The return interface of streamTemplate - for template-specific streaming with known types.
  */
 export interface Stream<T extends object, K> {
   on(type: "create", listener: (event: CreateEvent<T, K>) => void): void;
@@ -115,6 +114,24 @@ export interface Stream<T extends object, K> {
 }
 
 /**
+ * Additional interface-specific methods for interface streaming.
+ */
+export interface InterfaceStreamMethods<I extends object> {
+  on(type: "interfaceView", listener: (event: Interface<I>) => void): void;
+  off(type: "interfaceView", listener: (event: Interface<I>) => void): void;
+}
+
+/**
+ * The return interface of streamInterface - combines Stream with interface-specific events.
+ * 
+ * Most of the time, if you are subscribing to an interface, the underlying
+ * template is operationally not interesting to you (otherwise, you would be
+ * subscribing to the template directly). Consequently we will emit the
+ * template related events but not make an effort to decode them.
+ */
+export type InterfaceStream<I extends object> = Stream<object, unknown> & InterfaceStreamMethods<I>;
+
+/**
  * Template mapping type for MultiStream:
  * template IDs to their corresponding contract and key types
  */
@@ -125,6 +142,42 @@ export type TemplateMapping = Record<
     keyType: unknown;
   }
 >;
+
+/**
+ * Interface mapping type for InterfaceMultiStream:
+ * interface IDs to their corresponding contract types
+ */
+export type InterfaceMapping = Record<
+  string,
+  {
+    contractType: object;
+  }
+>;
+
+/**
+ * Interface-specific methods for MultiStream
+ */
+export interface InterfaceMultiStreamMethods<IM extends InterfaceMapping> {
+  /**
+   * Register a listener for interfaceView events for a specific interface
+   * @param interfaceId The interface ID to listen for
+   * @param listener The callback function that will receive properly typed interface events
+   */
+  onInterfaceView<IID extends keyof IM>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void;
+
+  /**
+   * Remove an interfaceView event listener for a specific interface
+   * @param interfaceId The interface ID to stop listening for
+   * @param listener The callback function to remove
+   */
+  offInterfaceView<IID extends keyof IM>(
+    interfaceId: IID,
+    listener: (event: Interface<IM[IID]["contractType"]>) => void
+  ): void;
+}
 
 /**
  * Provides template-specific event handlers.
@@ -191,6 +244,24 @@ export interface MultiStream<TM extends TemplateMapping> {
   close(): void;
   updateToken(newToken: string): void;
 }
+
+/**
+ * Derives a TemplateMapping from an InterfaceMapping
+ * Templates underlying interfaces have generic object contractType and unknown keyType
+ */
+type DerivedTemplateMapping<IM extends InterfaceMapping> = {
+  [K in keyof IM]: {
+    contractType: object;
+    keyType: unknown;
+  }
+};
+
+/**
+ * Extended MultiStream interface that includes interface-specific event handlers
+ * Similar to how InterfaceStream extends Stream
+ * Derives the template mapping from the interface mapping since interfaces are implemented for templates
+ */
+export type InterfaceMultiStream<IM extends InterfaceMapping> = MultiStream<DerivedTemplateMapping<IM>> & InterfaceMultiStreamMethods<IM>;
 
 export interface Query<T = unknown> {
   [key: string]: unknown;

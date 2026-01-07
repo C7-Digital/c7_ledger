@@ -6,6 +6,8 @@ import {
   LedgerOffset,
   type MultiStream,
   type TemplateMapping,
+  type InterfaceMapping,
+  type InterfaceMultiStream,
   CantonError,
   Interface,
 } from "@c7/ledger/lite";
@@ -67,6 +69,10 @@ export interface StreamQueryResult<TContract extends object = object, TKey = any
   readonly updateToken: (newToken: string) => void;
 }
 
+export interface StreamQueryInterfaceResult<IContract extends object> extends StreamQueryResult<object, unknown> {
+  readonly interfacesMap: ReadonlyMap<ContractId<IContract>, Interface<IContract>>;
+}
+
 export interface UserResult {
   /** The user information from the token */
   readonly user: User | null;
@@ -82,6 +88,21 @@ export interface MultiStreamQueryResult<TM extends TemplateMapping> {
   /** Loading state */
   readonly loading: boolean;
   /** Error if stream setup failed */
+  readonly error: CantonError | string | null;
+  /** Function to manually reload the query */
+  readonly reload: () => void;
+  /** Whether the stream is connected */
+  readonly connected: boolean;
+  /** Function to update the authentication token */
+  readonly updateToken: (newToken: string) => void;
+}
+
+export interface MultiStreamInterfaceQueryResult<IM extends InterfaceMapping> {
+  /** The multi-stream instance for interface streaming */
+  readonly multiStream: InterfaceMultiStream<IM> | null;
+  /** Loading state */
+  readonly loading: boolean;
+  /** Error if query failed */
   readonly error: CantonError | string | null;
   /** Function to manually reload the query */
   readonly reload: () => void;

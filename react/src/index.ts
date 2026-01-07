@@ -18,7 +18,9 @@ export {
   useQuery,
   useQueryInterface,
   useStreamQuery,
+  useStreamQueryInterface,
   useMultiStreamQuery,
+  useMultiStreamInterfaceQuery,
   useRightsAs,
 } from "./defaultLedgerContext";
 

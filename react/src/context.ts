@@ -13,19 +13,21 @@ import {
   useRef,
 } from "react";
 import type { Context, FunctionComponent } from "react";
-import type { InterfaceCompanion, Template, TemplateOrInterface, ContractId } from "@daml/types";
+import type { InterfaceCompanion, Template, ContractId } from "@daml/types";
 import {
   Ledger,
+  type ArchiveEvent,
   type LedgerOptions,
   type CreateEvent,
-  type Interface,
-  type PackageIdString,
-  type Stream,
-  type StreamState,
   type CantonError,
+  type StreamState,
   type User,
   type MultiStream,
   type TemplateMapping,
+  type InterfaceMapping,
+  type InterfaceMultiStream,
+  type PackageIdString,
+  type Interface,
 } from "@c7/ledger/lite";
 import type {
   DamlLedgerConfig,
@@ -33,8 +35,10 @@ import type {
   QueryResult,
   InterfaceQueryResult,
   StreamQueryResult,
+  StreamQueryInterfaceResult,
   UserResult,
   MultiStreamQueryResult,
+  MultiStreamInterfaceQueryResult,
 } from "./types";
 
 // Utility type to convert template with literal string ID to PackageIdString for ledger compatibility
@@ -321,20 +325,18 @@ export function useQueryInterface<
 
 
 /**
- * Hook to stream active contracts for a single template with real-time updates
- * @param template - The template to query
- * @param options - Query options
- * @returns Stream query result with contracts, loading state, connection status, and reload function
+ * Base hook for streaming functionality - handles common state management and lifecycle
  */
-export function useStreamQuery<
+function useStreamBase<
   TContract extends object = object,
-  TKey = any,
-  TTemplateId extends string = string,
+  TKey = unknown,
+  TStream extends { on: Function; off: Function; start: Function; close: Function; updateToken: Function } = any
 >(
-  template: TemplateOrInterface<TContract, TKey, TTemplateId>,
-  options: QueryOptions = {}
-): StreamQueryResult<TContract, TKey> {
-  const { ledger, reloadTrigger } = useDamlLedgerContext();
+  createStream: () => Promise<TStream>,
+  setupAdditionalEventHandlers?: (stream: TStream) => void,
+  dependencies: any[] = []
+) {
+  const { reloadTrigger } = useDamlLedgerContext();
   const [contractsMap, setContractsMap] = useState<
     ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>
   >(() => new Map());
@@ -342,17 +344,12 @@ export function useStreamQuery<
   const [connected, setConnected] = useState<boolean>(false);
   const [error, setError] = useState<CantonError | string | null>(null);
 
-  // Extract options values to avoid object reference issues in useEffect
-  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
-
   // Use refs to prevent garbage collection
-  const streamRef = useRef<Stream<TContract, TKey> | null>(null);
+  const streamRef = useRef<TStream | null>(null);
   const isCleanedUpRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const reload = useCallback(async (): Promise<void> => {
-    // For streaming queries, reload means restarting the stream
-    // The stream will handle state initialization through create/archive events
     setLoading(true);
     setError(null);
     setContractsMap(new Map());
@@ -375,36 +372,35 @@ export function useStreamQuery<
         setLoading(true);
         setError(null);
 
-        // Create a stream for the template
-        streamRef.current = await ledger.streamQuery<TContract, TKey>(
-          template as unknown as ToLedgerTemplate<TContract, TKey, TTemplateId>,
-          atOffset,
-          false, // skipAcs
-          includeCreatedEventBlob,
-          readAsParties
-        );
-
-        // Handle new contracts
+        streamRef.current = await createStream();
+        
+        // Handle common create events
         streamRef.current.on("create", (event: CreateEvent<TContract, TKey>) => {
-          setContractsMap(prevMap => new Map(prevMap).set(event.contractId, event));
+          setContractsMap((prevMap: ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>) => 
+            new Map(prevMap).set(event.contractId, event)
+          );
         });
 
-        // Handle archived contracts
-        streamRef.current.on("archive", event => {
-          setContractsMap(prevMap => {
+        // Handle common archive events
+        streamRef.current.on("archive", (event: any) => {
+          setContractsMap((prevMap: ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>) => {
             const newMap = new Map(prevMap);
             newMap.delete(event.contractId);
             return newMap;
           });
         });
 
-        // Handle errors
+        // Setup additional event handlers (e.g., interfaceView for interface streams)
+        if (setupAdditionalEventHandlers) {
+          setupAdditionalEventHandlers(streamRef.current);
+        }
+
+        // Common error and state handling
         streamRef.current.on("error", (err: CantonError) => {
-          setError(err);
+          setError(err.cause);
           setConnected(false);
         });
 
-        // Handle connection state
         streamRef.current.on("state", (state: StreamState) => {
           setConnected(state === "live");
           if (state === "live") {
@@ -413,15 +409,13 @@ export function useStreamQuery<
         });
 
         streamRef.current.start();
-      } catch (err: unknown) {
-        const errorMessage =
-          err instanceof Error ? `${err.name}: ${err.message}` : "Failed to setup stream";
-        setError(errorMessage);
-        setConnected(false);
-        setLoading(false);
-
-        // Retry on setup failure (unless cleaned up)
+      } catch (err) {
         if (!isCleanedUpRef.current) {
+          const errorMessage = err instanceof Error ? `${err.name}: ${err.message}` : "Failed to setup stream";
+          setError(errorMessage);
+          setConnected(false);
+          setLoading(false);
+
           reconnectTimeoutRef.current = setTimeout(() => {
             void setupStream();
           }, 5000);
@@ -432,28 +426,22 @@ export function useStreamQuery<
     void setupStream();
 
     return (): void => {
-      // Clean up stream
       isCleanedUpRef.current = true;
-
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
-
       if (streamRef.current) {
         streamRef.current.close();
         streamRef.current = null;
       }
       setConnected(false);
     };
-    // The template object is often unstable, so we depend on its ID instead to prevent re-renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ledger, template.templateId, atOffset, includeCreatedEventBlob, readAsParties]);
+  }, dependencies);
 
   // Handle manual reload triggers
   useEffect(() => {
     if (reloadTrigger > 0) {
-      // Skip initial render (reloadTrigger starts at 0)
       reload();
     }
   }, [reloadTrigger, reload]);
@@ -469,31 +457,111 @@ export function useStreamQuery<
 }
 
 /**
- * Hook to stream active contracts for multiple templates with real-time updates
- * @param templateMapping - Mapping of template IDs to their contract and key types
+ * Hook to stream active contracts for a single template with real-time updates
+ * @param template - The template to query
  * @param options - Query options
- * @returns Multi-stream query result with stream instance, loading state, connection status, and reload function
+ * @returns Stream query result with contracts, loading state, connection status, and reload function
  */
-export function useMultiStreamQuery<TM extends TemplateMapping>(
-  templateMapping: TM,
+export function useStreamQuery<
+  TContract extends object = object,
+  TKey = any,
+  TTemplateId extends string = string,
+>(
+  template: Template<TContract, TKey, TTemplateId>,
   options: QueryOptions = {}
-): MultiStreamQueryResult<TM> {
-  const { ledger, reloadTrigger } = useDamlLedgerContext();
-  const [multiStream, setMultiStream] = useState<MultiStream<TM> | null>(null);
+): StreamQueryResult<TContract, TKey> {
+  const { ledger } = useDamlLedgerContext();
+  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
+
+  const result = useStreamBase<TContract, TKey>(
+    () => ledger.streamQuery(template, atOffset, false, includeCreatedEventBlob, readAsParties),
+    undefined, // No additional event handlers needed for template streaming
+    [ledger, template.templateId, atOffset, includeCreatedEventBlob, readAsParties]
+  );
+
+  // Return only the fields expected by StreamQueryResult (without interfacesMap)
+  return {
+    ...result,
+    contractsMap: result.contractsMap as ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>,
+  };
+}
+
+/**
+ * Hook to stream active contracts for a single interface with real-time updates
+ * @param interface_ - The interface to query
+ * @param options - Query options
+ * @returns Stream query result with contracts, loading state, connection status, and reload function
+ */
+export function useStreamQueryInterface<
+  IContract extends object = object,
+  IId extends string = string,
+>(
+  interface_: InterfaceCompanion<IContract, unknown, IId>,
+  options: QueryOptions = {}
+): StreamQueryInterfaceResult<IContract> {
+  const { ledger } = useDamlLedgerContext();
+  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
+
+  // Manage interfacesMap state locally since it's interface-specific
+  const [interfacesMap, setInterfacesMap] = useState<
+    ReadonlyMap<ContractId<IContract>, Interface<IContract>>
+  >(() => new Map());
+
+  const result = useStreamBase<object, unknown>(
+    () => ledger.streamQueryInterface(interface_, atOffset, false, includeCreatedEventBlob, readAsParties),
+    (stream) => {
+      // Handle interface view events (create/archive handled by base hook)
+      stream.on("interfaceView", (interfaceEvent: Interface<IContract>) => {
+        setInterfacesMap((prevMap: ReadonlyMap<ContractId<IContract>, Interface<IContract>>) => 
+          new Map(prevMap).set(interfaceEvent.contractId, interfaceEvent)
+        );
+      });
+
+      // Handle archived contracts for interfacesMap (contractsMap handled by base hook)
+      stream.on("archive", (event: ArchiveEvent<IContract>) => {
+        setInterfacesMap((prevMap: ReadonlyMap<ContractId<IContract>, Interface<IContract>>) => {
+          const newMap = new Map(prevMap);
+          newMap.delete(event.contractId as ContractId<IContract>);
+          return newMap;
+        });
+      });
+    },
+    [ledger, interface_.templateId, atOffset, includeCreatedEventBlob, readAsParties]
+  );
+
+  // Override the base hook's reload to also clear interfacesMap
+  const reload = useCallback(async (): Promise<void> => {
+    setInterfacesMap(new Map());
+    await result.reload();
+  }, [result.reload]);
+
+  return {
+    ...result,
+    contractsMap: result.contractsMap as ReadonlyMap<ContractId<object>, CreateEvent<object, unknown>>,
+    interfacesMap,
+    reload, // Override with our custom reload that also clears interfacesMap
+  };
+}
+
+/**
+ * Base hook for multi-stream functionality - handles common state management and lifecycle
+ */
+function useMultiStreamBase<TStream extends { onState: Function; onError: Function; start: Function; close: Function; updateToken: Function }>(
+  createStream: () => Promise<TStream>,
+  dependencies: any[]
+) {
+  const { reloadTrigger } = useDamlLedgerContext();
+  const [multiStream, setMultiStream] = useState<TStream | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [connected, setConnected] = useState<boolean>(false);
   const [error, setError] = useState<CantonError | string | null>(null);
 
-  // Extract options values to avoid object reference issues in useEffect
-  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
-
   // Use refs to prevent garbage collection
-  const streamRef = useRef<MultiStream<TM> | null>(null);
+  const streamRef = useRef<TStream | null>(null);
   const isCleanedUpRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const reload = useCallback(async (): Promise<void> => {
-    // For streaming queries, reload means restarting the stream
     setLoading(true);
     setError(null);
     setMultiStream(null);
@@ -508,7 +576,6 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
   // Setup real streaming connection
   useEffect(() => {
     isCleanedUpRef.current = false;
-    console.debug("[useMultiStreamQuery] Setting up stream with readAsParties:", readAsParties);
 
     const setupStream = async (): Promise<void> => {
       if (isCleanedUpRef.current) return;
@@ -517,19 +584,8 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
         setLoading(true);
         setError(null);
 
-        console.debug(
-          "[useMultiStreamQuery] Creating new multi-stream for parties:",
-          readAsParties
-        );
-        // Create a multi-stream for the template mapping
-        streamRef.current = await ledger.createMultiStream<TM>(
-          templateMapping,
-          atOffset,
-          false, // skipAcs
-          includeCreatedEventBlob,
-          readAsParties
-        );
-
+        streamRef.current = await createStream();
+        
         // Handle connection state
         streamRef.current.onState((state: StreamState) => {
           setConnected(state === "live");
@@ -540,7 +596,6 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
 
         // Handle errors
         streamRef.current.onError((err: CantonError) => {
-          console.debug("[useMultiStreamQuery] Stream error:", err);
           setError(err.cause);
         });
 
@@ -565,8 +620,6 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
     void setupStream();
 
     return (): void => {
-      // Clean up stream
-      console.debug("[useMultiStreamQuery] Cleaning up stream for parties:", readAsParties);
       isCleanedUpRef.current = true;
 
       if (reconnectTimeoutRef.current) {
@@ -581,19 +634,11 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
       setConnected(false);
       setMultiStream(null);
     };
-    // Depend on a stable representation of the template mapping and a serialized version of readAsParties
-  }, [
-    ledger,
-    JSON.stringify(templateMapping),
-    atOffset,
-    includeCreatedEventBlob,
-    JSON.stringify(readAsParties),
-  ]);
+  }, dependencies);
 
   // Handle manual reload triggers
   useEffect(() => {
     if (reloadTrigger > 0) {
-      // Skip initial render (reloadTrigger starts at 0)
       reload();
     }
   }, [reloadTrigger, reload]);
@@ -605,6 +650,78 @@ export function useMultiStreamQuery<TM extends TemplateMapping>(
     error,
     reload,
     updateToken,
+  };
+}
+
+/**
+ * Hook to stream active contracts for multiple templates with real-time updates
+ * @param templateMapping - Mapping of template IDs to their contract and key types
+ * @param options - Query options
+ * @returns Multi-stream query result with stream instance, loading state, connection status, and reload function
+ */
+export function useMultiStreamQuery<TM extends TemplateMapping>(
+  templateMapping: TM,
+  options: QueryOptions = {}
+): MultiStreamQueryResult<TM> {
+  const { ledger } = useDamlLedgerContext();
+  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
+
+  const result = useMultiStreamBase(
+    () => ledger.createMultiStream<TM>(
+      templateMapping,
+      atOffset,
+      false, // skipAcs
+      includeCreatedEventBlob,
+      readAsParties
+    ),
+    [
+      ledger,
+      JSON.stringify(templateMapping),
+      atOffset,
+      includeCreatedEventBlob,
+      JSON.stringify(readAsParties),
+    ]
+  );
+
+  return {
+    ...result,
+    multiStream: result.multiStream as MultiStream<TM> | null,
+  };
+}
+
+/**
+ * Hook to stream active contracts for multiple interfaces with real-time updates
+ * @param interfaceMapping - Mapping of interface IDs to their contract types
+ * @param options - Query options
+ * @returns Multi-stream query result with stream instance, loading state, connection status, and reload function
+ */
+export function useMultiStreamInterfaceQuery<IM extends InterfaceMapping>(
+  interfaceMapping: IM,
+  options: QueryOptions = {}
+): MultiStreamInterfaceQueryResult<IM> {
+  const { ledger } = useDamlLedgerContext();
+  const { atOffset = "end", includeCreatedEventBlob = false, readAsParties } = options;
+
+  const result = useMultiStreamBase(
+    () => ledger.createMultiInterfaceStream<IM>(
+      interfaceMapping,
+      atOffset,
+      false, // skipAcs
+      includeCreatedEventBlob,
+      readAsParties
+    ),
+    [
+      ledger,
+      JSON.stringify(interfaceMapping),
+      atOffset,
+      includeCreatedEventBlob,
+      JSON.stringify(readAsParties),
+    ]
+  );
+
+  return {
+    ...result,
+    multiStream: result.multiStream as InterfaceMultiStream<IM> | null,
   };
 }
 
@@ -621,7 +738,9 @@ export function createLedgerContext() {
     useQuery,
     useQueryInterface,
     useStreamQuery,
+    useStreamQueryInterface,
     useMultiStreamQuery,
+    useMultiStreamInterfaceQuery,
     useRightsAs,
   };
 }

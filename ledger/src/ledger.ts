@@ -22,10 +22,8 @@ import {
   Choice,
   InterfaceCompanion,
   Template,
-  TemplateOrInterface,
   lookupTemplate,
 } from "@daml/types";
-import { decodeJwt } from "jose";
 import { EventEmitter } from "eventemitter3";
 import { logger } from "./logger";
 import { logTokenExpiration } from "./token";
@@ -38,7 +36,7 @@ import {
   UpdatesResponse,
   isTransaction,
 } from "./websocket";
-import { MultiStreamAdapter } from "./multistream";
+import { MultiStreamAdapter, InterfaceMultiStreamImpl } from "./multistream";
 import {
   AllocatePartyRequest,
   AllocatePartyResponse,
@@ -53,6 +51,9 @@ import {
   Interface,
   LedgerOffset,
   Stream,
+  InterfaceStream,
+  InterfaceMapping,
+  InterfaceMultiStream,
   StreamState,
   PartyDetails,
   User,
@@ -78,6 +79,9 @@ type Filters = components["schemas"]["Filters"];
 type JsCommands = Schemas["JsCommands"];
 type JsCommand = Schemas["Command"];
 type Schemas = components["schemas"];
+type CreatedEvent = Schemas["CreatedEvent"];
+type ArchivedEvent = Schemas["ArchivedEvent"];
+type JsInterfaceView = Schemas["JsInterfaceView"];
 
 // Type guard to check if an event is a CreatedEvent
 function isCreateEvent(
@@ -86,9 +90,24 @@ function isCreateEvent(
   return "CreatedEvent" in event;
 }
 
+function createEventWithoutDecoder(
+  cantonEvent: CreatedEvent,
+): CreateEvent<object, unknown> {
+   return {
+    type: "create",
+    templateId: cantonEvent.templateId,
+    contractId: cantonEvent.contractId as unknown as ContractId<object>,
+    payload: cantonEvent.createArgument ?? {},
+    signatories: (cantonEvent.signatories || []) as Party[],
+    observers: (cantonEvent.observers || []) as Party[],
+    key: undefined,
+    createdEventBlob: cantonEvent.createdEventBlob || "",
+  };
+}
+
 // This term is so overloaded, lets add a '_' to help differentiate
 function createEvent_<T extends object, K = unknown>(
-  cantonEvent: Schemas["CreatedEvent"],
+  cantonEvent: CreatedEvent,
   versionedRegistry?: VersionedRegistry
 ): CreateEvent<T, K> {
   let t: Template<T, K>;
@@ -129,7 +148,7 @@ function createEvent_<T extends object, K = unknown>(
   };
 }
 
-function archiveEvent_<T extends object>(cantonEvent: Schemas["ArchivedEvent"]): ArchiveEvent<T> {
+function archiveEvent_<T extends object>(cantonEvent: ArchivedEvent): ArchiveEvent<T> {
   return {
     type: "archive",
     templateId: cantonEvent.templateId,
@@ -139,13 +158,13 @@ function archiveEvent_<T extends object>(cantonEvent: Schemas["ArchivedEvent"]):
   };
 }
 
-// It is possible that we query for a given interview that we are interested in,
-// but the underlying contract has multiple interview implementations that we are NOT
+// It is possible that we query for a given interface that we are interested in,
+// but the underlying contract has multiple interface implementations that we are NOT
 // interested in, and consequently not registered in our versionedRegistry.
 // In this case we return null.
 function interfaceEvent_<I extends object, K = unknown>(
-  cantonEvent: Schemas["CreatedEvent"],
-  interfaceView: Schemas["JsInterfaceView"], 
+  cantonEvent: CreatedEvent,
+  interfaceView: JsInterfaceView, 
   versionedRegistry: VersionedRegistry
 ): Interface<I> | null{
 
@@ -174,6 +193,7 @@ function interfaceEvent_<I extends object, K = unknown>(
     key: cantonEvent.contractKey,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     interfaceView: decodedInterfaceView,
+    interfaceId: interfaceView.interfaceId,
     packageVersion,
   }
 }
@@ -326,11 +346,15 @@ export interface LedgerOptions {
   autoReconnect?: boolean;
 }
 
+type FilterSpec 
+  = { type: "template", templateId: PackageIdString } 
+  | { type: "interface", interfaceId: PackageIdString };
+
 /**
  * Internal stream implementation for active contracts
  */
 class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
-  private eventEmitter = new EventEmitter();
+  protected eventEmitter = new EventEmitter();
   private stopClient?: () => void;
   private parties: Party[];
   private wsClient: WebSocketClient;
@@ -338,19 +362,19 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   private skipAcs: boolean;
   private state_: StreamState = "start";
   private filtersByParty: Record<string, any>;
-  private versionedRegistry?: VersionedRegistry;
+  protected versionedRegistry?: VersionedRegistry;
   private autoReconnect: boolean;
 
   /**
    * Creates a new stream for active contracts
    *
-   * @param template The template to stream contracts for
+   * @param filters The filters to stream contracts for - FilterSpec[]
    * @param parties The parties to stream contracts for
    * @param wsClient The WebSocket client to use
    * @param activeAtOffset Optional offset to start streaming from
    */
   constructor(
-    templateIds: PackageIdString[],
+    filters: FilterSpec[],
     parties: Party[],
     wsClient: WebSocketClient,
     startOffset: number,
@@ -365,9 +389,11 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     this.skipAcs = skipAcs;
     this.versionedRegistry = versionedRegistry;
     this.autoReconnect = autoReconnect;
-    let cumulative = templateIds.map(templateId => {
+    let cumulative = filters.map(filter => {
       return {
-        identifierFilter: templateFilter(templateId, includeCreatedEventBlob),
+        identifierFilter: filter.type === "template" 
+          ? templateFilter(filter.templateId, includeCreatedEventBlob) 
+          : interfaceFilter(filter.interfaceId, includeCreatedEventBlob),
       };
     });
     this.filtersByParty = this.parties.reduce(
@@ -404,6 +430,14 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     );
   }
 
+  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
+    this.eventEmitter.emit("create", createEvent_(createdEvent, this.versionedRegistry));
+  }
+
+  protected handleArchivedEvent(archivedEvent: ArchivedEvent): void {
+    this.eventEmitter.emit("archive", archiveEvent_(archivedEvent))
+  }
+
   /**
    * Handle responses from the active contracts stream
    */
@@ -427,10 +461,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
         );
         this.offset = activeContract.createdEvent.offset;
       }
-      this.eventEmitter.emit(
-        "create",
-        createEvent_(activeContract.createdEvent, this.versionedRegistry)
-      );
+      this.handleCreatedEvent(activeContract.createdEvent)
     }
   }
 
@@ -498,13 +529,10 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
       for (const event of jsTransaction.events || []) {
         if ("CreatedEvent" in event) {
           this.offset = Math.max(this.offset, event.CreatedEvent.offset);
-          this.eventEmitter.emit(
-            "create",
-            createEvent_(event.CreatedEvent, this.versionedRegistry)
-          );
+          this.handleCreatedEvent(event.CreatedEvent)
         } else if ("ArchivedEvent" in event) {
           this.offset = Math.max(this.offset, event.ArchivedEvent.offset);
-          this.eventEmitter.emit("archive", archiveEvent_(event.ArchivedEvent));
+          this.handleArchivedEvent(event.ArchivedEvent)
         } else {
           logger.warn(`Unexpected event type in transaction stream: ${JSON.stringify(event)}`);
         }
@@ -662,6 +690,54 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
         const _exhaustive: never = this.state_;
         throw new Error(`Unknown stream state: ${_exhaustive}`);
     }
+  }
+}
+
+class InterfaceStreamImpl<I extends object> extends LedgerStream<object, unknown> implements InterfaceStream<I> {
+
+  constructor(
+    filters: FilterSpec[],
+    parties: Party[],
+    wsClient: WebSocketClient,
+    startOffset: number,
+    // Required for interface streams
+    versionedRegistry: VersionedRegistry,
+    skipAcs: boolean = false,
+    includeCreatedEventBlob: boolean = true,
+    autoReconnect: boolean = false,
+  ) {
+    super(filters, parties, wsClient, startOffset, skipAcs, includeCreatedEventBlob, versionedRegistry, autoReconnect);
+  }
+
+  // Override on method to handle interfaceView events
+  on(type: "create", listener: (event: CreateEvent<object, unknown>) => void): void;
+  on(type: "archive", listener: (event: ArchiveEvent<object>) => void): void;
+  on(type: "error", listener: (event: CantonError) => void): void;
+  on(type: "state", listener: (event: StreamState) => void): void;
+  on(type: "interfaceView", listener: (event: Interface<I>) => void): void;
+  on(type: string, listener: (...args: any[]) => void): void {
+    this.eventEmitter.on(type, listener);
+  }
+
+  // Override off method to handle interfaceView events
+  off(type: "create", listener: (event: CreateEvent<object, unknown>) => void): void;
+  off(type: "archive", listener: (event: ArchiveEvent<object>) => void): void;
+  off(type: "error", listener: (event: CantonError) => void): void;
+  off(type: "state", listener: (event: StreamState) => void): void;
+  off(type: "interfaceView", listener: (event: Interface<I>) => void): void;
+  off(type: string, listener: (...args: any[]) => void): void {
+    this.eventEmitter.off(type, listener);
+  }
+
+  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
+    this.eventEmitter.emit("create", createEventWithoutDecoder(createdEvent));
+    for (const interfaceView of createdEvent.interfaceViews ?? []) {
+      this.eventEmitter.emit("interfaceView", interfaceEvent_(createdEvent, interfaceView, this.versionedRegistry!));
+    }
+  }
+
+  protected handleArchivedEvent(archivedEvent: ArchivedEvent): void {
+    this.eventEmitter.emit("archive", archiveEvent_(archivedEvent))
   }
 }
 
@@ -1103,10 +1179,12 @@ export class Ledger {
    * @param offset Optional offset to start streaming from
    * @param skipAcs Whether to skip archived contracts
    * @param includeCreatedEventBlob Whether to include created event blobs
-   * @returns A stream of events for the specified template
+   * @param readAsParties Array of parties to stream for, if not specified default to
+   *          the actAs parties of the user in the token.
+   * @returns A stream of events for the specified template or interface
    */
   async streamQuery<T extends object, K = unknown>(
-    template: TemplateOrInterface<T, K>,
+    template: Template<T, K>,
     offset: LedgerOffset = "end",
     skipAcs: boolean = false,
     includeCreatedEventBlob: boolean = false,
@@ -1115,13 +1193,37 @@ export class Ledger {
     const activeAtOffset = await this.resolveOffset(offset);
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     return new LedgerStream<T, K>(
-      [template.templateId as PackageIdString],
+      [ { type: "template", templateId: template.templateId as PackageIdString }],
       parties_,
       this.initClient(),
       activeAtOffset,
       skipAcs,
       includeCreatedEventBlob,
       this.options.versionedRegistry,
+      this.options.autoReconnect ?? true,
+    );
+  }
+
+  async streamQueryInterface<I extends object, K = unknown>(
+    interface_: InterfaceCompanion<I, K>,
+    offset: LedgerOffset = "end",
+    skipAcs: boolean = false,
+    includeCreatedEventBlob: boolean = false,
+    readAsParties?: Party[]
+  ): Promise<InterfaceStream<I>> {
+    const activeAtOffset = await this.resolveOffset(offset);
+    const parties_ = readAsParties || (await this.getTokenActAsParties());
+    if (!this.options.versionedRegistry) {
+      throw new Error("VersionedRegistry expected for streamQueryInterface provided");
+    }
+    return new InterfaceStreamImpl<I>(
+      [ { type: "interface", interfaceId: interface_.templateId as PackageIdString }],
+      parties_,
+      this.initClient(),
+      activeAtOffset,
+      this.options.versionedRegistry,
+      skipAcs,
+      includeCreatedEventBlob,
       this.options.autoReconnect ?? true,
     );
   }
@@ -1157,8 +1259,9 @@ export class Ledger {
    * stream.start();
    * ```
    *
-   * @param templates Array of templates to stream
+   * @param tm Template mapping for the streams
    * @param offset Optional offset to start streaming from
+   * @param skipAcs Whether to skip loading the initial active contract set
    * @param includeCreatedEventBlob Whether to include created event blobs
    * @param readAsParties Array of parties to stream for, if not specified default to
    *          the actAs parties of the user in the token.
@@ -1173,10 +1276,12 @@ export class Ledger {
   ): Promise<MultiStream<TM>> {
     const activeAtOffset = await this.resolveOffset(offset);
 
-    const templateIds = Object.keys(tm) as PackageIdString[];
+    const filters : FilterSpec[] = Object.keys(tm).map((id) => {
+      return {type: 'template', templateId: id as PackageIdString };
+    });
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     const stream = new LedgerStream<object, unknown>(
-      templateIds,
+      filters,
       parties_,
       this.initClient(),
       activeAtOffset,
@@ -1189,6 +1294,37 @@ export class Ledger {
     return new MultiStreamAdapter<TM>(stream);
   }
 
+  async createMultiInterfaceStream<IM extends InterfaceMapping>(
+    im: IM,
+    offset: LedgerOffset = "end",
+    skipAcs: boolean = false,
+    includeCreatedEventBlob: boolean = false,
+    readAsParties?: Party[]
+  ): Promise<InterfaceMultiStream<IM>> {
+    const activeAtOffset = await this.resolveOffset(offset);
+
+    const filters : FilterSpec[] = Object.keys(im).map((id) => {
+      return {type: 'interface', interfaceId: id as PackageIdString };
+    });
+    const parties_ = readAsParties || (await this.getTokenActAsParties());
+    
+    if (!this.options.versionedRegistry) {
+      throw new Error("VersionedRegistry expected for createMultiInterfaceStream");
+    }
+    
+    const stream = new InterfaceStreamImpl<object>(
+      filters,
+      parties_,
+      this.initClient(),
+      activeAtOffset,
+      this.options.versionedRegistry,
+      skipAcs,
+      includeCreatedEventBlob,
+      this.options.autoReconnect ?? true,
+    );
+
+    return new InterfaceMultiStreamImpl<IM>(stream);
+  }
   // User information
   async getUserInfo(userId: string): Promise<User | null> {
     const response = await this.client.getUserInfo(userId);
