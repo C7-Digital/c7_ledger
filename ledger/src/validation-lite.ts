@@ -2,7 +2,7 @@
  * Lite runtime validation utilities - validation is disabled in lite builds
  *
  * This module provides stub implementations that pass data through without validation.
- * Use the full @c7/ledger package if you need runtime schema validation.
+ * Use the full @c7-digital/ledger package if you need runtime schema validation.
  */
 import { logger } from "./logger";
 
@@ -18,7 +18,7 @@ export class SchemaValidator {
     if (validation) {
       logger.warn(
         `SchemaValidator instance ${this.instanceId}: Validation requested but using lite build. ` +
-          `Install the full @c7/ledger package for runtime validation support.`
+          `Install the full @c7-digital/ledger package for runtime validation support.`
       );
     }
 

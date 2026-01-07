@@ -1,5 +1,5 @@
 /**
- * @c7/react - React hooks for Daml ledger integration
+ * @c7-digital/react - React hooks for Daml ledger integration
  *
  * A replacement for @daml/react that uses the Canton JSON API v2
  * with TypeScript support and modern React patterns.

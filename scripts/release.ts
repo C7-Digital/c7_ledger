@@ -51,13 +51,13 @@ function parsePackageSelection(): PackageSelection {
 }
 
 function validatePeerDependency(reactPkg: any, ledgerVersion: string): void {
-  const peerDep = reactPkg.peerDependencies?.['@c7/ledger'];
+  const peerDep = reactPkg.peerDependencies?.['@c7-digital/ledger'];
   const expectedPeerDep = `^${ledgerVersion}`;
 
   if (peerDep !== expectedPeerDep) {
     console.error('\n✗ Validation failed: React peer dependency mismatch');
     console.error(`  Expected: "@c7/ledger": "${expectedPeerDep}"`);
-    console.error(`  Found:    "@c7/ledger": "${peerDep || '(not set)'}"`);
+    console.error(`  Found:    "@c7-digital/ledger": "${peerDep || '(not set)'}"`);
     console.error('\nPlease update the peer dependency in react/package.json to match the ledger version.');
     process.exit(1);
   }
@@ -76,7 +76,7 @@ async function main() {
   if (packageSelection === 'all') {
     console.log('Releasing: Both packages\n');
   } else {
-    console.log(`Releasing: @c7/${packageSelection} only\n`);
+    console.log(`Releasing: @c7-digital/${packageSelection} only\n`);
   }
 
   // Read package versions independently
@@ -87,7 +87,7 @@ async function main() {
 
   
   // Confirm versions have been updated
-  const packagesToUpdate = packageSelection === 'all' ? 'both packages' : `@c7/${packageSelection}`;
+  const packagesToUpdate = packageSelection === 'all' ? 'both packages' : `@c7-digital/${packageSelection}`;
   const confirmation = await prompt(`Have you updated the version for ${packagesToUpdate}? (y/n) `);
   if (confirmation.toLowerCase() !== 'y') {
     console.log('Please update the version(s) in the appropriate package.json file(s) before running the release script.');
@@ -123,10 +123,10 @@ async function main() {
   // Show what will be published
   console.log('Ready to publish:');
   if (releasingLedger) {
-    console.log(`  - @c7/ledger@${ledgerVersion}`);
+    console.log(`  - @c7-digital/ledger@${ledgerVersion}`);
   }
   if (releasingReact) {
-    console.log(`  - @c7/react@${reactVersion}`);
+    console.log(`  - @c7-digital/react@${reactVersion}`);
   }
   console.log('');
 
@@ -142,31 +142,31 @@ async function main() {
 
   // Publish packages
   if (releasingLedger) {
-    console.log(`Publishing @c7/ledger@${ledgerVersion}...`);
+    console.log(`Publishing @c7-digital/ledger@${ledgerVersion}...`);
     try {
       exec(`npm publish --access public`, { cwd: resolve(process.cwd(), 'ledger') });
-      console.log(`✓ Published @c7/ledger\n`);
+      console.log(`✓ Published @c7-digital/ledger\n`);
     } catch (error) {
-      console.error(`✗ Failed to publish @c7/ledger`);
+      console.error(`✗ Failed to publish @c7-digital/ledger`);
       process.exit(1);
     }
   }
 
   if (releasingReact) {
-    console.log(`Publishing @c7/react@${reactVersion}...`);
+    console.log(`Publishing @c7-digital/react@${reactVersion}...`);
     try {
       exec(`npm publish --access public`, { cwd: resolve(process.cwd(), 'react') });
-      console.log(`✓ Published @c7/react\n`);
+      console.log(`✓ Published @c7-digital/react\n`);
     } catch (error) {
-      console.error(`✗ Failed to publish @c7/react`);
+      console.error(`✗ Failed to publish @c7-digital/react`);
       process.exit(1);
     }
   }
 
   // Final success message
   const publishedPackages: string[] = [];
-  if (releasingLedger) publishedPackages.push(`@c7/ledger@${ledgerVersion}`);
-  if (releasingReact) publishedPackages.push(`@c7/react@${reactVersion}`);
+  if (releasingLedger) publishedPackages.push(`@c7-digital/ledger@${ledgerVersion}`);
+  if (releasingReact) publishedPackages.push(`@c7-digital/react@${reactVersion}`);
 
   console.log(`Done! Published ${publishedPackages.join(' and ')}`);
 }

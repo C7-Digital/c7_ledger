@@ -11,7 +11,7 @@ The Ledger class now supports an optional `versionedRegistry` that allows you to
 ### Step 1: Import the registry from codegen
 
 ```typescript
-// Note: This example references a codegen package which is not part of @c7/ledger
+// Note: This example references a codegen package which is not part of @c7-digital/ledger
 // You would need to generate or provide your own template registry
 import { lookupTemplate, getCurrentPackageVersion } from "your-codegen-package";
 ```
@@ -49,7 +49,7 @@ type CreateEvent<T extends object, K = unknown> = {
 ## Usage Example
 
 ```typescript
-import { Ledger } from "@c7/ledger";
+import { Ledger } from "@c7-digital/ledger";
 import {
   lookupTemplate,
   getCurrentPackageVersion,
