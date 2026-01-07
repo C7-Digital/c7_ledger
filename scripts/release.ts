@@ -100,6 +100,16 @@ async function main() {
     console.log('✓ React peer dependency matches ledger version\n');
   }
 
+  // Clean before build
+  console.log('Cleaning previous builds...');
+  try {
+    exec('pnpm clean');
+    console.log('✓ Clean successful\n');
+  } catch (error) {
+    console.error('✗ Clean failed');
+    process.exit(1);
+  }
+
   // Run build
   console.log('Running build...');
   try {
