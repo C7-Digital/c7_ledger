@@ -158,8 +158,8 @@ function archiveEvent_<T extends object>(cantonEvent: ArchivedEvent): ArchiveEve
   };
 }
 
-// It is possible that we query for a given interview that we are interested in,
-// but the underlying contract has multiple interview implementations that we are NOT
+// It is possible that we query for a given interface that we are interested in,
+// but the underlying contract has multiple interface implementations that we are NOT
 // interested in, and consequently not registered in our versionedRegistry.
 // In this case we return null.
 function interfaceEvent_<I extends object, K = unknown>(
