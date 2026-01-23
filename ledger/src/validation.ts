@@ -9,6 +9,20 @@ import { logger } from "./logger";
 
 export type ValidationMode = "throwOnError" | "logErrors";
 
+interface JsonSchemaProperty {
+  type?: string | string[];
+  $ref?: string;
+  anyOf?: JsonSchemaProperty[];
+  allOf?: JsonSchemaProperty[];
+  oneOf?: JsonSchemaProperty[];
+  properties?: Record<string, JsonSchemaProperty>;
+  required?: string[];
+  items?: JsonSchemaProperty;
+  [key: string]: unknown;
+}
+
+type JsonSchemaOrArray = JsonSchemaProperty | JsonSchemaProperty[];
+
 export class SchemaValidator {
   private ajv?: InstanceType<typeof Ajv.default>;
   private schemaCount = 0;
@@ -114,16 +128,109 @@ export class SchemaValidator {
     }
   }
 
+  /**
+   * Transform schema to allow null values for non-required fields
+   * This handles the common OpenAPI pattern where optional fields can be null
+   */
+  private makeOptionalFieldsNullable(schema: JsonSchemaOrArray): JsonSchemaOrArray {
+    if (!schema || typeof schema !== "object") return schema;
+
+    // Handle arrays - recursively transform each element
+    if (Array.isArray(schema)) {
+      return schema.map((item) => this.makeOptionalFieldsNullable(item)) as JsonSchemaProperty[];
+    }
+
+    const transformed = { ...schema };
+
+    // If this is an object schema with properties
+    if (transformed.type === "object" && transformed.properties) {
+      const required = new Set(transformed.required || []);
+      
+      // For each property that's not required, allow null values
+      for (const [propName, propSchema] of Object.entries(transformed.properties)) {
+        if (!required.has(propName) && typeof propSchema === "object" && !Array.isArray(propSchema)) {
+          
+          // If it has a simple type and isn't already allowing null
+          if (propSchema.type && typeof propSchema.type === "string" && propSchema.type !== "null") {
+            // Make it accept both the original type and null
+            transformed.properties[propName] = {
+              ...propSchema,
+              anyOf: [
+                { ...propSchema, type: propSchema.type },
+                { type: "null" }
+              ]
+            };
+            // Remove the type field as it's now in anyOf
+            delete transformed.properties[propName].type;
+          }
+        }
+        
+        // Recursively transform nested schemas
+        const nestedSchema = transformed.properties[propName];
+        if (nestedSchema) {
+          transformed.properties[propName] = this.makeOptionalFieldsNullable(
+            nestedSchema
+          ) as JsonSchemaProperty;
+        }
+      }
+    }
+
+    // Handle $ref - don't transform, let AJV resolve it
+    if (transformed.$ref) {
+      return transformed;
+    }
+
+    // Recursively handle nested schemas in allOf, anyOf, oneOf
+    if (transformed.allOf) {
+      transformed.allOf = transformed.allOf.map((s) =>
+        this.makeOptionalFieldsNullable(s)
+      ) as JsonSchemaProperty[];
+    }
+    if (transformed.anyOf) {
+      transformed.anyOf = transformed.anyOf.map((s) =>
+        this.makeOptionalFieldsNullable(s)
+      ) as JsonSchemaProperty[];
+    }
+    if (transformed.oneOf) {
+      transformed.oneOf = transformed.oneOf.map((s) =>
+        this.makeOptionalFieldsNullable(s)
+      ) as JsonSchemaProperty[];
+    }
+
+    return transformed;
+  }
+
   private async loadSchemasFromContent(yamlContent: string): Promise<void> {
     if (!this.ajv) return;
 
     try {
       // Dynamically import yaml only when needed for tree-shaking
       const yaml = await import("yaml");
-      const spec = yaml.parse(yamlContent);
+      const spec = yaml.parse(yamlContent) as {
+        components?: {
+          schemas?: Record<string, JsonSchemaProperty>;
+        };
+      };
 
       // Load the complete schema document first to enable reference resolution
       if (spec?.components?.schemas) {
+        // Transform schemas to allow null for optional fields
+        for (const [schemaName, schemaDefinition] of Object.entries(spec.components.schemas)) {
+          const transformed = this.makeOptionalFieldsNullable(schemaDefinition);
+          // Schemas in the components should always be objects, not arrays
+          if (transformed) {
+            if (Array.isArray(transformed)) {
+              // Arrays shouldn't appear at the schema root level, but handle gracefully
+              const firstItem = transformed[0];
+              if (firstItem) {
+                spec.components.schemas[schemaName] = firstItem;
+              }
+            } else {
+              spec.components.schemas[schemaName] = transformed;
+            }
+          }
+        }
+
         // Add the full schema document with an ID so references can be resolved
         this.ajv.addSchema(spec, "#");
         logger.debug(`Added full schema document with ID "#"`);
@@ -202,9 +309,12 @@ export class SchemaValidator {
       }
       const isValid = this.ajv.validate(schemaName, data);
       if (!isValid) {
+        const errorDetails = this.ajv.errorsText();
+        logger.warn(`Validation errors: ${errorDetails}`);
+        logger.debug(`Full validation errors:`, this.ajv.errors);
         this.handleError(
-          `Schema validation failed for ${schemaName}:`,
-          new Error(`Schema validation failed for ${schemaName}: ${this.ajv.errorsText()}`)
+          `Schema validation failed for ${schemaName}: ${errorDetails}`,
+          new Error(`Schema validation failed for ${schemaName}: ${errorDetails}`)
         );
       } else {
         logger.debug(`Validation successful for "${schemaName}"`);
