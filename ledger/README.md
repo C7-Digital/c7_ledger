@@ -16,9 +16,9 @@ This package provides a TypeScript client for interacting with Canton's JSON Led
 
 This package follows the Canton SDK versioning scheme. The package version matches the Canton OpenAPI specification version used to generate the types.
 
-**Current version**: `3.4.7`
+**Current version**: `3.4.9`
 
-- Corresponds to Canton SDK version `3.4.7`
+- Corresponds to Canton SDK version `3.4.9`
 - Types are generated from the OpenAPI spec for this specific Canton version
 - When Canton releases a new version, this package will be updated to match
 
@@ -86,7 +86,7 @@ pnpm lint
 
 ## OpenAPI Specification
 
-The package uses the OpenAPI specification from Canton 3.4.7. The spec is saved as a version specific file (e.x. `openapi_3.4.7.yaml`) and types are automatically generated into `src/generated/api.ts`.
+The package uses the OpenAPI specification from Canton 3.4.9. The spec is saved as a version specific file (e.x. `openapi_3.4.9.yaml`) and types are automatically generated into `src/generated/api.ts`.
 
 To update the specification:
 
