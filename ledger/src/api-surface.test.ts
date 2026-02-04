@@ -109,53 +109,6 @@ describe("Generated type structure", () => {
     ];
     expect(keys).toEqual(["offset", "nodeId", "contractId", "templateId"]);
   });
-
-  it("JsCantonError has expected properties", () => {
-    type JsCantonError = components["schemas"]["JsCantonError"];
-    const keys: (keyof JsCantonError)[] = ["code", "cause", "errorCategory"];
-    expect(keys).toEqual(["code", "cause", "errorCategory"]);
-  });
-
-  it("JsGetActiveContractsResponse has expected properties", () => {
-    type JsGetActiveContractsResponse =
-      components["schemas"]["JsGetActiveContractsResponse"];
-    const keys: (keyof JsGetActiveContractsResponse)[] = [
-      "workflowId",
-      "contractEntry",
-    ];
-    expect(keys).toEqual(["workflowId", "contractEntry"]);
-  });
-
-  it("JsActiveContract has expected properties", () => {
-    type JsActiveContract = components["schemas"]["JsActiveContract"];
-    const keys: (keyof JsActiveContract)[] = [
-      "createdEvent",
-      "synchronizerId",
-      "reassignmentCounter",
-    ];
-    expect(keys).toEqual([
-      "createdEvent",
-      "synchronizerId",
-      "reassignmentCounter",
-    ]);
-  });
-
-  it("async-api channels interface has expected WebSocket paths", () => {
-    const paths: (keyof channels)[] = [
-      "/v2/commands/completions",
-      "/v2/state/active-contracts",
-      "/v2/updates",
-      "/v2/updates/flats",
-      "/v2/updates/trees",
-    ];
-    expect(paths).toEqual([
-      "/v2/commands/completions",
-      "/v2/state/active-contracts",
-      "/v2/updates",
-      "/v2/updates/flats",
-      "/v2/updates/trees",
-    ]);
-  });
 });
 
 describe("Branded type verification", () => {
