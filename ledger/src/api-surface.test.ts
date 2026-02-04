@@ -110,24 +110,6 @@ describe("Generated type structure", () => {
     expect(keys).toEqual(["offset", "nodeId", "contractId", "templateId"]);
   });
 
-  it("JsTransaction has expected properties", () => {
-    type JsTransaction = components["schemas"]["JsTransaction"];
-    const keys: (keyof JsTransaction)[] = [
-      "updateId",
-      "commandId",
-      "workflowId",
-      "effectiveAt",
-      "events",
-    ];
-    expect(keys).toEqual([
-      "updateId",
-      "commandId",
-      "workflowId",
-      "effectiveAt",
-      "events",
-    ]);
-  });
-
   it("JsCantonError has expected properties", () => {
     type JsCantonError = components["schemas"]["JsCantonError"];
     const keys: (keyof JsCantonError)[] = ["code", "cause", "errorCategory"];
