@@ -21,6 +21,10 @@
     "./lite": {
       "import": "./lib-lite/src/index.js",
       "types": "./lib-lite/src/index.d.ts"
+    },
+    "./sets": {
+      "import": "./lib/src/sets.js",
+      "types": "./lib/src/sets.d.ts"
     }
   },
   "bin": {
