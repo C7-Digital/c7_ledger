@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@c7-digital/ledger",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "type": "module",
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
@@ -21,6 +21,10 @@
     "./lite": {
       "import": "./lib-lite/src/index.js",
       "types": "./lib-lite/src/index.d.ts"
+    },
+    "./sets": {
+      "import": "./lib/src/sets.js",
+      "types": "./lib/src/sets.d.ts"
     }
   },
   "bin": {
