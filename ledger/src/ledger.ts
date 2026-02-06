@@ -130,6 +130,7 @@ function createEvent_<T extends object, K = unknown>(
       throw new Error(`Expected template in registry not: ${JSON.stringify(result)}`);
     }
   } else {
+    console.debug(`Using default lookupTemplate for ${cantonEvent.templateId}`);
     t = lookupTemplate(cantonEvent.templateId) as unknown as Template<T, K>;
   }
 
@@ -271,16 +272,16 @@ function convertCommand(command: Command<any, any>) : JsCommand {
       return {
         CreateCommand: {
           templateId: command.template.templateId,
-          createArguments: command.payload,
+          createArguments: command.template.encode(command.payload),
         }
       };
     case 'createAndExercise':
       return {
         CreateAndExerciseCommand: {
           templateId: command.template.templateId,
-          createArguments: command.payload,
+          createArguments: command.template.encode(command.payload),
           choice: createNameString(command.choice.choiceName),
-          choiceArgument: command.argument,
+          choiceArgument: command.choice.argumentEncode(command.argument),
         }
       };
     case 'exercise':
@@ -289,7 +290,7 @@ function convertCommand(command: Command<any, any>) : JsCommand {
           templateId: command.choice.template().templateId,
           contractId: createLedgerString(command.contractId),
           choice: createNameString(command.choice.choiceName),
-          choiceArgument: command.argument,
+          choiceArgument: command.choice.argumentEncode(command.argument),
         }
       };
     default:
@@ -1002,7 +1003,7 @@ export class Ledger {
   ): Promise<CreateEvent<T, K>> {
     const createCommand: Schemas["CreateCommand"] = {
       templateId: template.templateId,
-      createArguments: payload,
+      createArguments: template.encode(payload),
     };
 
     const actAs_ = actAs || (await this.getTokenActAsParties());
@@ -1075,7 +1076,7 @@ export class Ledger {
       templateId: choice.template().templateId,
       contractId: createLedgerString(contractId.toString()),
       choice: createNameString(choice.choiceName),
-      choiceArgument: argument,
+      choiceArgument: choice.argumentEncode(argument),
     };
 
     const actAs_ = actAs || (await this.getTokenActAsParties());
