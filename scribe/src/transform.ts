@@ -168,18 +168,31 @@ function fixImports() {
       for (const fileName in bundle) {
         const chunk = bundle[fileName];
         if (chunk?.type === "chunk" && chunk.code) {
-          chunk.code = chunk.code
-            .replace(
-              'import require$$0 from "@mojotech/json-type-validation";',
-              'import * as require$$0 from "@mojotech/json-type-validation";'
-            )
-            .replace(
-              'import require$$1 from "@daml/types";',
-              'import * as require$$1 from "@daml/types";'
-            )
-            .replace(/import "@daml\/ledger";\n?/g, "")
-            .replace(/^.*damlTypes\.registerTemplate.*$/gm, "");
+          let code = chunk.code;
 
+          // Fix default -> namespace imports for external modules.
+          // Rollup variable names vary across versions (require$0, require$$0, etc.)
+          // so we match any variable name generically.
+          code = code.replace(
+            /import ([\w$]+) from "(@mojotech\/json-type-validation|@daml\/types)";/g,
+            'import * as $1 from "$2";'
+          );
+
+          // The commonjs plugin's CJS interop code may use a different naming
+          // convention (require$$N) than the Rollup import variables (require$N).
+          // Normalize double-$ references to match the actual import names.
+          code = code.replace(
+            /require\$\$(\d+)/g,
+            (_, n) => `require$${n}`
+          );
+
+          // Remove @daml/ledger side-effect imports
+          code = code.replace(/import "@daml\/ledger";\n?/g, "");
+
+          // Strip global registerTemplate calls
+          code = code.replace(/^.*damlTypes\.registerTemplate.*$/gm, "");
+
+          chunk.code = code;
           // Discard source maps since we're modifying code
           chunk.map = null;
         }
