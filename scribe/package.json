@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@c7-digital/scribe",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Transform DAML codegen output into unified TypeScript packages for use with @c7-digital/ledger",
+  "main": "lib/src/index.js",
+  "types": "lib/src/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "exports": {
+    ".": {
+      "import": "./lib/src/index.js",
+      "types": "./lib/src/index.d.ts"
+    },
+    "./vite": {
+      "import": "./lib/src/vite-plugin.js",
+      "types": "./lib/src/vite-plugin.d.ts"
+    }
+  },
+  "bin": {
+    "scribe": "./lib/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc --watch",
+    "clean": "rm -rf lib",
+    "prepare": "pnpm build"
+  },
+  "dependencies": {
+    "glob": "^10.0.0",
+    "yaml": "^2.8.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.130",
+    "typescript": "^5.8.3",
+    "vite": "^5.0.0"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

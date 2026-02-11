@@ -1,6 +1,7 @@
 packages:
   - 'ledger'
   - 'react'
+  - 'scribe'
 
 settings:
   inject-workspace-packages: true
