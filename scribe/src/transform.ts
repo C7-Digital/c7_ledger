@@ -98,34 +98,48 @@ export async function bundle(
 /**
  * Vite plugin to resolve self-referencing package imports.
  *
- * Raw codegen .d.ts files reference themselves by package name, e.g.:
- *   import { ... } from '@domain-verify/codegen/daml-prim-DA-Types-1.0.0'
+ * Raw codegen .d.ts files reference the package by its own npm name, e.g.:
+ *   require('@domain-verify/codegen/daml-prim-DA-Types-1.0.0')
  *
- * We resolve these to local paths within srcDir.
+ * The subpath after the package name corresponds to a directory in srcDir.
+ * We resolve these to local paths: srcDir/<subpath>/lib/index.js
  */
 function resolveSelfReferences(srcDir: string) {
   return {
     name: "scribe:resolve-self-references",
     resolveId(source: string) {
-      // Match any subpath import that looks like a codegen package reference.
-      // These contain package-like directory names with version numbers.
-      // Pattern: anything containing daml-prim-, daml-stdlib-, ghc-stdlib-,
-      // or any other directory that exists in srcDir.
-      const parts = source.split("/");
+      // Strategy 1: If the source directly matches a directory in srcDir
+      // (e.g., relative imports that got resolved to a package name)
+      const direct = resolve(srcDir, source);
+      if (existsSync(direct)) {
+        const withLib = resolve(direct, "lib", "index.js");
+        if (existsSync(withLib)) return withLib;
+      }
 
-      // Check if the first part (or @scope/name part) matches a directory in src
-      for (let i = 0; i < parts.length; i++) {
-        const candidate = parts.slice(0, i + 1).join("/");
-        const remaining = parts.slice(i + 1);
+      // Strategy 2: Strip scoped package prefix (@scope/name/subpath -> subpath)
+      // Handles: @domain-verify/codegen/daml-prim-DA-Types-1.0.0
+      let subpath: string | undefined;
+      if (source.startsWith("@")) {
+        // @scope/name/subpath -> skip first two segments
+        const parts = source.split("/");
+        if (parts.length > 2) {
+          subpath = parts.slice(2).join("/");
+        }
+      } else if (source.includes("/")) {
+        // unscoped-name/subpath -> skip first segment
+        const parts = source.split("/");
+        if (parts.length > 1) {
+          subpath = parts.slice(1).join("/");
+        }
+      }
 
-        // Try to resolve as a directory in srcDir
-        const resolvedDir = resolve(srcDir, candidate);
+      if (subpath) {
+        const resolvedDir = resolve(srcDir, subpath);
         if (existsSync(resolvedDir)) {
-          // Try with lib/index.js appended
-          const withLib = resolve(resolvedDir, "lib", ...remaining, "index.js");
+          const withLib = resolve(resolvedDir, "lib", "index.js");
           if (existsSync(withLib)) return withLib;
 
-          const withIndex = resolve(resolvedDir, ...remaining, "index.js");
+          const withIndex = resolve(resolvedDir, "index.js");
           if (existsSync(withIndex)) return withIndex;
         }
       }
