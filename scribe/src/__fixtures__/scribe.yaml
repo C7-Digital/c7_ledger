@@ -1,0 +1,18 @@
+schema: "1.0"
+input: "./codegen-js"
+
+main:
+  pattern: "my-project-*"
+
+vendor:
+  "splice-amulet-*":
+    modules:
+      "Splice.Amulet":
+        alias: Splice_Amulet
+        templates:
+          - FeaturedAppActivityMarker
+
+compat:
+  versions:
+    - hash: "oldhash111111111111111111111111111111111111111111111111111111111111"
+      version: "0.0.9"

@@ -26,6 +26,8 @@
     "build": "tsc -p tsconfig.json",
     "watch": "tsc --watch",
     "clean": "rm -rf lib",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "pnpm build"
   },
   "dependencies": {
@@ -38,7 +40,8 @@
   "devDependencies": {
     "@types/node": "^18.19.130",
     "typescript": "^5.8.3",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "vite": "^5.0.0"
