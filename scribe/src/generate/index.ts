@@ -1,10 +1,11 @@
-import { mkdir, writeFile, symlink, readdir, rm } from "node:fs/promises";
+import { mkdir, writeFile, symlink, readdir, rm, copyFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type { AnalyzedPackage } from "../analyze.js";
 import type { ResolvedConfig } from "../config.js";
 import { generateImports, generateExportStatements } from "./exports.js";
 import { generateRegistry } from "./registry.js";
 import { generateTypeDefs, generateVersionTypeDef } from "./types.js";
+import { bundle } from "../transform.js";
 
 export { generateImports, generateExportStatements } from "./exports.js";
 export { generateRegistry } from "./registry.js";
@@ -78,6 +79,18 @@ export async function generate(
   await writeFile(join(srcDir, "version.d.ts"), generateVersionTypeDef());
 
   const files = ["src/index.js", "src/index.d.ts", "src/version.js", "src/version.d.ts"];
+
+  // Bundle if configured
+  if (config.output.bundle) {
+    console.log("Bundling with Vite...");
+    await bundle(srcDir, outputDir);
+
+    // Copy type declarations to output dir
+    await copyFile(join(srcDir, "index.d.ts"), join(outputDir, "index.d.ts"));
+    await copyFile(join(srcDir, "version.d.ts"), join(outputDir, "version.d.ts"));
+
+    files.push("dist/codegen.js", "dist/index.js", "dist/version.js", "dist/index.d.ts", "dist/version.d.ts");
+  }
 
   printSummary(mainPkg, vendorPkgs, config);
 
