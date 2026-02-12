@@ -2,6 +2,7 @@ packages:
   - 'ledger'
   - 'react'
   - 'scribe'
+  - 'scan'
 
 settings:
   inject-workspace-packages: true

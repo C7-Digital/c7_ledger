@@ -15,6 +15,7 @@
   "references": [
     { "path": "./ledger" },
     { "path": "./react" },
-    { "path": "./scribe" }
+    { "path": "./scribe" },
+    { "path": "./scan" }
   ]
 }
