@@ -11,8 +11,10 @@ describe("loadConfig", () => {
     });
 
     expect(config.main.pattern).toBe("my-project-*");
-    expect(config.compat.versions).toHaveLength(1);
-    expect(config.compat.versions[0]!.version).toBe("0.0.9");
+    const mainCompat = config.compat["my-project-*"];
+    expect(mainCompat).toBeDefined();
+    expect(mainCompat!.versions).toHaveLength(1);
+    expect(mainCompat!.versions![0]!.version).toBe("0.0.9");
     expect(config.output.bundle).toBe(true);
     expect(config.output.dir).toMatch(/dist$/);
   });
@@ -37,7 +39,7 @@ describe("loadConfig", () => {
     expect(config.output.dir).toMatch(/dist$/);
     expect(config.output.bundle).toBe(true);
     expect(config.main.pattern).toBeUndefined();
-    expect(config.compat.versions).toEqual([]);
+    expect(config.compat).toEqual({});
     expect(config.dryRun).toBe(false);
   });
 

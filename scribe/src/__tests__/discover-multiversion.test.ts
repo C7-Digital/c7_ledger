@@ -13,7 +13,7 @@ function makeConfig(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
     input: MULTIVERSION_INPUT,
     output: { dir: "/tmp/scribe-test-out", bundle: false },
     main: {},
-    compat: { versions: [] },
+    compat: {},
     dryRun: false,
     ...overrides,
   };

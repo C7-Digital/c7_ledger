@@ -29,9 +29,11 @@ const CompatVersionSchema = z.object({
   version: z.string(),
 });
 
-const CompatConfigSchema = z.object({
+const CompatPackageSchema = z.object({
   versions: z.array(CompatVersionSchema).optional(),
 });
+
+const CompatConfigSchema = z.record(z.string(), CompatPackageSchema);
 
 const OutputConfigSchema = z.object({
   dir: z.string().default("dist"),
@@ -62,7 +64,7 @@ export interface ResolvedConfig {
     modules?: Record<string, ModuleOverride>;
   };
   vendor?: Record<string, VendorOverride>;
-  compat: { versions: Array<{ hash: string; version: string }> };
+  compat: Record<string, { versions: Array<{ hash: string; version: string }> }>;
   version?: string;
   dryRun: boolean;
 }
@@ -85,7 +87,7 @@ export async function loadConfig(opts: RunOptions): Promise<ResolvedConfig> {
     output: { dir: resolve(outputDir), bundle },
     main: { pattern: file?.main?.pattern, modules: file?.main?.modules },
     vendor: file?.vendor,
-    compat: { versions: file?.compat?.versions ?? [] },
+    compat: file?.compat ?? {},
     version: opts.version ?? process.env["DAR_VERSION"],
     dryRun: opts.dryRun ?? false,
   };

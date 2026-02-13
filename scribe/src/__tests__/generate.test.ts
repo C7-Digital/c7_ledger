@@ -63,9 +63,11 @@ const config: ResolvedConfig = {
   output: { dir: "/fake/dist", bundle: false },
   main: {},
   compat: {
-    versions: [
-      { hash: "oldhash111", version: "0.0.9" },
-    ],
+    "my-project-*": {
+      versions: [
+        { hash: "oldhash111", version: "0.0.9" },
+      ],
+    },
   },
   dryRun: false,
 };

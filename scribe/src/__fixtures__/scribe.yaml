@@ -13,6 +13,7 @@ vendor:
           - FeaturedAppActivityMarker
 
 compat:
-  versions:
-    - hash: "oldhash111111111111111111111111111111111111111111111111111111111111"
-      version: "0.0.9"
+  "my-project-*":
+    versions:
+      - hash: "oldhash111111111111111111111111111111111111111111111111111111111111"
+        version: "0.0.9"

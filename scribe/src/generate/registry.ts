@@ -81,7 +81,7 @@ export function generateRegistry(
 
   // Registration calls for vendor packages
   for (const vendor of vendorPkgs) {
-    const versionPairs = buildVendorVersionPairs(vendor);
+    const versionPairs = buildVersionPairs(vendor, config);
     lines.push(`// Register vendor package templates (${vendor.name})`);
     for (const mod of vendor.modules) {
       for (const member of mod.members) {
@@ -128,9 +128,28 @@ export function generateRegistry(
   return lines.join("\n");
 }
 
+function globToRegex(pattern: string): RegExp {
+  return new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
+}
+
 /**
- * Build [prefix, version] pairs for the main package.
- * Includes compat hashes, current packageId hash, and generic # prefix.
+ * Find compat versions for a package by matching its name against compat keys.
+ */
+function findCompatVersions(
+  pkgName: string,
+  config: ResolvedConfig
+): Array<{ hash: string; version: string }> {
+  for (const [pattern, entry] of Object.entries(config.compat)) {
+    if (globToRegex(pattern).test(pkgName)) {
+      return entry.versions ?? [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Build [prefix, version] pairs for a package.
+ * Includes compat hashes (if any match), current packageId hash, and generic # prefix.
  */
 function buildVersionPairs(
   pkg: AnalyzedPackage,
@@ -139,7 +158,7 @@ function buildVersionPairs(
   const pairs: Array<[string, string]> = [];
 
   // Compat versions (old hashes)
-  for (const compat of config.compat.versions) {
+  for (const compat of findCompatVersions(pkg.name, config)) {
     pairs.push([compat.hash, compat.version]);
   }
 
@@ -151,18 +170,4 @@ function buildVersionPairs(
   pairs.push([`#${baseName}`, pkg.version]);
 
   return pairs;
-}
-
-/**
- * Build [prefix, version] pairs for vendor packages.
- * No compat versions -- just the packageId and generic prefix.
- */
-function buildVendorVersionPairs(
-  pkg: AnalyzedPackage
-): Array<[string, string]> {
-  const baseName = pkg.name.replace(/-\d+\.\d+\.\d+.*$/, "");
-  return [
-    [pkg.packageId, pkg.version],
-    [`#${baseName}`, pkg.version],
-  ];
 }

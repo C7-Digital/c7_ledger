@@ -13,7 +13,7 @@ const defaultConfig: ResolvedConfig = {
   input: FIXTURES_INPUT,
   output: { dir: "/tmp/scribe-test-out", bundle: false },
   main: {},
-  compat: { versions: [] },
+  compat: {},
   dryRun: false,
 };
 

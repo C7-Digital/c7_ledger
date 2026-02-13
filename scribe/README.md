@@ -72,9 +72,10 @@ vendor:
           - FeaturedAppActivityMarker
 
 compat:
-  versions:
-    - hash: "8afd289e3ba826fcb23d955cfc108470b53527b0615745554185e5c9625b5832"
-      version: "0.0.5"
+  "domain-verification-model-*":
+    versions:
+      - hash: "8afd289e3ba826fcb23d955cfc108470b53527b0615745554185e5c9625b5832"
+        version: "0.0.5"
 ```
 
 ```bash
@@ -133,9 +134,10 @@ vendor:
           - FeaturedAppActivityMarker
 
 compat:
-  versions:                    # Backward-compat hashes for contract upgrades.
-    - hash: "8afd289e..."      # Package ID hash from a previous version.
-      version: "0.0.5"         # Version label for that hash.
+  "my-project-*":              # Glob matching package names (main or vendor).
+    versions:                  # Backward-compat hashes for contract upgrades.
+      - hash: "8afd289e..."    # Package ID hash from a previous version.
+        version: "0.0.5"       # Version label for that hash.
 ```
 
 **The config exists to constrain, not to describe.** If you omit `modules`, all are exported. If you omit `templates`, all are registered. Use config when you want *less* than the default, or need aliases and compat hashes.
