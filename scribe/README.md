@@ -38,7 +38,7 @@ Scribe auto-detects:
 | Templates & interfaces | Exports with `templateId` in `.d.ts` files |
 | Package ID | From `lib/index.d.ts` |
 | Version | From directory name (e.g. `my-project-0.1.0` -> `0.1.0`) |
-| Vendor packages | `splice-*` packages |
+| Vendor packages | `splice-*` packages (third-party DARs your model depends on; exported separately from your main modules) |
 | Stdlib | `daml-prim-*`, `daml-stdlib-*`, `ghc-stdlib-*` |
 
 Output:
