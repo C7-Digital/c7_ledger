@@ -96,13 +96,15 @@ export async function bundle(
 }
 
 /**
- * Vite plugin to resolve self-referencing package imports.
+ * Rollup plugin to resolve cross-package imports within the codegen output.
  *
- * Raw codegen .d.ts files reference the package by its own npm name, e.g.:
- *   require('@domain-verify/codegen/daml-prim-DA-Types-1.0.0')
+ * Each raw codegen package imports its dependencies (e.g. daml-prim, daml-stdlib)
+ * using the consumer's npm package name as a prefix:
+ *   require('@mypackage/codegen/daml-prim-DA-Types-1.0.0')
  *
- * The subpath after the package name corresponds to a directory in srcDir.
- * We resolve these to local paths: srcDir/<subpath>/lib/index.js
+ * At bundle time these aren't real npm packages — they're sibling directories
+ * in the staging area. This plugin strips the package prefix and resolves
+ * the subpath to a local directory: srcDir/<subpath>/lib/index.js
  */
 function resolveSelfReferences(srcDir: string) {
   return {
@@ -117,7 +119,7 @@ function resolveSelfReferences(srcDir: string) {
       }
 
       // Strategy 2: Strip scoped package prefix (@scope/name/subpath -> subpath)
-      // Handles: @domain-verify/codegen/daml-prim-DA-Types-1.0.0
+      // e.g. @mypackage/codegen/daml-prim-DA-Types-1.0.0 -> daml-prim-DA-Types-1.0.0
       let subpath: string | undefined;
       if (source.startsWith("@")) {
         // @scope/name/subpath -> skip first two segments
