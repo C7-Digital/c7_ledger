@@ -152,7 +152,7 @@ describe("integration: full pipeline", () => {
     beforeAll(async () => {
       tmpDir = await mkdtemp(join(tmpdir(), "scribe-test-nobundle-"));
       outputDir = join(tmpDir, "dist");
-      srcDir = join(tmpDir, "src"); // generate() creates src/ adjacent to output
+      srcDir = join(tmpDir, ".scribe"); // generate() creates .scribe/ adjacent to output
 
       const config = await loadConfig({
         input: FIXTURES_INPUT,

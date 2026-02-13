@@ -274,15 +274,15 @@ Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodeg
   "version": "0.0.1",
   "type": "module",
   "main": "dist/index.js",
-  "types": "src/index.d.ts",
+  "types": ".scribe/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./src/index.d.ts"
+      "types": "./.scribe/index.d.ts"
     },
     "./version": {
       "import": "./dist/version.js",
-      "types": "./src/version.d.ts"
+      "types": "./.scribe/version.d.ts"
     }
   },
   "scripts": {
@@ -299,7 +299,7 @@ Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodeg
 }
 ```
 
-Scribe creates a `src/` staging directory (symlinked raw codegen packages + generated `.d.ts` files) and a `dist/` directory (bundled ESM). The `types` field points at `src/index.d.ts` so TypeScript resolves types through the original `.d.ts` chain, while `main`/`exports` point at the bundled `dist/` output for runtime.
+Scribe creates a `.scribe/` staging directory (symlinked raw codegen packages + generated `.d.ts` files) and a `dist/` directory (bundled ESM). The `.scribe/` directory is tool-managed and should not be edited manually. The `types` field points at `.scribe/index.d.ts` so TypeScript resolves types through the original `.d.ts` chain, while `main`/`exports` point at the bundled `dist/` output for runtime.
 
 ## Requirements
 

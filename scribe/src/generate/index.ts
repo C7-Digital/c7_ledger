@@ -38,11 +38,11 @@ export async function generate(
     return { mainPkg, vendorPkgs, stdlibPkgs, outputDir: config.output.dir, files: [] };
   }
 
-  // Prepare a staging directory (src/) adjacent to output
+  // Prepare a staging directory (.scribe/) adjacent to output
   const outputDir = config.output.dir;
-  const srcDir = resolve(outputDir, "..", "src");
+  const srcDir = resolve(outputDir, "..", ".scribe");
 
-  // Clean and recreate src/
+  // Clean and recreate .scribe/
   await rm(srcDir, { recursive: true, force: true });
   await mkdir(srcDir, { recursive: true });
 
@@ -78,7 +78,7 @@ export async function generate(
   // Generate version.d.ts
   await writeFile(join(srcDir, "version.d.ts"), generateVersionTypeDef());
 
-  const files = ["src/index.js", "src/index.d.ts", "src/version.js", "src/version.d.ts"];
+  const files = [".scribe/index.js", ".scribe/index.d.ts", ".scribe/version.js", ".scribe/version.d.ts"];
 
   // Bundle if configured
   if (config.output.bundle) {
