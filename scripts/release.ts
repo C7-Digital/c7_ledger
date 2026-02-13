@@ -5,8 +5,9 @@ import * as readline from 'readline';
 
 const LEDGER_PACKAGE_PATH = 'ledger/package.json';
 const REACT_PACKAGE_PATH = 'react/package.json';
+const SCRIBE_PACKAGE_PATH = 'scribe/package.json';
 
-type PackageSelection = 'ledger' | 'react' | 'all';
+type PackageSelection = 'ledger' | 'react' | 'scribe' | 'all';
 
 function exec(command: string, options = {}) {
   return execSync(command, { stdio: 'inherit', ...options });
@@ -41,9 +42,9 @@ function parsePackageSelection(): PackageSelection {
 
   const value = args[packageIndex + 1] as PackageSelection;
 
-  if (!value || !['ledger', 'react', 'all'].includes(value)) {
+  if (!value || !['ledger', 'react', 'scribe', 'all'].includes(value)) {
     console.error(`Invalid --package value: ${value || 'none'}`);
-    console.error('Valid options: ledger, react, all');
+    console.error('Valid options: ledger, react, scribe, all');
     process.exit(1);
   }
 
@@ -71,6 +72,7 @@ async function main() {
   // Determine which packages are being released
   const releasingLedger = packageSelection === 'ledger' || packageSelection === 'all';
   const releasingReact = packageSelection === 'react' || packageSelection === 'all';
+  const releasingScribe = packageSelection === 'scribe' || packageSelection === 'all';
 
   // Display what will be released
   if (packageSelection === 'all') {
@@ -82,8 +84,10 @@ async function main() {
   // Read package versions independently
   const ledgerPkg = readPackageJson(LEDGER_PACKAGE_PATH);
   const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
+  const scribePkg = readPackageJson(SCRIBE_PACKAGE_PATH);
   const ledgerVersion = ledgerPkg.version;
   const reactVersion = reactPkg.version;
+  const scribeVersion = scribePkg.version;
 
   
   // Confirm versions have been updated
@@ -138,6 +142,9 @@ async function main() {
   if (releasingReact) {
     console.log(`  - @c7-digital/react@${reactVersion}`);
   }
+  if (releasingScribe) {
+    console.log(`  - @c7-digital/scribe@${scribeVersion}`);
+  }
   console.log('');
 
   // Confirm with user
@@ -173,10 +180,22 @@ async function main() {
     }
   }
 
+  if (releasingScribe) {
+    console.log(`Publishing @c7-digital/scribe@${scribeVersion}...`);
+    try {
+      exec(`npm publish --access public`, { cwd: resolve(process.cwd(), 'scribe') });
+      console.log(`✓ Published @c7-digital/scribe\n`);
+    } catch (error) {
+      console.error(`✗ Failed to publish @c7-digital/scribe`);
+      process.exit(1);
+    }
+  }
+
   // Final success message
   const publishedPackages: string[] = [];
   if (releasingLedger) publishedPackages.push(`@c7-digital/ledger@${ledgerVersion}`);
   if (releasingReact) publishedPackages.push(`@c7-digital/react@${reactVersion}`);
+  if (releasingScribe) publishedPackages.push(`@c7-digital/scribe@${scribeVersion}`);
 
   console.log(`Done! Published ${publishedPackages.join(' and ')}`);
 }
