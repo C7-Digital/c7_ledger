@@ -160,17 +160,17 @@ Scribe ships a companion Vite plugin for consumer apps at `@c7-digital/scribe/vi
 ```typescript
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { damlPlugin } from '@c7-digital/scribe/vite';
+import { damlCodegenPlugin } from '@c7-digital/scribe/vite';
 
 export default defineConfig({
   plugins: [
-    damlPlugin(),
+    damlCodegenPlugin(),
     react(),
   ],
 });
 ```
 
-### What `damlPlugin()` configures
+### What `damlCodegenPlugin()` configures
 
 - `@mojotech/json-type-validation` -> UMD build (required for ESM compat)
 - `@daml/types` -> local node_modules copy
@@ -179,7 +179,7 @@ export default defineConfig({
 ### Options
 
 ```typescript
-damlPlugin({
+damlCodegenPlugin({
   // Override node_modules lookup path.
   // Useful in monorepos where node_modules isn't at cwd().
   nodeModulesPath: __dirname,
@@ -257,14 +257,14 @@ The `versionedRegistry` function is structurally compatible with `VersionedRegis
 dpm codegen-js          scribe                    consumer app
 ┌─────────────┐    ┌──────────────────┐    ┌──────────────────────┐
 │ model-0.0.8/│    │ discover         │    │ vite.config.ts       │
-│ splice-*/   │--->│ analyze          │    │   damlPlugin()       │
+│ splice-*/   │--->│ analyze          │    │   damlCodegenPlugin()       │
 │ daml-prim-*/│    │ generate + bundle│--->│                      │
 │ daml-stdlib/│    │                  │    │ import { ... }        │
 └─────────────┘    └──────────────────┘    │   from '@pkg/codegen'│
                                            └──────────────────────┘
 ```
 
-Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlPlugin()` Vite plugin owns the **consumer** side (`@daml/types` resolution, optimizeDeps). Neither depends on the other.
+Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodegenPlugin()` Vite plugin owns the **consumer** side (`@daml/types` resolution, optimizeDeps). Neither depends on the other.
 
 ## Consumer `package.json` setup
 

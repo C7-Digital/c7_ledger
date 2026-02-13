@@ -7,12 +7,12 @@
 
 import { resolve } from "node:path";
 
-interface DamlPluginOptions {
+interface DamlCodegenPluginOptions {
   /** Override the path to node_modules (defaults to cwd) */
   nodeModulesPath?: string;
 }
 
-export function damlPlugin(options: DamlPluginOptions = {}) {
+export function damlCodegenPlugin(options: DamlCodegenPluginOptions = {}) {
   const base = options.nodeModulesPath ?? process.cwd();
 
   return {
