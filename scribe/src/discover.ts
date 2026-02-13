@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { rcompare } from "semver";
 import type { ResolvedConfig } from "./config.js";
 
 export type PackageRole = "main" | "vendor" | "stdlib";
@@ -92,7 +93,7 @@ export async function discoverPackages(
     } else {
       // Pick the latest version (sort semver descending)
       selected = mainPackages.sort((a, b) =>
-        compareSemver(b.detectedVersion ?? "0.0.0", a.detectedVersion ?? "0.0.0")
+        rcompare(a.detectedVersion ?? "0.0.0", b.detectedVersion ?? "0.0.0")
       )[0];
     }
 
@@ -105,13 +106,3 @@ export async function discoverPackages(
   return packages;
 }
 
-/** Simple semver comparison. Returns negative if a < b, positive if a > b, 0 if equal. */
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
