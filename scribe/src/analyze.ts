@@ -55,7 +55,11 @@ async function discoverMembers(
   let content: string;
   try {
     content = await readFile(moduleDtsPath, "utf-8");
-  } catch {
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      console.warn(`Warning: could not read ${moduleDtsPath}: ${code ?? err}`);
+    }
     return [];
   }
 
@@ -91,7 +95,11 @@ async function discoverModules(
     let entries;
     try {
       entries = await readdir(dir, { withFileTypes: true });
-    } catch {
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        console.warn(`Warning: could not read directory ${dir}: ${code ?? err}`);
+      }
       return;
     }
 
