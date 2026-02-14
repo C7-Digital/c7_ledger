@@ -27,6 +27,7 @@
     "watch": "tsc --watch",
     "clean": "rm -rf lib",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:watch": "vitest",
     "prepare": "pnpm build"
   },

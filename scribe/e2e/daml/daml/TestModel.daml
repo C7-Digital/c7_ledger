@@ -1,0 +1,54 @@
+module TestModel where
+
+-- | A simple asset template for e2e testing.
+template Asset
+  with
+    owner : Party
+    description : Text
+    value : Int
+  where
+    signatory owner
+
+    choice Transfer : ContractId Asset
+      with
+        newOwner : Party
+      controller owner
+      do create this with owner = newOwner
+
+    choice UpdateValue : ContractId Asset
+      with
+        newValue : Int
+      controller owner
+      do create this with value = newValue
+
+-- | An interface for transferable assets.
+data TransferableView = TransferableView
+  with
+    tOwner : Party
+  deriving (Eq, Show)
+
+interface Transferable where
+  viewtype TransferableView
+  getOwner : Party
+
+  choice InterfaceTransfer : ContractId Transferable
+    with
+      iNewOwner : Party
+    controller getOwner this
+    do
+      create (toInterface @Transferable (ManagedAsset (getOwner this) "" 0 iNewOwner))
+
+-- | A managed asset that implements the Transferable interface.
+template ManagedAsset
+  with
+    manager : Party
+    label : Text
+    amount : Int
+    delegate : Party
+  where
+    signatory manager
+    observer delegate
+
+    interface instance Transferable for ManagedAsset where
+      view = TransferableView with tOwner = manager
+      getOwner = manager

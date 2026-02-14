@@ -1,0 +1,11 @@
+# NOTE: sdk-version must match ledger's @daml/types dependency (currently 3.4.9).
+# When bumping, also update .github/workflows/ci.yml (Daml SDK install step).
+sdk-version: 3.4.9
+name: scribe-e2e-test
+version: 0.1.0
+source: daml
+dependencies:
+  - daml-prim
+  - daml-stdlib
+build-options:
+  - -Wno-upgrade-interfaces
