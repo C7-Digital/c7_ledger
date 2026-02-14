@@ -30,7 +30,7 @@ const CompatVersionSchema = z.object({
 });
 
 const CompatPackageSchema = z.object({
-  versions: z.array(CompatVersionSchema).optional(),
+  versions: z.array(CompatVersionSchema).default([]),
 });
 
 const CompatConfigSchema = z.record(z.string(), CompatPackageSchema);
