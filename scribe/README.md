@@ -259,9 +259,9 @@ The `versionedRegistry` function is structurally compatible with `VersionedRegis
 dpm codegen-js          scribe                    consumer app
 ┌─────────────┐    ┌──────────────────┐    ┌──────────────────────┐
 │ model-0.0.8/│    │ discover         │    │ vite.config.ts       │
-│ splice-*/   │--->│ analyze          │    │   damlCodegenPlugin()       │
+│ splice-*/   │--->│ analyze          │    │   damlCodegenPlugin()│
 │ daml-prim-*/│    │ generate + bundle│--->│                      │
-│ daml-stdlib/│    │                  │    │ import { ... }        │
+│ daml-stdlib/│    │                  │    │ import { ... }       │
 └─────────────┘    └──────────────────┘    │   from '@pkg/codegen'│
                                            └──────────────────────┘
 ```
@@ -303,8 +303,34 @@ Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodeg
 
 Scribe creates a `.scribe/` staging directory (symlinked raw codegen packages + generated `.d.ts` files) and a `dist/` directory (bundled ESM). The `.scribe/` directory is tool-managed and should not be edited manually. The `types` field points at `.scribe/index.d.ts` so TypeScript resolves types through the original `.d.ts` chain, while `main`/`exports` point at the bundled `dist/` output for runtime.
 
+## Development
+
+### Testing
+
+```bash
+# Unit tests (fixture-based, no external dependencies)
+pnpm test
+
+# E2E tests (requires dpm or daml CLI)
+pnpm test:e2e
+```
+
+Unit tests validate scribe's transformation logic against hand-crafted fixtures in `src/__fixtures__/`. They're fast and don't require the Daml SDK.
+
+E2E tests validate the full pipeline against real codegen output: compile a Daml model, run `dpm codegen-js`, run scribe, then verify that a downstream consumer can type-check (`tsc --noEmit`) and bundle (`vite.build()`) the output. They require `dpm` (preferred) or the legacy `daml` assistant and will skip gracefully if neither is installed.
+
+### SDK version pin
+
+The Daml SDK version is pinned in two places:
+
+- `e2e/daml/daml.yaml` — `sdk-version` used to compile the test model
+- `.github/workflows/ci.yml` — version installed on CI runners
+
+Both must match `ledger`'s `@daml/types` dependency (currently **3.4.9**).
+
 ## Requirements
 
 - Node.js >= 18.0.0
 - pnpm >= 8.0.0
 - Vite 5.x or 6.x (optional, for bundling and the companion plugin)
+- `dpm` or `daml` CLI (optional, for e2e tests only)
