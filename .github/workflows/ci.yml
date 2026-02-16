@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# NOTE: The Daml SDK version (currently 3.4.9) is pinned in
+# scribe/e2e/daml/daml.yaml and must match ledger's @daml/types dependency.
+# When bumping, update both places.
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -29,3 +33,11 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Install Daml SDK
+        run: |
+          curl -sSL https://get.daml.com/ | sh -s 3.4.9
+          echo "$HOME/.daml/bin" >> $GITHUB_PATH
+
+      - name: Scribe E2E Tests
+        run: pnpm --filter @c7-digital/scribe test:e2e
