@@ -118,24 +118,16 @@ function resolveSelfReferences(srcDir: string) {
         if (existsSync(withLib)) return withLib;
       }
 
-      // Strategy 2: Strip scoped package prefix (@scope/name/subpath -> subpath)
-      // e.g. @mypackage/codegen/daml-prim-DA-Types-1.0.0 -> daml-prim-DA-Types-1.0.0
-      let subpath: string | undefined;
-      if (source.startsWith("@")) {
-        // @scope/name/subpath -> skip first two segments
-        const parts = source.split("/");
-        if (parts.length > 2) {
-          subpath = parts.slice(2).join("/");
-        }
-      } else if (source.includes("/")) {
-        // unscoped-name/subpath -> skip first segment
-        const parts = source.split("/");
-        if (parts.length > 1) {
-          subpath = parts.slice(1).join("/");
-        }
-      }
-
-      if (subpath) {
+      // Strategy 2: Strip package prefix and try to resolve against srcDir.
+      // Scoped: @scope/name/subpath -> skip first two segments
+      // Unscoped: name/subpath -> skip first segment
+      // Note: @rollup/plugin-commonjs may strip the '@' from scoped names
+      // (e.g. @domain-verify/codegen/foo -> domain-verify/codegen/foo),
+      // so we progressively try stripping more segments until a match is found.
+      const parts = source.split("/");
+      const startIdx = source.startsWith("@") ? 2 : 1;
+      for (let i = startIdx; i < parts.length; i++) {
+        const subpath = parts.slice(i).join("/");
         const resolvedDir = resolve(srcDir, subpath);
         if (existsSync(resolvedDir)) {
           const withLib = resolve(resolvedDir, "lib", "index.js");
