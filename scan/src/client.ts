@@ -4,24 +4,37 @@
  * Provides type-safe access to the Scan API endpoints for discovering
  * party metadata, ANS entries, validator licenses, DSO info, and more.
  */
-import { operations } from "./generated/api";
+import { Party } from "@daml/types";
+import { operations, components } from "./generated/api";
 import { logger } from "./logger";
 import fetch from "cross-fetch";
+
+// ─── Party-refined types ──────────────────────────────────────────────
+// The OpenAPI spec uses plain `string` for party identifiers. We refine
+// known party fields to `Party` from @daml/types for downstream type safety.
+
+/** ANS entry with `user` typed as Party (owner party ID). */
+export type AnsEntry = Omit<components["schemas"]["AnsEntry"], "user"> & {
+  user: Party;
+};
 
 // ─── ANS / Name Service ────────────────────────────────────────────────
 
 type ListAnsEntriesOperation = operations["listAnsEntries"];
 type ListAnsEntriesParams = ListAnsEntriesOperation["parameters"]["query"];
-type ListAnsEntriesResponse =
-  ListAnsEntriesOperation["responses"]["200"]["content"]["application/json"];
+type ListAnsEntriesResponse = {
+  entries: AnsEntry[];
+};
 
 type LookupAnsEntryByPartyOperation = operations["lookupAnsEntryByParty"];
-type LookupAnsEntryByPartyResponse =
-  LookupAnsEntryByPartyOperation["responses"]["200"]["content"]["application/json"];
+type LookupAnsEntryByPartyResponse = {
+  entry: AnsEntry;
+};
 
 type LookupAnsEntryByNameOperation = operations["lookupAnsEntryByName"];
-type LookupAnsEntryByNameResponse =
-  LookupAnsEntryByNameOperation["responses"]["200"]["content"]["application/json"];
+type LookupAnsEntryByNameResponse = {
+  entry: AnsEntry;
+};
 
 // ─── Party Resolution ──────────────────────────────────────────────────
 
@@ -32,12 +45,18 @@ type GetPartyToParticipantResponse =
 // ─── Network Info ──────────────────────────────────────────────────────
 
 type GetDsoInfoOperation = operations["getDsoInfo"];
-type GetDsoInfoResponse =
+type GetDsoInfoResponseRaw =
   GetDsoInfoOperation["responses"]["200"]["content"]["application/json"];
+/** DSO info with sv_party_id and dso_party_id typed as Party. */
+type GetDsoInfoResponse = Omit<GetDsoInfoResponseRaw, "sv_party_id" | "dso_party_id"> & {
+  sv_party_id: Party;
+  dso_party_id: Party;
+};
 
 type GetDsoPartyIdOperation = operations["getDsoPartyId"];
-type GetDsoPartyIdResponse =
-  GetDsoPartyIdOperation["responses"]["200"]["content"]["application/json"];
+type GetDsoPartyIdResponse = {
+  dso_party_id: Party;
+};
 
 type ListDsoSequencersOperation = operations["listDsoSequencers"];
 type ListDsoSequencersResponse =
@@ -233,7 +252,7 @@ export class ScanClient {
     });
   }
 
-  async lookupAnsEntryByParty(party: string): Promise<LookupAnsEntryByPartyResponse> {
+  async lookupAnsEntryByParty(party: Party): Promise<LookupAnsEntryByPartyResponse> {
     return this.request<LookupAnsEntryByPartyResponse>(
       `/v0/ans-entries/by-party/${encodeURIComponent(party)}`,
       "GET",
@@ -251,7 +270,7 @@ export class ScanClient {
 
   async getPartyToParticipant(
     domainId: string,
-    partyId: string,
+    partyId: Party,
   ): Promise<GetPartyToParticipantResponse> {
     return this.request<GetPartyToParticipantResponse>(
       `/v0/domains/${encodeURIComponent(domainId)}/parties/${encodeURIComponent(partyId)}/participant-id`,
