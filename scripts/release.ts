@@ -95,7 +95,7 @@ async function main() {
 
   
   // Confirm versions have been updated
-  const packagesToUpdate = packageSelection === 'all' ? 'both packages' : `@c7-digital/${packageSelection}`;
+  const packagesToUpdate = packageSelection === 'all' ? 'all packages' : `@c7-digital/${packageSelection}`;
   const confirmation = await prompt(`Have you updated the version for ${packagesToUpdate}? (y/n) `);
   if (confirmation.toLowerCase() !== 'y') {
     console.log('Please update the version(s) in the appropriate package.json file(s) before running the release script.');
