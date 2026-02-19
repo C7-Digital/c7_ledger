@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2020",
     "rootDir": ".",
-    "module": "esnext",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "declaration": true,
     "declarationDir": "lib",
     "outDir": "lib",

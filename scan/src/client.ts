@@ -5,8 +5,8 @@
  * party metadata, ANS entries, validator licenses, DSO info, and more.
  */
 import { Party } from "@daml/types";
-import { operations, components } from "./generated/api";
-import { logger } from "./logger";
+import { operations, components } from "./generated/api.js";
+import { logger } from "./logger.js";
 import fetch from "cross-fetch";
 
 // ─── Party-refined types ──────────────────────────────────────────────
