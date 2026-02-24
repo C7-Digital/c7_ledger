@@ -40,6 +40,7 @@ import { MultiStreamAdapter, InterfaceMultiStreamImpl } from "./multistream";
 import {
   AllocatePartyRequest,
   AllocatePartyResponse,
+  AnyCommand,
   ArchiveEvent,
   CantonError,
   Command,
@@ -266,7 +267,7 @@ export function exerciseCmd<T extends object, C, R, K = unknown>(
   };
 }
 
-function convertCommand(command: Command<any, any>) : JsCommand {
+function convertCommand(command: AnyCommand) : JsCommand {
   switch (command.type) {
     case 'create':
       return {
@@ -1122,7 +1123,7 @@ export class Ledger {
    * @returns Stream of events resulting from the submitted commands.
    */
   async submit(
-    commands: Command<any, any>[],
+    commands: AnyCommand[],
     actAs?: Party[]
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));

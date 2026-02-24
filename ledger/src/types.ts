@@ -289,10 +289,21 @@ export type ExerciseCommand<T extends object, C, R, K = unknown> = {
   argument: C;
 };
 
-export type Command<T extends object, C, R = unknown, K = unknown> 
-  = CreateCommand<T, K> 
-  | CreateAndExerciseCommand<T, C, R, K> 
+export type Command<T extends object, C, R = unknown, K = unknown>
+  = CreateCommand<T, K>
+  | CreateAndExerciseCommand<T, C, R, K>
   | ExerciseCommand<T, C, R, K>;
+
+/**
+ * A command with erased type parameters, suitable for heterogeneous arrays
+ * passed to `Ledger.submit()`. Each variant is independently widened to `any`,
+ * so a `CreateCommand<A, KA>` and an `ExerciseCommand<B, CB, RB, KB>` can
+ * coexist in the same `AnyCommand[]` without a cast.
+ */
+export type AnyCommand =
+  | CreateCommand<any, any>
+  | CreateAndExerciseCommand<any, any, any, any>
+  | ExerciseCommand<any, any, any, any>;
 
 // Party management types with proper string formats
 export interface AllocatePartyRequest {
