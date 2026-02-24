@@ -3,6 +3,7 @@ packages:
   - 'react'
   - 'scribe'
   - 'scan'
+  - 'server'
 
 settings:
   inject-workspace-packages: true
