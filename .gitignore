@@ -3,4 +3,5 @@ dist/
 lib/
 lib-lite/
 *.log
+*.tsbuildinfo
 .DS_Store
