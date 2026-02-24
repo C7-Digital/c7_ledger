@@ -5,5 +5,6 @@ Type safe interactions with Canton node via [JSON API](https://docs.digitalasset
 - [C7/Ledger](ledger/README.md)
 - [C7/React](react/README.md)
 - [C7/Scribe](scribe/README.md)
+- [C7/Server](server/README.md)
 
 - Current version: 0.0.1, Daml/Canton Target: 3.4.9
