@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@c7-digital/server",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "description": "Server infrastructure for Canton Network applications",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./auth": {
+      "import": "./dist/auth/index.js",
+      "types": "./dist/auth/index.d.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "auth": ["dist/auth/index.d.ts"]
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "tsc"
+  },
+  "dependencies": {
+    "@daml/types": "3.4.9",
+    "jose": "^6.0.10",
+    "keycloak-connect": "^26.1.1",
+    "zod": "^3.24.3"
+  },
+  "peerDependencies": {
+    "@c7-digital/ledger": ">=0.0.8"
+  },
+  "devDependencies": {
+    "@c7-digital/ledger": "workspace:*",
+    "@types/node": "^18.15.11",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

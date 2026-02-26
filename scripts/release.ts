@@ -7,8 +7,9 @@ const LEDGER_PACKAGE_PATH = 'ledger/package.json';
 const REACT_PACKAGE_PATH = 'react/package.json';
 const SCRIBE_PACKAGE_PATH = 'scribe/package.json';
 const SCAN_PACKAGE_PATH = 'scan/package.json';
+const SERVER_PACKAGE_PATH = 'server/package.json';
 
-type PackageSelection = 'ledger' | 'react' | 'scribe' | 'scan' | 'all';
+type PackageSelection = 'ledger' | 'react' | 'scribe' | 'scan' | 'server' | 'all';
 
 function exec(command: string, options = {}) {
   return execSync(command, { stdio: 'inherit', ...options });
@@ -43,9 +44,9 @@ function parsePackageSelection(): PackageSelection {
 
   const value = args[packageIndex + 1] as PackageSelection;
 
-  if (!value || !['ledger', 'react', 'scribe', 'scan', 'all'].includes(value)) {
+  if (!value || !['ledger', 'react', 'scribe', 'scan', 'server', 'all'].includes(value)) {
     console.error(`Invalid --package value: ${value || 'none'}`);
-    console.error('Valid options: ledger, react, scribe, scan, all');
+    console.error('Valid options: ledger, react, scribe, scan, server, all');
     process.exit(1);
   }
 
@@ -75,6 +76,7 @@ async function main() {
   const releasingReact = packageSelection === 'react' || packageSelection === 'all';
   const releasingScribe = packageSelection === 'scribe' || packageSelection === 'all';
   const releasingScan = packageSelection === 'scan' || packageSelection === 'all';
+  const releasingServer = packageSelection === 'server' || packageSelection === 'all';
 
   // Display what will be released
   if (packageSelection === 'all') {
@@ -88,10 +90,12 @@ async function main() {
   const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
   const scribePkg = readPackageJson(SCRIBE_PACKAGE_PATH);
   const scanPkg = readPackageJson(SCAN_PACKAGE_PATH);
+  const serverPkg = readPackageJson(SERVER_PACKAGE_PATH);
   const ledgerVersion = ledgerPkg.version;
   const reactVersion = reactPkg.version;
   const scribeVersion = scribePkg.version;
   const scanVersion = scanPkg.version;
+  const serverVersion = serverPkg.version;
 
   
   // Confirm versions have been updated
@@ -152,6 +156,9 @@ async function main() {
   if (releasingScan) {
     console.log(`  - @c7-digital/scan@${scanVersion}`);
   }
+  if (releasingServer) {
+    console.log(`  - @c7-digital/server@${serverVersion}`);
+  }
   console.log('');
 
   // Confirm with user
@@ -209,12 +216,24 @@ async function main() {
     }
   }
 
+  if (releasingServer) {
+    console.log(`Publishing @c7-digital/server@${serverVersion}...`);
+    try {
+      exec(`npm publish --access public`, { cwd: resolve(process.cwd(), 'server') });
+      console.log(`✓ Published @c7-digital/server\n`);
+    } catch (error) {
+      console.error(`✗ Failed to publish @c7-digital/server`);
+      process.exit(1);
+    }
+  }
+
   // Final success message
   const publishedPackages: string[] = [];
   if (releasingLedger) publishedPackages.push(`@c7-digital/ledger@${ledgerVersion}`);
   if (releasingReact) publishedPackages.push(`@c7-digital/react@${reactVersion}`);
   if (releasingScribe) publishedPackages.push(`@c7-digital/scribe@${scribeVersion}`);
   if (releasingScan) publishedPackages.push(`@c7-digital/scan@${scanVersion}`);
+  if (releasingServer) publishedPackages.push(`@c7-digital/server@${serverVersion}`);
 
   console.log(`Done! Published ${publishedPackages.join(' and ')}`);
 }
