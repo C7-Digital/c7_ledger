@@ -7,6 +7,7 @@ export type { KeycloakConfig, TokenUpdateCallback } from "./types.js";
 export {
   ActiveContractsService,
   type ActiveContractsServiceOptions,
+  BaseTracker,
   TemplateTracker,
   InterfaceTracker,
   TypeSafeTrackerRegistry,
