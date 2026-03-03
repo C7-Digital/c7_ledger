@@ -173,6 +173,8 @@ export interface ScanClientConfig {
   baseUrl: string;
   /** Optional bearer token for authenticated endpoints */
   token?: string;
+  /** Enable verbose request/response logging via the logger */
+  debug?: boolean;
 }
 
 // ─── ScanClient ────────────────────────────────────────────────────────
@@ -180,10 +182,12 @@ export interface ScanClientConfig {
 export class ScanClient {
   public readonly baseUrl: string;
   public readonly token?: string;
+  public debug: boolean;
 
   constructor(config: ScanClientConfig) {
     this.baseUrl = config.baseUrl;
     this.token = config.token;
+    this.debug = config.debug ?? false;
   }
 
   private async request<TResponse>(
@@ -227,21 +231,41 @@ export class ScanClient {
       requestInit.body = JSON.stringify(options.body);
     }
 
-    logger.debug(`${method} ${url}`);
+    if (this.debug) {
+      logger.info(`[scan-debug] → ${method} ${url}`);
+      if (options?.body) {
+        logger.info(`[scan-debug] → body: ${JSON.stringify(options.body)}`);
+      }
+    } else {
+      logger.debug(`${method} ${url}`);
+    }
+
     const response = await fetch(url, requestInit);
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
+      if (this.debug) {
+        logger.error(`[scan-debug] ← ${response.status} ${response.statusText}`, text);
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}${text ? ` - ${text}` : ""}`);
     }
 
     // Some health endpoints return empty bodies
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
+      if (this.debug) {
+        logger.info(`[scan-debug] ← ${response.status} (no JSON body)`);
+      }
       return undefined as unknown as TResponse;
     }
 
-    return (await response.json()) as TResponse;
+    const json = (await response.json()) as TResponse;
+    if (this.debug) {
+      const preview = JSON.stringify(json);
+      const truncated = preview.length > 2000 ? preview.slice(0, 2000) + "..." : preview;
+      logger.info(`[scan-debug] ← ${response.status} ${truncated}`);
+    }
+    return json;
   }
 
   // ─── ANS / Name Service ────────────────────────────────────────────
