@@ -254,7 +254,10 @@ export class ScanClient {
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
       if (this.debug) {
-        logger.info(`[scan-debug] ← ${response.status} (no JSON body)`);
+        // Log the actual content-type and attempt to read the body for debugging
+        const text = await response.text().catch(() => "");
+        const bodyPreview = text.length > 2000 ? text.slice(0, 2000) + "..." : text;
+        logger.warn(`[scan-debug] ← ${response.status} content-type="${contentType}" body=${bodyPreview}`);
       }
       return undefined as unknown as TResponse;
     }
