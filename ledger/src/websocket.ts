@@ -9,7 +9,10 @@ import type { channels, components } from "./generated/async-api";
 import { SchemaValidator, ValidationMode } from "./validation";
 import { logger } from "./logger";
 import { logTokenExpiration } from "./token";
+import { isCantonError, type JsCantonError } from "./types";
 import WebSocket from "isomorphic-ws";
+
+export { JsCantonError, isCantonError };
 
 export interface StreamConfig {
   token: string;
@@ -37,9 +40,6 @@ export type UpdatesStreamMessage = UpdatesChannel["subscribe"]["message"];
 type EndpointRequestType<T extends ChannelEndpoint> = channels[T]["publish"]["message"];
 type EndpointResponseType<T extends ChannelEndpoint> = channels[T]["subscribe"]["message"];
 
-// Error type from the AsyncAPI schema
-export type JsCantonError = components["schemas"]["JsCantonError"];
-
 // Discriminated union types for stream responses
 export type Response<T> =
   | { status: "success"; data: T }
@@ -63,17 +63,6 @@ const SCHEMA_MAP: Record<ChannelEndpoint, string> = {
 
 export interface StopClient {
   (): void;
-}
-
-// Type guard to check if a response is a JsCantonError
-export function isCantonError(response: unknown): response is JsCantonError {
-  return (
-    typeof response === "object" &&
-    response !== null &&
-    "code" in response &&
-    "cause" in response &&
-    "context" in response
-  );
 }
 
 export function parseStreamResponse<T>(response: T | JsCantonError): Response<T> {
