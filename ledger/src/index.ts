@@ -1,6 +1,6 @@
 // Main export for the new ledger package
 export { Ledger, type LedgerOptions, createCmd, createAndExerciseCmd, exerciseCmd } from "./ledger";
-export { TypedHttpClient, type TypedHttpClientConfig } from "./client";
+export { TypedHttpClient, type TypedHttpClientConfig, LedgerApiError } from "./client";
 export {
   WebSocketClient,
   type StreamConfig,

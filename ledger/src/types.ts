@@ -5,7 +5,21 @@ import {
   UserIdString,
   PackageIdString,
 } from "./valueTypes";
-import { JsCantonError } from "./websocket";
+import type { components } from "./generated/async-api";
+
+// Error type from the Canton AsyncAPI schema
+export type JsCantonError = components["schemas"]["JsCantonError"];
+
+// Type guard to check if a response is a JsCantonError
+export function isCantonError(response: unknown): response is JsCantonError {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "code" in response &&
+    "cause" in response &&
+    "context" in response
+  );
+}
 
 // Generic CreateEvent
 export type CreateEvent<T extends object, K = unknown> = {

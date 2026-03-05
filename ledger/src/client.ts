@@ -10,7 +10,41 @@
  */
 import { paths, operations } from "./generated/api";
 import { SchemaValidator, ValidationMode } from "./validation";
+import { isCantonError, type JsCantonError } from "./types";
 import fetch from "cross-fetch";
+
+/**
+ * Error thrown when the Canton ledger API returns a non-OK HTTP response.
+ * Captures the HTTP status, status text, and — when the response body
+ * is a JsCantonError — the structured error details from Canton.
+ */
+export class LedgerApiError extends Error {
+  public readonly status: number;
+  public readonly statusText: string;
+  public readonly cantonError?: JsCantonError;
+  public readonly responseBody?: unknown;
+
+  constructor(
+    status: number,
+    statusText: string,
+    body?: unknown,
+  ) {
+    const cantonErr = isCantonError(body) ? body : undefined;
+    const detail = cantonErr
+      ? `${cantonErr.code}: ${cantonErr.cause}`
+      : (typeof body === "string" ? body : undefined);
+    const message = detail
+      ? `HTTP ${status}: ${statusText} — ${detail}`
+      : `HTTP ${status}: ${statusText}`;
+
+    super(message);
+    this.name = "LedgerApiError";
+    this.status = status;
+    this.statusText = statusText;
+    this.cantonError = cantonErr;
+    this.responseBody = body;
+  }
+}
 
 // Extract request/response types for specific operations
 type SubmitAndWaitOperation = operations["postV2CommandsSubmit-and-wait"];
@@ -95,7 +129,17 @@ export class TypedHttpClient {
     const response = await fetch(url, requestInit);
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        try {
+          body = await response.text();
+        } catch {
+          // Response body unreadable — leave undefined
+        }
+      }
+      throw new LedgerApiError(response.status, response.statusText, body);
     }
 
     const parsed = await response.json();
@@ -111,6 +155,7 @@ export class TypedHttpClient {
     return parsed as TResponse;
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async submitAndWait(commands: SubmitAndWaitRequest): Promise<SubmitAndWaitResponse> {
     return this.request<SubmitAndWaitResponse>(
       "/v2/commands/submit-and-wait",
@@ -120,6 +165,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async submitAndWaitForTransaction(
     commands: SubmitAndWaitForTransactionRequest
   ): Promise<SubmitAndWaitForTransactionResponse> {
@@ -131,6 +177,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async getParties(): Promise<GetPartiesResponse> {
     return this.request<GetPartiesResponse>(
       "/v2/parties",
@@ -140,6 +187,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async getUserInfo(userId: string): Promise<GetUserResponse> {
     return this.request<GetUserResponse>(
       `/v2/users/${userId}` as keyof paths,
@@ -149,6 +197,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async getUserRights(userId: string): Promise<GetUserRightsResponse> {
     return this.request<GetUserRightsResponse>(
       `/v2/users/${userId}/rights` as keyof paths,
@@ -158,6 +207,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async queryActiveContracts(
     queryRequest: QueryActiveContractsRequest
   ): Promise<QueryActiveContractsResponse> {
@@ -170,6 +220,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async allocateParty(request: AllocatePartyRequest): Promise<AllocatePartyResponse> {
     return this.request<AllocatePartyResponse>(
       "/v2/parties",
@@ -179,6 +230,7 @@ export class TypedHttpClient {
     );
   }
 
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async getLedgerEnd(): Promise<GetLedgerEndResponse> {
     return this.request<GetLedgerEndResponse>(
       "/v2/state/ledger-end",
