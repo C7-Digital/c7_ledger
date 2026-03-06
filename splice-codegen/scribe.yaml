@@ -1,0 +1,61 @@
+schema: "1.0"
+input: "codegen/js"
+output:
+  dir: "dist"
+  bundle: true
+
+# No main package — this is a vendor-only codegen for Splice templates
+# referenced by the Scan API.
+
+vendor:
+  # Pattern uses "splice-amulet-0*" to avoid matching splice-amulet-name-service
+  "splice-amulet-0*":
+    modules:
+      "Splice.Amulet":
+        alias: Amulet
+        templates:
+          - FeaturedAppRight
+          - UnclaimedDevelopmentFundCoupon
+      "Splice.AmuletRules":
+        alias: AmuletRules
+        templates:
+          - AmuletRules
+          - TransferPreapproval
+      "Splice.ExternalPartyAmuletRules":
+        alias: ExternalPartyAmuletRules
+        templates:
+          - ExternalPartyAmuletRules
+          - TransferCommand
+          - TransferCommandCounter
+      "Splice.Round":
+        alias: Round
+        templates:
+          - OpenMiningRound
+          - IssuingMiningRound
+          - ClosedMiningRound
+      "Splice.ValidatorLicense":
+        alias: ValidatorLicense
+        templates:
+          - ValidatorLicense
+
+  "splice-amulet-name-service-*":
+    modules:
+      "Splice.Ans":
+        alias: Ans
+        templates:
+          - AnsEntry
+          - AnsEntryContext
+          - AnsRules
+
+  "splice-dso-governance-*":
+    modules:
+      "Splice.DSO.SvState":
+        alias: SvState
+        templates:
+          - SvNodeState
+          - SvStatusReport
+      "Splice.DsoRules":
+        alias: DsoRules
+        templates:
+          - DsoRules
+          - VoteRequest

@@ -3,6 +3,7 @@ packages:
   - 'react'
   - 'scribe'
   - 'scan'
+  - 'splice-codegen'
 
 settings:
   inject-workspace-packages: true

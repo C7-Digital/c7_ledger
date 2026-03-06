@@ -1,0 +1,10 @@
+# Generated output
+dist/
+.scribe/
+codegen/
+
+# Vendor DARs (downloaded, not committed)
+vendor/*.dar
+
+# Node
+node_modules/

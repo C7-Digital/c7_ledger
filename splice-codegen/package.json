@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@c7-digital/splice-codegen",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Generated TypeScript bindings for Splice Daml templates (ValidatorLicense, SvNodeState, AnsEntry, etc.)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": ".scribe/index.d.ts",
+  "files": [
+    "dist",
+    ".scribe"
+  ],
+  "exports": {
+    ".": {
+      "types": "./.scribe/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./version": {
+      "types": "./.scribe/version.d.ts",
+      "import": "./dist/version.js",
+      "default": "./dist/version.js"
+    },
+    "./*": {
+      "types": "./.scribe/*"
+    }
+  },
+  "scripts": {
+    "vendor": "bash scripts/vendor.sh",
+    "codegen": "bash scripts/codegen.sh",
+    "build": "scribe --config scribe.yaml",
+    "rebuild": "pnpm vendor && pnpm codegen && pnpm build",
+    "clean": "rm -rf dist .scribe codegen/js"
+  },
+  "dependencies": {
+    "@daml/types": "3.4.9",
+    "@mojotech/json-type-validation": "^3.1.0"
+  },
+  "devDependencies": {
+    "@c7-digital/scribe": "0.0.2"
+  }
+}
