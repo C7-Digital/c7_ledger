@@ -1,9 +1,9 @@
-# Generated output
+# Generated output (rebuilt via `pnpm prepare`)
 dist/
 .scribe/
 codegen/
 
-# Vendor DARs (downloaded, not committed)
+# Vendor DARs (downloaded via `pnpm vendor`)
 vendor/*.dar
 
 # Node

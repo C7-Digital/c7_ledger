@@ -26,6 +26,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Install dpm (Daml Package Manager)
+        run: |
+          curl -sSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> $GITHUB_PATH
+
       - run: pnpm install --no-frozen-lockfile
 
       - name: Build

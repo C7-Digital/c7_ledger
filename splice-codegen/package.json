@@ -30,7 +30,8 @@
     "vendor": "bash scripts/vendor.sh",
     "codegen": "bash scripts/codegen.sh",
     "build": "scribe --config scribe.yaml",
-    "rebuild": "pnpm vendor && pnpm codegen && pnpm build",
+    "rebuild": "bash scripts/vendor.sh && bash scripts/codegen.sh && scribe --config scribe.yaml",
+    "prepare": "bash scripts/vendor.sh && bash scripts/codegen.sh && scribe --config scribe.yaml",
     "clean": "rm -rf dist .scribe codegen/js"
   },
   "dependencies": {
@@ -38,6 +39,6 @@
     "@mojotech/json-type-validation": "^3.1.0"
   },
   "devDependencies": {
-    "@c7-digital/scribe": "0.0.2"
+    "@c7-digital/scribe": "workspace:*"
   }
 }
