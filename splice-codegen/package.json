@@ -23,7 +23,9 @@
       "default": "./dist/version.js"
     },
     "./*": {
-      "types": "./.scribe/*"
+      "types": "./.scribe/*",
+      "import": "./.scribe/*/lib/index.js",
+      "default": "./.scribe/*/lib/index.js"
     }
   },
   "scripts": {
