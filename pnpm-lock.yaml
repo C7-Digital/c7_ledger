@@ -183,8 +183,8 @@ importers:
         version: 3.1.0
     devDependencies:
       '@c7-digital/scribe':
-        specifier: workspace:*
-        version: link:../scribe
+        specifier: 0.0.2
+        version: 0.0.2(rollup@4.57.1)(vite@5.4.21(@types/node@22.19.15))
 
 packages:
 
@@ -352,6 +352,16 @@ packages:
 
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
+
+  '@c7-digital/scribe@0.0.2':
+    resolution: {integrity: sha512-jCEn/Ge/+2WJf0UGLBgCG0aMnvpPeQRlQnIPu08vle5Nr+CJ0U1eJlvUymELE1aGGa+lIA2ogJkln1pjYp9kUw==}
+    engines: {node: '>=18.0.0', pnpm: '>=8.0.0'}
+    hasBin: true
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0
+    peerDependenciesMeta:
+      vite:
+        optional: true
 
   '@daml/types@3.4.9':
     resolution: {integrity: sha512-qFnSsZ9nyE2sf+LqA40XxoMdxEirsT6dKLW4of2GqFiQ8ZSiI40A8wU2WCCy+qn0LHtSTLD+XqEYCBPB73UKpA==}
@@ -2883,6 +2893,19 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bcoe/v8-coverage@0.2.3': {}
+
+  '@c7-digital/scribe@0.0.2(rollup@4.57.1)(vite@5.4.21(@types/node@22.19.15))':
+    dependencies:
+      '@rollup/plugin-commonjs': 28.0.9(rollup@4.57.1)
+      '@rollup/plugin-node-resolve': 16.0.3(rollup@4.57.1)
+      glob: 10.5.0
+      semver: 7.7.4
+      yaml: 2.8.2
+      zod: 3.25.76
+    optionalDependencies:
+      vite: 5.4.21(@types/node@22.19.15)
+    transitivePeerDependencies:
+      - rollup
 
   '@daml/types@3.4.9':
     dependencies:
