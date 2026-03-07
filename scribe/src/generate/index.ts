@@ -1,4 +1,4 @@
-import { mkdir, writeFile, symlink, readdir, rm, copyFile } from "node:fs/promises";
+import { mkdir, writeFile, symlink, readdir, rm, copyFile, realpath } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type { AnalyzedPackage } from "../analyze.js";
 import type { ResolvedConfig } from "../config.js";
@@ -46,11 +46,13 @@ export async function generate(
   await rm(srcDir, { recursive: true, force: true });
   await mkdir(srcDir, { recursive: true });
 
-  // Symlink all input packages into src/
+  // Symlink all input packages into src/ using relative paths
+  const realSrcDir = await realpath(srcDir);
   const inputEntries = await readdir(config.input, { withFileTypes: true });
   for (const entry of inputEntries) {
     if (entry.isDirectory() || entry.isSymbolicLink()) {
-      const target = resolve(join(config.input, entry.name));
+      const absTarget = resolve(join(config.input, entry.name));
+      const target = relative(realSrcDir, absTarget);
       const link = join(srcDir, entry.name);
       await symlink(target, link);
     }

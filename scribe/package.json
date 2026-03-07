@@ -40,7 +40,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^18.19.130",
+    "@types/node": "^22.15.0",
     "@types/semver": "^7.7.1",
     "typescript": "^5.8.3",
     "vite": "^5.0.0",

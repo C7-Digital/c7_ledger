@@ -6,6 +6,7 @@
  */
 import { Party } from "@daml/types";
 import { operations, components } from "./generated/api.js";
+import type * as Typed from "./types.js";
 import { logger } from "./logger.js";
 import fetch from "cross-fetch";
 
@@ -44,14 +45,7 @@ type GetPartyToParticipantResponse =
 
 // ─── Network Info ──────────────────────────────────────────────────────
 
-type GetDsoInfoOperation = operations["getDsoInfo"];
-type GetDsoInfoResponseRaw =
-  GetDsoInfoOperation["responses"]["200"]["content"]["application/json"];
-/** DSO info with sv_party_id and dso_party_id typed as Party. */
-type GetDsoInfoResponse = Omit<GetDsoInfoResponseRaw, "sv_party_id" | "dso_party_id"> & {
-  sv_party_id: Party;
-  dso_party_id: Party;
-};
+type GetDsoInfoResponse = Typed.GetDsoInfoResponse;
 
 type GetDsoPartyIdOperation = operations["getDsoPartyId"];
 type GetDsoPartyIdResponse = {
@@ -70,8 +64,7 @@ type ListDsoScansResponse =
 
 type ListValidatorLicensesOperation = operations["listValidatorLicenses"];
 type ListValidatorLicensesParams = ListValidatorLicensesOperation["parameters"]["query"];
-type ListValidatorLicensesResponse =
-  ListValidatorLicensesOperation["responses"]["200"]["content"]["application/json"];
+type ListValidatorLicensesResponse = Typed.ListValidatorLicensesResponse;
 
 type GetValidatorFaucetsOperation = operations["getValidatorFaucetsByValidator"];
 type GetValidatorFaucetsParams = GetValidatorFaucetsOperation["parameters"]["query"];
@@ -129,15 +122,12 @@ type GetHoldingsSummaryResponse =
 
 // ─── Rounds ────────────────────────────────────────────────────────────
 
-type GetClosedRoundsOperation = operations["getClosedRounds"];
-type GetClosedRoundsResponse =
-  GetClosedRoundsOperation["responses"]["200"]["content"]["application/json"];
+type GetClosedRoundsResponse = Typed.GetClosedRoundsResponse;
 
 type GetOpenAndIssuingMiningRoundsOperation = operations["getOpenAndIssuingMiningRounds"];
 type GetOpenAndIssuingMiningRoundsRequest =
   GetOpenAndIssuingMiningRoundsOperation["requestBody"]["content"]["application/json"];
-type GetOpenAndIssuingMiningRoundsResponse =
-  GetOpenAndIssuingMiningRoundsOperation["responses"]["200"]["content"]["application/json"];
+type GetOpenAndIssuingMiningRoundsResponse = Typed.GetOpenAndIssuingMiningRoundsResponse;
 
 // ─── Events ────────────────────────────────────────────────────────────
 
@@ -154,9 +144,7 @@ type GetEventByIdResponse =
 
 // ─── Misc ──────────────────────────────────────────────────────────────
 
-type ListUnclaimedDevelopmentFundCouponsOperation = operations["listUnclaimedDevelopmentFundCoupons"];
-type ListUnclaimedDevelopmentFundCouponsResponse =
-  ListUnclaimedDevelopmentFundCouponsOperation["responses"]["200"]["content"]["application/json"];
+type ListUnclaimedDevelopmentFundCouponsResponse = Typed.ListUnclaimedDevelopmentFundCouponsResponse;
 
 type GetHealthStatusOperation = operations["getHealthStatus"];
 type GetHealthStatusResponse =
