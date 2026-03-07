@@ -56,6 +56,7 @@ for dar in "${DAR_FILES[@]}"; do
     echo "  WARNING: $dar not found in Splice repository at tag $SPLICE_TAG"
     echo "  Available files matching pattern:"
     ls "$DARS_DIR" | grep "$(echo "$dar" | sed 's/-[0-9].*//')" || true
+    exit 1
   fi
 done
 
