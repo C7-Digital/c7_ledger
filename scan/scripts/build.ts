@@ -11,11 +11,11 @@
  * 5. Compile TypeScript (tsc + tsc-alias)
  */
 
-import { join, dirname } from "path";
+import { join, dirname, relative, sep } from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { writeFile, mkdir, readdir } from "fs/promises";
+import { writeFile, mkdir, readdir, readFile, cp } from "fs/promises";
 import { existsSync } from "fs";
 
 const execAsync = promisify(exec);
@@ -161,6 +161,69 @@ async function compileTypeScript(): Promise<void> {
   }
 }
 
+async function embedSpliceCodegen(): Promise<void> {
+  console.log("Embedding splice-codegen types...");
+
+  const spliceCodegenRoot = join(projectRoot, "node_modules", "@c7-digital", "splice-codegen");
+  const scribeDir = join(spliceCodegenRoot, ".scribe");
+  const vendorDir = join(projectRoot, "lib", "_vendor", "splice-codegen");
+
+  if (!existsSync(scribeDir)) {
+    throw new Error(`splice-codegen .scribe directory not found at ${scribeDir}`);
+  }
+
+  // Copy .scribe/ into lib/_vendor/splice-codegen/ (dereference symlinks)
+  await cp(scribeDir, vendorDir, { recursive: true, dereference: true });
+  console.log(`Copied .scribe/ → ${vendorDir}`);
+
+  // Rewrite @c7-digital/splice-codegen imports in all .d.ts files under lib/
+  const libDir = join(projectRoot, "lib");
+  await rewriteImportsInDir(libDir, vendorDir);
+
+  console.log("splice-codegen types embedded successfully.");
+}
+
+/**
+ * Recursively find .d.ts files and rewrite @c7-digital/splice-codegen imports
+ * to relative paths pointing into _vendor/splice-codegen/.
+ */
+async function rewriteImportsInDir(dir: string, vendorDir: string): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await rewriteImportsInDir(fullPath, vendorDir);
+    } else if (entry.name.endsWith(".d.ts")) {
+      let content = await readFile(fullPath, "utf-8");
+      if (!content.includes("@c7-digital/splice-codegen")) continue;
+
+      content = content.replace(
+        /from\s+(['"])@c7-digital\/splice-codegen(?:\/([^'"]*))?\1/g,
+        (_match, quote, subpath) => {
+          const fileDir = dirname(fullPath);
+          if (subpath) {
+            // Subpath import: @c7-digital/splice-codegen/MODULE_NAME
+            // Resolves to vendorDir/MODULE_NAME/lib/index
+            const target = join(vendorDir, subpath, "lib", "index");
+            let rel = relative(fileDir, target).split(sep).join("/");
+            if (!rel.startsWith(".")) rel = "./" + rel;
+            return `from ${quote}${rel}${quote}`;
+          } else {
+            // Root import: @c7-digital/splice-codegen
+            // Resolves to vendorDir/index
+            const target = join(vendorDir, "index");
+            let rel = relative(fileDir, target).split(sep).join("/");
+            if (!rel.startsWith(".")) rel = "./" + rel;
+            return `from ${quote}${rel}${quote}`;
+          }
+        }
+      );
+
+      await writeFile(fullPath, content, "utf-8");
+    }
+  }
+}
+
 async function build(): Promise<void> {
   console.log("Starting @c7-digital/scan build...\n");
 
@@ -178,6 +241,9 @@ async function build(): Promise<void> {
 
     // Compile TypeScript (depends on generated types)
     await compileTypeScript();
+
+    // Embed splice-codegen types into lib/ so consumers don't need it installed
+    await embedSpliceCodegen();
 
     console.log(`\nBuild completed successfully for Splice version: ${version}`);
   } catch (error) {

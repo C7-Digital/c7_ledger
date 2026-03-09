@@ -21,13 +21,13 @@
     "build": "tsx scripts/build.ts --splice-version=0.5.10",
     "compile": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "watch": "tsc --watch",
-    "clean": "rm -rf lib src/generated",
+    "clean": "rm -rf lib src/generated lib/_vendor",
     "prepare": "pnpm build",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --passWithNoTests"
   },
   "dependencies": {
-    "@c7-digital/splice-codegen": "workspace:*",
     "@daml/types": "3.4.9",
+    "@mojotech/json-type-validation": "^3.1.0",
     "cross-fetch": "^3.2.0"
   },
   "engines": {
@@ -35,6 +35,7 @@
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
+    "@c7-digital/splice-codegen": "workspace:*",
     "@types/jest": "^30.0.0",
     "@types/node": "^18.15.11",
     "jest": "^29.7.0",

@@ -98,16 +98,19 @@ importers:
 
   scan:
     dependencies:
-      '@c7-digital/splice-codegen':
-        specifier: workspace:*
-        version: link:../splice-codegen
       '@daml/types':
         specifier: 3.4.9
         version: 3.4.9
+      '@mojotech/json-type-validation':
+        specifier: ^3.1.0
+        version: 3.1.0
       cross-fetch:
         specifier: ^3.2.0
         version: 3.2.0
     devDependencies:
+      '@c7-digital/splice-codegen':
+        specifier: workspace:*
+        version: link:../splice-codegen
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
