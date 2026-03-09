@@ -164,12 +164,18 @@ async function compileTypeScript(): Promise<void> {
 async function embedSpliceCodegen(): Promise<void> {
   console.log("Embedding splice-codegen types...");
 
-  const spliceCodegenRoot = join(projectRoot, "node_modules", "@c7-digital", "splice-codegen");
-  const scribeDir = join(spliceCodegenRoot, ".scribe");
+  // Look for splice-codegen's .scribe/ in multiple locations:
+  // 1. Sibling workspace directory (../splice-codegen/.scribe)
+  // 2. node_modules (when installed as a dependency)
+  const candidates = [
+    join(projectRoot, "..", "splice-codegen", ".scribe"),
+    join(projectRoot, "node_modules", "@c7-digital", "splice-codegen", ".scribe"),
+  ];
+  const scribeDir = candidates.find(d => existsSync(d));
   const vendorDir = join(projectRoot, "lib", "_vendor", "splice-codegen");
 
-  if (!existsSync(scribeDir)) {
-    throw new Error(`splice-codegen .scribe directory not found at ${scribeDir}`);
+  if (!scribeDir) {
+    throw new Error(`splice-codegen .scribe directory not found. Searched:\n${candidates.join("\n")}`);
   }
 
   // Copy .scribe/ into lib/_vendor/splice-codegen/ (dereference symlinks)
