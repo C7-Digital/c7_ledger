@@ -31,9 +31,10 @@
   "scripts": {
     "vendor": "bash scripts/vendor.sh",
     "codegen": "bash scripts/codegen.sh",
+    "prebuild": "if [ ! -d codegen/js ]; then mkdir -p codegen && tar xzf codegen-js-3.4.9.tar.gz -C codegen; fi",
     "build": "scribe --config scribe.yaml",
     "rebuild": "pnpm vendor && pnpm codegen && pnpm build",
-    "prepare": "mkdir -p codegen && tar xzf codegen-js.tar.gz -C codegen && scribe --config scribe.yaml",
+    "prepare": "mkdir -p codegen && tar xzf codegen-js-3.4.9.tar.gz -C codegen && scribe --config scribe.yaml",
     "clean": "rm -rf dist .scribe codegen/js"
   },
   "dependencies": {
