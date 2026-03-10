@@ -229,6 +229,38 @@ type GetBackfillingStatusOperation = operations["getBackfillingStatus"];
 type GetBackfillingStatusResponse =
   GetBackfillingStatusOperation["responses"]["200"]["content"]["application/json"];
 
+type GetSynchronizerIdentitiesOperation = operations["getSynchronizerIdentities"];
+type GetSynchronizerIdentitiesResponse =
+  GetSynchronizerIdentitiesOperation["responses"]["200"]["content"]["application/json"];
+
+type GetSynchronizerBootstrappingTransactionsOperation = operations["getSynchronizerBootstrappingTransactions"];
+type GetSynchronizerBootstrappingTransactionsResponse =
+  GetSynchronizerBootstrappingTransactionsOperation["responses"]["200"]["content"]["application/json"];
+
+type GetUpdatesBeforeOperation = operations["getUpdatesBefore"];
+type GetUpdatesBeforeRequest =
+  GetUpdatesBeforeOperation["requestBody"]["content"]["application/json"];
+type GetUpdatesBeforeResponse =
+  GetUpdatesBeforeOperation["responses"]["200"]["content"]["application/json"];
+
+type GetImportUpdatesOperation = operations["getImportUpdates"];
+type GetImportUpdatesRequest =
+  GetImportUpdatesOperation["requestBody"]["content"]["application/json"];
+type GetImportUpdatesResponse =
+  GetImportUpdatesOperation["responses"]["200"]["content"]["application/json"];
+
+// ─── Governance (lookups) ──────────────────────────────────────────────
+
+type ListVoteRequestsByTrackingCidOperation = operations["listVoteRequestsByTrackingCid"];
+type ListVoteRequestsByTrackingCidRequest =
+  ListVoteRequestsByTrackingCidOperation["requestBody"]["content"]["application/json"];
+type ListVoteRequestsByTrackingCidResponse =
+  ListVoteRequestsByTrackingCidOperation["responses"]["200"]["content"]["application/json"];
+
+type LookupDsoRulesVoteRequestOperation = operations["lookupDsoRulesVoteRequest"];
+type LookupDsoRulesVoteRequestResponse =
+  LookupDsoRulesVoteRequestOperation["responses"]["200"]["content"]["application/json"];
+
 // ─── Misc ──────────────────────────────────────────────────────────────
 
 type ListUnclaimedDevelopmentFundCouponsResponse = Typed.ListUnclaimedDevelopmentFundCouponsResponse;
@@ -676,6 +708,61 @@ export class ScanClient {
   async getBackfillingStatus(): Promise<GetBackfillingStatusResponse> {
     return this.request<GetBackfillingStatusResponse>(
       "/v0/backfilling/status",
+      "GET",
+    );
+  }
+
+  async getSynchronizerIdentities(
+    domainIdPrefix: string,
+  ): Promise<GetSynchronizerIdentitiesResponse> {
+    return this.request<GetSynchronizerIdentitiesResponse>(
+      `/v0/synchronizer-identities/${encodeURIComponent(domainIdPrefix)}`,
+      "GET",
+    );
+  }
+
+  async getSynchronizerBootstrappingTransactions(
+    domainIdPrefix: string,
+  ): Promise<GetSynchronizerBootstrappingTransactionsResponse> {
+    return this.request<GetSynchronizerBootstrappingTransactionsResponse>(
+      `/v0/synchronizer-bootstrapping-transactions/${encodeURIComponent(domainIdPrefix)}`,
+      "GET",
+    );
+  }
+
+  async getUpdatesBefore(body: GetUpdatesBeforeRequest): Promise<GetUpdatesBeforeResponse> {
+    return this.request<GetUpdatesBeforeResponse>(
+      "/v0/backfilling/updates-before",
+      "POST",
+      { body },
+    );
+  }
+
+  async getImportUpdates(body: GetImportUpdatesRequest): Promise<GetImportUpdatesResponse> {
+    return this.request<GetImportUpdatesResponse>(
+      "/v0/backfilling/import-updates",
+      "POST",
+      { body },
+    );
+  }
+
+  // ─── Governance (lookups) ─────────────────────────────────────────
+
+  async listVoteRequestsByTrackingCid(
+    body: ListVoteRequestsByTrackingCidRequest,
+  ): Promise<ListVoteRequestsByTrackingCidResponse> {
+    return this.request<ListVoteRequestsByTrackingCidResponse>(
+      "/v0/voterequest",
+      "POST",
+      { body },
+    );
+  }
+
+  async lookupDsoRulesVoteRequest(
+    voteRequestContractId: string,
+  ): Promise<LookupDsoRulesVoteRequestResponse> {
+    return this.request<LookupDsoRulesVoteRequestResponse>(
+      `/v0/voterequests/${encodeURIComponent(voteRequestContractId)}`,
       "GET",
     );
   }
