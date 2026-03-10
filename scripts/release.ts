@@ -8,7 +8,8 @@ const REACT_PACKAGE_PATH = 'react/package.json';
 const SCRIBE_PACKAGE_PATH = 'scribe/package.json';
 const SCAN_PACKAGE_PATH = 'scan/package.json';
 
-type PackageSelection = 'ledger' | 'react' | 'scribe' | 'scan' | 'all';
+const VALID_PACKAGES = ['ledger', 'react', 'scribe', 'scan'] as const;
+type PackageName = (typeof VALID_PACKAGES)[number];
 
 function exec(command: string, options = {}) {
   return execSync(command, { stdio: 'inherit', ...options });
@@ -33,23 +34,31 @@ function prompt(question: string): Promise<string> {
   });
 }
 
-function parsePackageSelection(): PackageSelection {
+function parsePackageSelection(): Set<PackageName> {
   const args = process.argv.slice(2);
   const packageIndex = args.findIndex(arg => arg === '--package');
 
   if (packageIndex === -1) {
-    return 'all';
+    return new Set(VALID_PACKAGES);
   }
 
-  const value = args[packageIndex + 1] as PackageSelection;
+  const names = args.slice(packageIndex + 1);
 
-  if (!value || !['ledger', 'react', 'scribe', 'scan', 'all'].includes(value)) {
-    console.error(`Invalid --package value: ${value || 'none'}`);
-    console.error('Valid options: ledger, react, scribe, scan, all');
+  if (names.length === 0) {
+    console.error('Missing --package value');
+    console.error('Valid options: ledger, react, scribe, scan (e.g. --package ledger react)');
     process.exit(1);
   }
 
-  return value;
+  const invalid = names.filter(n => !(VALID_PACKAGES as readonly string[]).includes(n));
+
+  if (invalid.length > 0) {
+    console.error(`Invalid --package value(s): ${invalid.join(', ')}`);
+    console.error('Valid options: ledger, react, scribe, scan (e.g. --package ledger react)');
+    process.exit(1);
+  }
+
+  return new Set(names as PackageName[]);
 }
 
 function validatePeerDependency(reactPkg: any, ledgerVersion: string): void {
@@ -71,16 +80,17 @@ async function main() {
   const packageSelection = parsePackageSelection();
 
   // Determine which packages are being released
-  const releasingLedger = packageSelection === 'ledger' || packageSelection === 'all';
-  const releasingReact = packageSelection === 'react' || packageSelection === 'all';
-  const releasingScribe = packageSelection === 'scribe' || packageSelection === 'all';
-  const releasingScan = packageSelection === 'scan' || packageSelection === 'all';
+  const releasingLedger = packageSelection.has('ledger');
+  const releasingReact = packageSelection.has('react');
+  const releasingScribe = packageSelection.has('scribe');
+  const releasingScan = packageSelection.has('scan');
 
   // Display what will be released
-  if (packageSelection === 'all') {
+  if (packageSelection.size === VALID_PACKAGES.length) {
     console.log('Releasing: All packages\n');
   } else {
-    console.log(`Releasing: @c7-digital/${packageSelection} only\n`);
+    const names = [...packageSelection].map(p => `@c7-digital/${p}`).join(', ');
+    console.log(`Releasing: ${names}\n`);
   }
 
   // Read package versions independently
@@ -95,7 +105,9 @@ async function main() {
 
   
   // Confirm versions have been updated
-  const packagesToUpdate = packageSelection === 'all' ? 'all packages' : `@c7-digital/${packageSelection}`;
+  const packagesToUpdate = packageSelection.size === VALID_PACKAGES.length
+    ? 'all packages'
+    : [...packageSelection].map(p => `@c7-digital/${p}`).join(', ');
   const confirmation = await prompt(`Have you updated the version for ${packagesToUpdate}? (y/n) `);
   if (confirmation.toLowerCase() !== 'y') {
     console.log('Please update the version(s) in the appropriate package.json file(s) before running the release script.');
