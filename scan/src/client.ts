@@ -142,6 +142,93 @@ type GetEventByIdParams = GetEventByIdOperation["parameters"]["query"];
 type GetEventByIdResponse =
   GetEventByIdOperation["responses"]["200"]["content"]["application/json"];
 
+// ─── Rules & Config ────────────────────────────────────────────────────
+
+type GetAmuletRulesOperation = operations["getAmuletRules"];
+type GetAmuletRulesRequest =
+  GetAmuletRulesOperation["requestBody"]["content"]["application/json"];
+type GetAmuletRulesResponse = Typed.GetAmuletRulesResponse;
+
+type GetExternalPartyAmuletRulesOperation = operations["getExternalPartyAmuletRules"];
+type GetExternalPartyAmuletRulesRequest =
+  GetExternalPartyAmuletRulesOperation["requestBody"]["content"]["application/json"];
+type GetExternalPartyAmuletRulesResponse = Typed.GetExternalPartyAmuletRulesResponse;
+
+type GetAnsRulesOperation = operations["getAnsRules"];
+type GetAnsRulesRequest =
+  GetAnsRulesOperation["requestBody"]["content"]["application/json"];
+type GetAnsRulesResponse = Typed.GetAnsRulesResponse;
+
+type GetSpliceInstanceNamesOperation = operations["getSpliceInstanceNames"];
+type GetSpliceInstanceNamesResponse =
+  GetSpliceInstanceNamesOperation["responses"]["200"]["content"]["application/json"];
+
+type FeatureSupportOperation = operations["featureSupport"];
+type FeatureSupportResponse =
+  FeatureSupportOperation["responses"]["200"]["content"]["application/json"];
+
+// ─── Featured Apps ─────────────────────────────────────────────────────
+
+type ListFeaturedAppRightsResponse = Typed.ListFeaturedAppRightsResponse;
+type LookupFeaturedAppRightResponse = Typed.LookupFeaturedAppRightResponse;
+
+// ─── Validator Faucets ─────────────────────────────────────────────────
+
+type GetTopValidatorsByValidatorFaucetsOperation = operations["getTopValidatorsByValidatorFaucets"];
+type GetTopValidatorsByValidatorFaucetsParams =
+  GetTopValidatorsByValidatorFaucetsOperation["parameters"]["query"];
+type GetTopValidatorsByValidatorFaucetsResponse =
+  GetTopValidatorsByValidatorFaucetsOperation["responses"]["200"]["content"]["application/json"];
+
+// ─── Transfers ─────────────────────────────────────────────────────────
+
+type LookupTransferPreapprovalByPartyResponse = Typed.LookupTransferPreapprovalByPartyResponse;
+type LookupTransferCommandCounterByPartyResponse = Typed.LookupTransferCommandCounterByPartyResponse;
+
+type LookupTransferCommandStatusOperation = operations["lookupTransferCommandStatus"];
+type LookupTransferCommandStatusParams =
+  LookupTransferCommandStatusOperation["parameters"]["query"];
+type LookupTransferCommandStatusResponse = Typed.LookupTransferCommandStatusResponse;
+
+// ─── Governance ────────────────────────────────────────────────────────
+
+type ListDsoRulesVoteRequestsResponse = Typed.ListDsoRulesVoteRequestsResponse;
+
+type ListVoteRequestResultsOperation = operations["listVoteRequestResults"];
+type ListVoteRequestResultsRequest =
+  ListVoteRequestResultsOperation["requestBody"]["content"]["application/json"];
+type ListVoteRequestResultsResponse =
+  ListVoteRequestResultsOperation["responses"]["200"]["content"]["application/json"];
+
+type ListAmuletPriceVotesOperation = operations["listAmuletPriceVotes"];
+type ListAmuletPriceVotesResponse =
+  ListAmuletPriceVotesOperation["responses"]["200"]["content"]["application/json"];
+
+// ─── Migrations ────────────────────────────────────────────────────────
+
+type MigrationScheduleResponse =
+  operations["getMigrationSchedule"]["responses"]["200"]["content"]["application/json"];
+
+type GetMigrationInfoOperation = operations["getMigrationInfo"];
+type GetMigrationInfoRequest =
+  GetMigrationInfoOperation["requestBody"]["content"]["application/json"];
+type GetMigrationInfoResponse =
+  GetMigrationInfoOperation["responses"]["200"]["content"]["application/json"];
+
+// ─── Infrastructure ────────────────────────────────────────────────────
+
+type ListSvBftSequencersOperation = operations["listSvBftSequencers"];
+type ListSvBftSequencersResponse =
+  ListSvBftSequencersOperation["responses"]["200"]["content"]["application/json"];
+
+type GetMemberTrafficStatusOperation = operations["getMemberTrafficStatus"];
+type GetMemberTrafficStatusResponse =
+  GetMemberTrafficStatusOperation["responses"]["200"]["content"]["application/json"];
+
+type GetBackfillingStatusOperation = operations["getBackfillingStatus"];
+type GetBackfillingStatusResponse =
+  GetBackfillingStatusOperation["responses"]["200"]["content"]["application/json"];
+
 // ─── Misc ──────────────────────────────────────────────────────────────
 
 type ListUnclaimedDevelopmentFundCouponsResponse = Typed.ListUnclaimedDevelopmentFundCouponsResponse;
@@ -423,6 +510,173 @@ export class ScanClient {
       `/v0/events/${encodeURIComponent(updateId)}`,
       "GET",
       { query: params as Record<string, unknown> | undefined },
+    );
+  }
+
+  // ─── Rules & Config ────────────────────────────────────────────────
+
+  async getAmuletRules(body?: GetAmuletRulesRequest): Promise<GetAmuletRulesResponse> {
+    return this.request<GetAmuletRulesResponse>("/v0/amulet-rules", "POST", {
+      body: body ?? {},
+    });
+  }
+
+  async getExternalPartyAmuletRules(
+    body?: GetExternalPartyAmuletRulesRequest,
+  ): Promise<GetExternalPartyAmuletRulesResponse> {
+    return this.request<GetExternalPartyAmuletRulesResponse>(
+      "/v0/external-party-amulet-rules",
+      "POST",
+      { body: body ?? {} },
+    );
+  }
+
+  async getAnsRules(body?: GetAnsRulesRequest): Promise<GetAnsRulesResponse> {
+    return this.request<GetAnsRulesResponse>("/v0/ans-rules", "POST", {
+      body: body ?? {},
+    });
+  }
+
+  async getSpliceInstanceNames(): Promise<GetSpliceInstanceNamesResponse> {
+    return this.request<GetSpliceInstanceNamesResponse>(
+      "/v0/splice-instance-names",
+      "GET",
+    );
+  }
+
+  async getFeatureSupport(): Promise<FeatureSupportResponse> {
+    return this.request<FeatureSupportResponse>("/v0/feature-support", "GET");
+  }
+
+  // ─── Featured Apps ────────────────────────────────────────────────
+
+  async listFeaturedAppRights(): Promise<ListFeaturedAppRightsResponse> {
+    return this.request<ListFeaturedAppRightsResponse>("/v0/featured-apps", "GET");
+  }
+
+  async lookupFeaturedAppRight(providerPartyId: Party): Promise<LookupFeaturedAppRightResponse> {
+    return this.request<LookupFeaturedAppRightResponse>(
+      `/v0/featured-apps/${encodeURIComponent(providerPartyId)}`,
+      "GET",
+    );
+  }
+
+  // ─── Validator Faucets ────────────────────────────────────────────
+
+  async getTopValidatorsByValidatorFaucets(
+    params: GetTopValidatorsByValidatorFaucetsParams,
+  ): Promise<GetTopValidatorsByValidatorFaucetsResponse> {
+    return this.request<GetTopValidatorsByValidatorFaucetsResponse>(
+      "/v0/top-validators-by-validator-faucets",
+      "GET",
+      { query: params as Record<string, unknown> },
+    );
+  }
+
+  // ─── Transfers ────────────────────────────────────────────────────
+
+  async lookupTransferPreapprovalByParty(
+    party: Party,
+  ): Promise<LookupTransferPreapprovalByPartyResponse> {
+    return this.request<LookupTransferPreapprovalByPartyResponse>(
+      `/v0/transfer-preapprovals/by-party/${encodeURIComponent(party)}`,
+      "GET",
+    );
+  }
+
+  async lookupTransferCommandCounterByParty(
+    party: Party,
+  ): Promise<LookupTransferCommandCounterByPartyResponse> {
+    return this.request<LookupTransferCommandCounterByPartyResponse>(
+      `/v0/transfer-command-counter/${encodeURIComponent(party)}`,
+      "GET",
+    );
+  }
+
+  async lookupTransferCommandStatus(
+    params: LookupTransferCommandStatusParams,
+  ): Promise<LookupTransferCommandStatusResponse> {
+    return this.request<LookupTransferCommandStatusResponse>(
+      "/v0/transfer-command/status",
+      "GET",
+      { query: params as Record<string, unknown> },
+    );
+  }
+
+  // ─── Governance ───────────────────────────────────────────────────
+
+  async listDsoRulesVoteRequests(): Promise<ListDsoRulesVoteRequestsResponse> {
+    return this.request<ListDsoRulesVoteRequestsResponse>(
+      "/v0/admin/sv/voterequests",
+      "GET",
+    );
+  }
+
+  async listVoteRequestResults(
+    body: ListVoteRequestResultsRequest,
+  ): Promise<ListVoteRequestResultsResponse> {
+    return this.request<ListVoteRequestResultsResponse>(
+      "/v0/admin/sv/voteresults",
+      "POST",
+      { body },
+    );
+  }
+
+  async listAmuletPriceVotes(): Promise<ListAmuletPriceVotesResponse> {
+    return this.request<ListAmuletPriceVotesResponse>(
+      "/v0/amulet-price/votes",
+      "GET",
+    );
+  }
+
+  // ─── Migrations ───────────────────────────────────────────────────
+
+  async getMigrationSchedule(): Promise<MigrationScheduleResponse | null> {
+    try {
+      return await this.request<MigrationScheduleResponse>(
+        "/v0/migrations/schedule",
+        "GET",
+      );
+    } catch (error) {
+      // 404 means no migration scheduled — return null instead of throwing
+      if (error instanceof Error && error.message.includes("404")) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getMigrationInfo(body: GetMigrationInfoRequest): Promise<GetMigrationInfoResponse> {
+    return this.request<GetMigrationInfoResponse>(
+      "/v0/backfilling/migration-info",
+      "POST",
+      { body },
+    );
+  }
+
+  // ─── Infrastructure ───────────────────────────────────────────────
+
+  async listSvBftSequencers(): Promise<ListSvBftSequencersResponse> {
+    return this.request<ListSvBftSequencersResponse>(
+      "/v0/sv-bft-sequencers",
+      "GET",
+    );
+  }
+
+  async getMemberTrafficStatus(
+    domainId: string,
+    memberId: string,
+  ): Promise<GetMemberTrafficStatusResponse> {
+    return this.request<GetMemberTrafficStatusResponse>(
+      `/v0/domains/${encodeURIComponent(domainId)}/members/${encodeURIComponent(memberId)}/traffic-status`,
+      "GET",
+    );
+  }
+
+  async getBackfillingStatus(): Promise<GetBackfillingStatusResponse> {
+    return this.request<GetBackfillingStatusResponse>(
+      "/v0/backfilling/status",
+      "GET",
     );
   }
 
