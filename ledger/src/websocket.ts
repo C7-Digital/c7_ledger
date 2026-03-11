@@ -165,7 +165,8 @@ export class WebSocketClient {
 
         onMessage(message);
       } catch (error) {
-        onError?.(new Error(`Failed to parse message for ${endpoint}: ${error}`));
+        const errorDetail = error instanceof Error ? error.message : JSON.stringify(error);
+        onError?.(new Error(`Failed to parse message for ${endpoint}: ${errorDetail}`));
       }
     };
 
