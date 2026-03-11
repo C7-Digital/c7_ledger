@@ -185,7 +185,7 @@ async function embedSpliceCodegen(): Promise<void> {
   // Remove nested package.json files — they contain dependencies on
   // @c7-digital/splice-codegen/* that would confuse pnpm during install.
   // Only .d.ts files are needed for type resolution.
-  await removeNestedPackageJsons(vendorDir);
+  await removeNonTsFiles(vendorDir);
 
   // Rewrite @c7-digital/splice-codegen imports in all .d.ts files under lib/
   const libDir = join(projectRoot, "lib");
@@ -194,12 +194,12 @@ async function embedSpliceCodegen(): Promise<void> {
   console.log("splice-codegen types embedded successfully.");
 }
 
-async function removeNestedPackageJsons(dir: string): Promise<void> {
+async function removeNonTsFiles(dir: string): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      await removeNestedPackageJsons(fullPath);
+      await removeNonTsFiles(fullPath);
     } else if (entry.name === "package.json" || entry.name === "tsconfig.json" || entry.name.endsWith(".js")) {
       await unlink(fullPath);
     }
