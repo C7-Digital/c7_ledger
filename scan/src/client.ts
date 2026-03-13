@@ -204,6 +204,28 @@ type ListAmuletPriceVotesOperation = operations["listAmuletPriceVotes"];
 type ListAmuletPriceVotesResponse =
   ListAmuletPriceVotesOperation["responses"]["200"]["content"]["application/json"];
 
+// ─── Round Aggregates (deprecated but actively used) ──────────────────
+
+type GetAggregatedRoundsOperation = operations["getAggregatedRounds"];
+type GetAggregatedRoundsResponse =
+  GetAggregatedRoundsOperation["responses"]["200"]["content"]["application/json"];
+
+type ListRoundTotalsOperation = operations["listRoundTotals"];
+type ListRoundTotalsRequest =
+  ListRoundTotalsOperation["requestBody"]["content"]["application/json"];
+type ListRoundTotalsResponse =
+  ListRoundTotalsOperation["responses"]["200"]["content"]["application/json"];
+
+type ListRoundPartyTotalsOperation = operations["listRoundPartyTotals"];
+type ListRoundPartyTotalsRequest =
+  ListRoundPartyTotalsOperation["requestBody"]["content"]["application/json"];
+type ListRoundPartyTotalsResponse =
+  ListRoundPartyTotalsOperation["responses"]["200"]["content"]["application/json"];
+
+type GetRoundOfLatestDataOperation = operations["getRoundOfLatestData"];
+type GetRoundOfLatestDataResponse =
+  GetRoundOfLatestDataOperation["responses"]["200"]["content"]["application/json"];
+
 // ─── Migrations ────────────────────────────────────────────────────────
 
 type MigrationScheduleResponse =
@@ -658,6 +680,38 @@ export class ScanClient {
     return this.request<ListAmuletPriceVotesResponse>(
       "/v0/amulet-price/votes",
       "GET",
+    );
+  }
+
+  // ─── Round Aggregates ────────────────────────────────────────────
+
+  async getAggregatedRounds(): Promise<GetAggregatedRoundsResponse> {
+    return this.request<GetAggregatedRoundsResponse>(
+      "/v0/aggregated-rounds",
+      "GET",
+    );
+  }
+
+  async getRoundOfLatestData(): Promise<GetRoundOfLatestDataResponse> {
+    return this.request<GetRoundOfLatestDataResponse>(
+      "/v0/round-of-latest-data",
+      "GET",
+    );
+  }
+
+  async listRoundTotals(body: ListRoundTotalsRequest): Promise<ListRoundTotalsResponse> {
+    return this.request<ListRoundTotalsResponse>(
+      "/v0/round-totals",
+      "POST",
+      { body },
+    );
+  }
+
+  async listRoundPartyTotals(body: ListRoundPartyTotalsRequest): Promise<ListRoundPartyTotalsResponse> {
+    return this.request<ListRoundPartyTotalsResponse>(
+      "/v0/round-party-totals",
+      "POST",
+      { body },
     );
   }
 
