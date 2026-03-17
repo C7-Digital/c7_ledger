@@ -192,7 +192,9 @@ type LookupTransferCommandStatusResponse = Typed.LookupTransferCommandStatusResp
 
 // ─── Governance ────────────────────────────────────────────────────────
 
-type ListDsoRulesVoteRequestsResponse = Typed.ListDsoRulesVoteRequestsResponse;
+type ListDsoRulesVoteRequestsOperation = operations["listDsoRulesVoteRequests"];
+type ListDsoRulesVoteRequestsResponse =
+  ListDsoRulesVoteRequestsOperation["responses"]["200"]["content"]["application/json"];
 
 type ListVoteRequestResultsOperation = operations["listVoteRequestResults"];
 type ListVoteRequestResultsRequest =
@@ -725,7 +727,7 @@ export class ScanClient {
       );
     } catch (error) {
       // 404 means no migration scheduled — return null instead of throwing
-      if (error instanceof Error && error.message.includes("404")) {
+      if (error instanceof Error && error.message.startsWith("HTTP 404")) {
         return null;
       }
       throw error;
@@ -802,6 +804,10 @@ export class ScanClient {
 
   // ─── Governance (lookups) ─────────────────────────────────────────
 
+  /**
+   * Look up VoteRequests by their contract IDs.
+   * Method name matches the Scan API operationId; the request body takes `vote_request_contract_ids`.
+   */
   async listVoteRequestsByTrackingCid(
     body: ListVoteRequestsByTrackingCidRequest,
   ): Promise<ListVoteRequestsByTrackingCidResponse> {
