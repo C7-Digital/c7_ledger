@@ -228,6 +228,12 @@ type GetRoundOfLatestDataOperation = operations["getRoundOfLatestData"];
 type GetRoundOfLatestDataResponse =
   GetRoundOfLatestDataOperation["responses"]["200"]["content"]["application/json"];
 
+type GetTopProvidersByAppRewardsOperation = operations["getTopProvidersByAppRewards"];
+type GetTopProvidersByAppRewardsParams =
+  GetTopProvidersByAppRewardsOperation["parameters"]["query"];
+type GetTopProvidersByAppRewardsResponse =
+  GetTopProvidersByAppRewardsOperation["responses"]["200"]["content"]["application/json"];
+
 // ─── Migrations ────────────────────────────────────────────────────────
 
 type MigrationScheduleResponse =
@@ -714,6 +720,16 @@ export class ScanClient {
       "/v0/round-party-totals",
       "POST",
       { body },
+    );
+  }
+
+  async getTopProvidersByAppRewards(
+    params: GetTopProvidersByAppRewardsParams,
+  ): Promise<GetTopProvidersByAppRewardsResponse> {
+    return this.request<GetTopProvidersByAppRewardsResponse>(
+      "/v0/top-providers-by-app-rewards",
+      "GET",
+      { query: params as Record<string, unknown> },
     );
   }
 
