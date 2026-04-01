@@ -69,12 +69,22 @@ export const DamlLedger: FunctionComponent<DamlLedgerProps> = props => {
   // These options should be static for the lifetime of the component
   const initialOptionsRef = useRef(otherOptions);
 
-  // Create ledger with initial token, but don't recreate when token changes
-  // Token updates are handled via updateToken() on streams
-  // Only recreate when reloadTrigger changes (explicit reload requested)
+  // Create ledger once. Token updates are pushed via setToken() below.
+  // Only recreate when reloadTrigger changes (explicit reload requested).
   const ledger = useMemo(() => {
     return new Ledger({ ...initialOptionsRef.current, token });
   }, [reloadTrigger]);
+
+  // When the token prop changes, update the ledger's HTTP token in-place.
+  // Streams are notified separately via the onTokenChange callback below.
+  const prevTokenRef = useRef(token);
+  useEffect(() => {
+    if (token !== prevTokenRef.current) {
+      console.log(`[DamlLedger] Token refreshed, updating ledger (prev: ...${prevTokenRef.current?.slice(-10)}, new: ...${token?.slice(-10)})`);
+      prevTokenRef.current = token;
+      ledger.setToken(token);
+    }
+  }, [token, ledger]);
 
   const triggerReload = useCallback(() => {
     setReloadTrigger(prev => prev + 1);
@@ -83,10 +93,11 @@ export const DamlLedger: FunctionComponent<DamlLedgerProps> = props => {
   const contextValue = useMemo(
     () => ({
       ledger,
+      token,
       reloadTrigger,
       triggerReload,
     }),
-    [ledger, reloadTrigger, triggerReload]
+    [ledger, token, reloadTrigger, triggerReload]
   );
 
   return createElement(DamlLedgerContext.Provider, { value: contextValue }, children);
@@ -336,7 +347,7 @@ function useStreamBase<
   setupAdditionalEventHandlers?: (stream: TStream) => void,
   dependencies: any[] = []
 ) {
-  const { reloadTrigger } = useDamlLedgerContext();
+  const { reloadTrigger, token } = useDamlLedgerContext();
   const [contractsMap, setContractsMap] = useState<
     ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>
   >(() => new Map());
@@ -361,6 +372,15 @@ function useStreamBase<
     }
   }, []);
 
+  // Automatically push token updates to the active stream
+  const prevStreamTokenRef = useRef(token);
+  useEffect(() => {
+    if (token !== prevStreamTokenRef.current) {
+      prevStreamTokenRef.current = token;
+      updateToken(token);
+    }
+  }, [token, updateToken]);
+
   // Setup real streaming connection
   useEffect(() => {
     isCleanedUpRef.current = false;
@@ -373,7 +393,7 @@ function useStreamBase<
         setError(null);
 
         streamRef.current = await createStream();
-        
+
         // Handle common create events
         streamRef.current.on("create", (event: CreateEvent<TContract, TKey>) => {
           setContractsMap((prevMap: ReadonlyMap<ContractId<TContract>, CreateEvent<TContract, TKey>>) => 
@@ -550,7 +570,7 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
   createStream: () => Promise<TStream>,
   dependencies: any[]
 ) {
-  const { reloadTrigger } = useDamlLedgerContext();
+  const { reloadTrigger, token } = useDamlLedgerContext();
   const [multiStream, setMultiStream] = useState<TStream | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [connected, setConnected] = useState<boolean>(false);
@@ -573,6 +593,15 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
     }
   }, []);
 
+  // Automatically push token updates to the active multi-stream
+  const prevMultiStreamTokenRef = useRef(token);
+  useEffect(() => {
+    if (token !== prevMultiStreamTokenRef.current) {
+      prevMultiStreamTokenRef.current = token;
+      updateToken(token);
+    }
+  }, [token, updateToken]);
+
   // Setup real streaming connection
   useEffect(() => {
     isCleanedUpRef.current = false;
@@ -585,7 +614,7 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
         setError(null);
 
         streamRef.current = await createStream();
-        
+
         // Handle connection state
         streamRef.current.onState((state: StreamState) => {
           setConnected(state === "live");
