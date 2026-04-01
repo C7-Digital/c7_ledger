@@ -76,7 +76,7 @@ export const DamlLedger: FunctionComponent<DamlLedgerProps> = props => {
   }, [reloadTrigger]);
 
   // When the token prop changes, update the ledger's HTTP token in-place.
-  // Streams are notified separately via the onTokenChange callback below.
+  // Streams observe token updates via the context value (consumed by hooks such as useStreamBase/useMultiStreamBase).
   const prevTokenRef = useRef(token);
   useEffect(() => {
     if (token !== prevTokenRef.current) {
