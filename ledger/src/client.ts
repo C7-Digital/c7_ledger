@@ -94,7 +94,7 @@ export interface TypedHttpClientConfig {
 }
 
 export class TypedHttpClient {
-  public readonly token: string;
+  public token: string;
   public readonly baseUrl: string;
   private validator?: SchemaValidator;
 

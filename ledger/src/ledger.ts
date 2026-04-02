@@ -43,7 +43,6 @@ import {
   AnyCommand,
   ArchiveEvent,
   CantonError,
-  Command,
   CreateCommand,
   CreateAndExerciseCommand,
   CreateEvent,
@@ -769,6 +768,16 @@ export class Ledger {
       openApiSchemaPath: options.openApiSchemaPath,
     });
     this.options = options;
+  }
+
+  /**
+   * Update the authentication token used for HTTP requests.
+   * Active streams should be updated separately via stream.updateToken().
+   */
+  setToken(newToken: string): void {
+    logTokenExpiration(newToken, "Ledger setToken");
+    this.client.token = newToken;
+    this.options = { ...this.options, token: newToken };
   }
 
   private generateCommandId(): LedgerString {

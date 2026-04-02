@@ -17,6 +17,7 @@ export type TemplateId = string & { readonly __templateId: unique symbol };
 
 export interface DamlLedgerConfig {
   readonly ledger: Ledger;
+  readonly token: string;
   readonly reloadTrigger: number;
   readonly triggerReload: () => void;
 }
