@@ -365,6 +365,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   private filtersByParty: Record<string, any>;
   protected versionedRegistry?: VersionedRegistry;
   private autoReconnect: boolean;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
 
   /**
    * Creates a new stream for active contracts
@@ -558,7 +559,8 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     // Auto-reconnect on abnormal close (1006) if stream is still active and auto-reconnect is enabled
     if (code === 1006 && this.state_ === "live" && this.autoReconnect) {
       logger.log(`WebSocket closed abnormally (1006), reconnecting in 3 seconds...`);
-      setTimeout(() => {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = undefined;
         if (this.state_ === "live") {
           // Double-check we're still active
           logger.log(`Attempting to reconnect stream...`);
@@ -638,6 +640,11 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     this.state_ = "stop";
     this.eventEmitter.emit("state", "stop");
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
     if (this.stopClient) {
       this.stopClient();
       this.stopClient = undefined;
@@ -662,13 +669,19 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     switch (this.state_) {
       case "live":
         logger.debug(`Restarting live stream with new token`);
-        
+
+        // Cancel any pending reconnect timer to avoid duplicate connections
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = undefined;
+        }
+
         // Close current connection
         if (this.stopClient) {
           this.stopClient();
           this.stopClient = undefined;
         }
-        
+
         // Restart the updates stream with the new token
         this.startUpdatesStream();
         break;
