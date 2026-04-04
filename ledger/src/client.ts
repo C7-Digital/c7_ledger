@@ -84,6 +84,19 @@ type GetLedgerEndOperation = operations["getV2StateLedger-end"];
 type GetLedgerEndResponse =
   GetLedgerEndOperation["responses"]["200"]["content"]["application/json"];
 
+type PrepareSubmissionOperation = operations["postV2Interactive-submissionPrepare"];
+type PrepareSubmissionRequest =
+  PrepareSubmissionOperation["requestBody"]["content"]["application/json"];
+type PrepareSubmissionResponse =
+  PrepareSubmissionOperation["responses"]["200"]["content"]["application/json"];
+
+type ExecuteSubmissionAndWaitForTransactionOperation =
+  operations["postV2Interactive-submissionExecuteandwaitfortransaction"];
+type ExecuteSubmissionAndWaitForTransactionRequest =
+  ExecuteSubmissionAndWaitForTransactionOperation["requestBody"]["content"]["application/json"];
+type ExecuteSubmissionAndWaitForTransactionResponse =
+  ExecuteSubmissionAndWaitForTransactionOperation["responses"]["200"]["content"]["application/json"];
+
 export type transaction_shape = "TRANSACTION_SHAPE_ACS_DELTA" | "TRANSACTION_SHAPE_LEDGER_EFFECTS";
 
 export interface TypedHttpClientConfig {
@@ -237,6 +250,37 @@ export class TypedHttpClient {
       "GET",
       undefined,
       "#/components/schemas/GetLedgerEndResponse"
+    );
+  }
+
+  /**
+   * Prepare a transaction for interactive submission.
+   * Returns cost estimation and a prepared transaction blob.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async prepareSubmission(
+    request: PrepareSubmissionRequest,
+  ): Promise<PrepareSubmissionResponse> {
+    return this.request<PrepareSubmissionResponse>(
+      "/v2/interactive-submission/prepare",
+      "POST",
+      request,
+      "#/components/schemas/JsPrepareSubmissionResponse",
+    );
+  }
+
+  /**
+   * Execute a prepared and signed transaction and wait for the resulting transaction.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async executeSubmissionAndWaitForTransaction(
+    request: ExecuteSubmissionAndWaitForTransactionRequest,
+  ): Promise<ExecuteSubmissionAndWaitForTransactionResponse> {
+    return this.request<ExecuteSubmissionAndWaitForTransactionResponse>(
+      "/v2/interactive-submission/executeAndWaitForTransaction",
+      "POST",
+      request,
+      "#/components/schemas/JsExecuteSubmissionAndWaitForTransactionResponse",
     );
   }
 }
