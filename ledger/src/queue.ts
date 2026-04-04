@@ -153,6 +153,8 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
 
   private queue: QueueEntry<any>[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimers = new Set<ReturnType<typeof setTimeout>>();
+  private inflight = 0;
   private paused = false;
   private closed = false;
   private draining = false;
@@ -208,7 +210,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       tag: options?.tag,
     };
 
-    return new Promise<R>((resolve, reject) => {
+    const promise = new Promise<R>((resolve, reject) => {
       const entry: QueueEntry<R> = { record, txFn, resolve, reject };
 
       // Insert sorted by priority (highest first)
@@ -218,14 +220,17 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       } else {
         this.queue.splice(insertIdx, 0, entry);
       }
+    });
 
-      // Fire-and-forget the log write — don't block the caller
-      this.txLog.record(record).catch((err) => {
-        logger.error(`Failed to log transaction ${id}: ${err}`);
-      });
-
+    // Await the initial log write to ensure ordering before any
+    // state transitions — prevents "queued" landing after "completed" in JSONL
+    this.txLog.record(record).catch((err) => {
+      logger.error(`Failed to log transaction ${id}: ${err}`);
+    }).then(() => {
       this.scheduleDrain();
     });
+
+    return promise;
   }
 
   /**
@@ -279,10 +284,10 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     this.scheduleDrain();
   }
 
-  /** Drain and close — waits for all queued items to complete, then resolves. */
+  /** Drain and close — waits for all queued and in-flight items to complete, then resolves. */
   async close(): Promise<void> {
     this.closed = true;
-    if (this.queue.length === 0) return;
+    if (this.queue.length === 0 && this.inflight === 0) return;
     return new Promise<void>((resolve) => {
       this.closeResolve = resolve;
       this.scheduleDrain();
@@ -299,6 +304,12 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       clearTimeout(this.drainTimer);
       this.drainTimer = null;
     }
+
+    // Cancel all pending retry timers
+    for (const timer of this.retryTimers) {
+      clearTimeout(timer);
+    }
+    this.retryTimers.clear();
 
     const aborted: TransactionRecord[] = [];
     const abortError = new Error("TransactionQueue aborted");
@@ -400,8 +411,9 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       return;
     }
 
-    // Remove from queue
+    // Remove from queue and track as in-flight
     this.queue.shift();
+    this.inflight++;
 
     // Transition to submitting
     await this.transition(entry, "submitting");
@@ -430,12 +442,13 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       await this.handleFailure(entry, err, costEstimate);
     }
 
+    this.inflight--;
     this.draining = false;
 
-    // Continue draining
+    // Continue draining or signal completion
     if (this.queue.length > 0) {
       this.scheduleDrain();
-    } else {
+    } else if (this.inflight === 0) {
       this.emit("drain");
       this.closeResolve?.();
     }
@@ -467,11 +480,22 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       // Give back the budget — the submission didn't go through
       this.budget.recalibrateFromActual(costEstimate, 0);
 
-      setTimeout(() => {
+      const retryTimer = setTimeout(() => {
+        this.retryTimers.delete(retryTimer);
+        // Guard: don't re-enqueue if the queue was aborted during backoff
+        if (this.closed) {
+          entry.record.state = "dead_lettered";
+          entry.record.updatedAt = new Date().toISOString();
+          entry.record.error = "Queue closed during retry backoff";
+          this.txLog.record(entry.record).catch(() => {});
+          entry.reject(new Error("TransactionQueue aborted"));
+          return;
+        }
         // Re-insert at the front (preserve priority ordering for retries)
         this.queue.unshift(entry);
         this.scheduleDrain();
       }, backoff);
+      this.retryTimers.add(retryTimer);
     } else {
       // Dead-letter
       entry.record.error = err.message;

@@ -62,6 +62,7 @@ describe("TransactionQueue", () => {
   });
 
   it("respects priority ordering", async () => {
+    jest.useRealTimers();
     const order: number[] = [];
     const ledger = {
       submit: jest.fn(async () => []),
@@ -73,18 +74,14 @@ describe("TransactionQueue", () => {
       windowMs: 1_200_000,
       mode: "time-spread",
       avgTxSizeBytes: 7000,
+      spreadPeriodMs: 100,
     });
 
     // Enqueue low, then high priority — high should execute first
-    queue.enqueue(async () => { order.push(1); return "low"; }, { priority: 0 });
-    queue.enqueue(async () => { order.push(2); return "high"; }, { priority: 10 });
+    const p1 = queue.enqueue(async () => { order.push(1); return "low"; }, { priority: 0 });
+    const p2 = queue.enqueue(async () => { order.push(2); return "high"; }, { priority: 10 });
 
-    // Drain both
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(200);
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(200);
-
+    await Promise.all([p1, p2]);
     expect(order).toEqual([2, 1]);
   });
 
@@ -145,6 +142,7 @@ describe("TransactionQueue", () => {
   });
 
   it("retries transient errors with backoff", async () => {
+    jest.useRealTimers();
     let attempts = 0;
     const failTwiceThenSucceed = jest.fn(async () => {
       attempts++;
@@ -166,36 +164,16 @@ describe("TransactionQueue", () => {
       windowMs: 1_200_000,
       mode: "time-spread",
       avgTxSizeBytes: 7000,
+      spreadPeriodMs: 100,
       maxRetries: 3,
-      baseRetryDelayMs: 100,
+      baseRetryDelayMs: 50,
       log,
     });
 
-    const resultPromise = queue.enqueue(
+    const result = await queue.enqueue(
       async () => ledger.submit([] as AnyCommand[]),
     );
 
-    // Drain: first attempt (fails)
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(100);
-
-    // Retry 1 after backoff (100ms)
-    jest.advanceTimersByTime(100);
-    await jest.advanceTimersByTimeAsync(100);
-
-    // Let the time-spread schedule kick in again
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(100);
-
-    // Retry 2 after backoff (200ms)
-    jest.advanceTimersByTime(200);
-    await jest.advanceTimersByTimeAsync(100);
-
-    // Let the time-spread schedule kick in again
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(100);
-
-    const result = await resultPromise;
     expect(result).toEqual([]);
     expect(attempts).toBe(3);
   });
@@ -226,6 +204,7 @@ describe("TransactionQueue", () => {
   });
 
   it("enqueueCommands delegates to ledger.submit", async () => {
+    jest.useRealTimers();
     const ledger = mockLedger({ submitDelay: 0, submitResult: [] });
     const queue = new TransactionQueue({
       ledger,
@@ -233,13 +212,10 @@ describe("TransactionQueue", () => {
       windowMs: 1_200_000,
       mode: "time-spread",
       avgTxSizeBytes: 7000,
+      spreadPeriodMs: 100,
     });
 
-    const resultPromise = queue.enqueueCommands([] as AnyCommand[]);
-    jest.advanceTimersByTime(100_000);
-    await jest.advanceTimersByTimeAsync(100);
-
-    const result = await resultPromise;
+    const result = await queue.enqueueCommands([] as AnyCommand[]);
     expect(result).toEqual([]);
     expect(ledger.submit).toHaveBeenCalled();
   });
