@@ -183,7 +183,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
   private paused = false;
   private shutdownState: ShutdownState = "open";
   private draining = false;
-  private closeResolve?: () => void;
+  private closeResolvers: Array<() => void> = [];
 
   constructor(options: TransactionQueueOptions) {
     super();
@@ -351,7 +351,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     this.shutdownState = "closing";
     if (this.isFullyDrained()) return;
     return new Promise<void>((resolve) => {
-      this.closeResolve = resolve;
+      this.closeResolvers.push(resolve);
       this.scheduleDrain();
     });
   }
@@ -437,11 +437,12 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     return this.queue.length === 0 && this.inflight === 0 && this.retryTimers.size === 0;
   }
 
-  /** Try to resolve closeResolve if all work is done. */
+  /** Try to resolve all close waiters if all work is done. */
   private checkDrainComplete(): void {
     if (this.isFullyDrained()) {
       this.emit("drain");
-      this.closeResolve?.();
+      for (const resolve of this.closeResolvers) resolve();
+      this.closeResolvers = [];
     }
   }
 
@@ -493,19 +494,39 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     const entry = this.queue[0]!;
     const costEstimate = entry.record.costEstimate ?? this.avgTxSizeBytes;
 
-    // In size-aware mode, double-check budget before submitting
-    if (this.mode === "size-aware" && !this.budget.canSubmit(costEstimate)) {
-      this.draining = false;
-      this.scheduleDrain();
-      return;
+    // In size-aware mode, check if the transaction can ever fit
+    if (this.mode === "size-aware") {
+      const waitMs = this.budget.estimateWaitMs(costEstimate);
+      if (waitMs === Infinity) {
+        // Transaction is larger than the effective budget — it can never be submitted
+        this.queue.shift();
+        this.draining = false;
+        entry.record.error = `Transaction estimate (${costEstimate} bytes) exceeds effective budget (${this.budget.getEffectiveBudget()} bytes)`;
+        await this.safeTransition(entry, "dead_lettered");
+        logger.error(`Transaction ${entry.record.id} dead-lettered: ${entry.record.error}`);
+        this.onDeadLetter?.({ ...entry.record });
+        this.emit("error", entry.record.id, new Error(entry.record.error));
+        entry.reject(new Error(entry.record.error));
+        if (this.queue.length > 0) {
+          this.scheduleDrain();
+        } else {
+          this.checkDrainComplete();
+        }
+        return;
+      }
+      if (!this.budget.canSubmit(costEstimate)) {
+        this.draining = false;
+        this.scheduleDrain();
+        return;
+      }
     }
 
     // Remove from queue and track as in-flight
     this.queue.shift();
     this.inflight++;
 
-    // Transition to submitting
-    await this.transition(entry, "submitting");
+    // Transition to submitting — log failure must not wedge the queue
+    await this.safeTransition(entry, "submitting");
 
     // Record budget consumption
     this.budget.recordSubmission(costEstimate);
@@ -516,7 +537,9 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       // Success
       entry.record.state = "completed";
       entry.record.updatedAt = new Date().toISOString();
-      await this.txLog.record(entry.record);
+      await this.txLog.record(entry.record).catch((logErr) => {
+        logger.error(`Failed to log completion for ${entry.record.id}: ${logErr}`);
+      });
       this.emit("stateChange", entry.record.id, "submitting", "completed");
 
       const jsonSize = entry.record.jsonSizeBytes;
@@ -563,7 +586,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       // Retry with backoff
       entry.record.retryCount++;
       entry.record.error = err.message;
-      await this.transition(entry, "retrying");
+      await this.safeTransition(entry, "retrying");
 
       const backoff = Math.min(
         30_000,
@@ -575,8 +598,13 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
           `retrying in ${backoff}ms: ${err.message}`,
       );
 
-      // Give back the budget — the submission didn't go through
-      this.budget.recalibrateFromActual(costEstimate, 0);
+      // Only refund budget for errors where we're confident the command was
+      // NOT accepted. For ambiguous network errors (ETIMEDOUT, FetchError),
+      // the command may have been accepted and charged before the response was
+      // lost — refunding would make our local balance too high.
+      if (this.isDefinitelyNotAccepted(err)) {
+        this.budget.recalibrateFromActual(costEstimate, 0);
+      }
 
       const retryTimer = setTimeout(() => {
         this.retryTimers.delete(retryTimer);
@@ -599,7 +627,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     } else {
       // Dead-letter
       entry.record.error = err.message;
-      await this.transition(entry, "dead_lettered");
+      await this.safeTransition(entry, "dead_lettered");
 
       logger.error(
         `Transaction ${entry.record.id} dead-lettered after ${entry.record.retryCount} retries: ${err.message}`,
@@ -623,11 +651,40 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     return false;
   }
 
+  /**
+   * Returns true for errors where we're confident Canton did NOT accept the
+   * command. For ambiguous network errors (timeout, connection reset), the
+   * command may have been processed — we can't safely refund the budget.
+   */
+  private isDefinitelyNotAccepted(err: any): boolean {
+    // Connection refused = server never saw the request
+    if (err.code === "ECONNREFUSED") return true;
+    // HTTP 5xx with a response = server received but rejected
+    if (typeof err.status === "number" && err.status >= 500) return true;
+    // HTTP 429 = rate-limited before processing
+    if (typeof err.status === "number" && err.status === 429) return true;
+    // FetchError / ETIMEDOUT = ambiguous — response may have been lost
+    return false;
+  }
+
   private async transition(entry: QueueEntry<any>, to: TransactionState): Promise<void> {
     const from = entry.record.state;
     entry.record.state = to;
     entry.record.updatedAt = new Date().toISOString();
     await this.txLog.record(entry.record);
     this.emit("stateChange", entry.record.id, from, to);
+  }
+
+  /** Like transition() but catches log I/O failures instead of throwing. */
+  private async safeTransition(entry: QueueEntry<any>, to: TransactionState): Promise<void> {
+    try {
+      await this.transition(entry, to);
+    } catch (logErr) {
+      // Log failure must not wedge the queue — degrade gracefully
+      logger.error(`Failed to log transition to ${to} for ${entry.record.id}: ${logErr}`);
+      // Still update the in-memory state so the queue can continue
+      entry.record.state = to;
+      entry.record.updatedAt = new Date().toISOString();
+    }
   }
 }

@@ -93,8 +93,15 @@ export class BudgetTracker {
    * Estimate wait time in ms until a transaction of given size can fit.
    * Returns 0 if it can be submitted immediately.
    */
+  /**
+   * Estimate wait time in ms until a transaction of given size can fit.
+   * Returns 0 if it can be submitted immediately.
+   * Returns Infinity if the transaction can never fit (larger than effective budget).
+   */
   estimateWaitMs(estimatedBytes: number): number {
     if (this.canSubmit(estimatedBytes)) return 0;
+    // A transaction larger than the effective budget can never be submitted
+    if (estimatedBytes > this.effectiveBudget) return Infinity;
     const deficit =
       estimatedBytes + (this.burstAmount - this.effectiveBudget) - this.getAvailableBalance();
     return Math.ceil(deficit / this.recoveryRatePerMs);

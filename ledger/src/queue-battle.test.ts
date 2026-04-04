@@ -773,6 +773,129 @@ describe("TransactionQueue — estimateCommandsJsonSize standalone", () => {
   });
 });
 
+describe("TransactionQueue — oversized transactions in size-aware mode (P1 fix)", () => {
+  it("dead-letters a transaction larger than effective budget", async () => {
+    const deadLetters: TransactionRecord[] = [];
+    const queue = fastQueue({ submit: jest.fn(async () => []) } as any, {
+      mode: "size-aware",
+      safetyMargin: 0.1, // effective = 180_000
+      onDeadLetter: (rec) => deadLetters.push(rec),
+    });
+
+    // Enqueue a 200KB transaction — exceeds 180KB effective budget
+    await expect(
+      queue.enqueue(async () => [], { sizeEstimate: 200_000 }),
+    ).rejects.toThrow("exceeds effective budget");
+
+    expect(deadLetters).toHaveLength(1);
+    expect(deadLetters[0]!.error).toContain("exceeds effective budget");
+  });
+
+  it("transactions below effective budget still process in size-aware mode", async () => {
+    const queue = fastQueue({ submit: jest.fn(async () => []) } as any, {
+      mode: "size-aware",
+      safetyMargin: 0.1, // effective = 180_000
+    });
+
+    // 10KB is well within budget
+    const result = await queue.enqueue(async () => "ok", { sizeEstimate: 10_000 });
+    expect(result).toBe("ok");
+  });
+});
+
+describe("TransactionQueue — ambiguous retry budget (P2 fix)", () => {
+  it("does NOT refund budget on ETIMEDOUT (ambiguous)", async () => {
+    let attempts = 0;
+    const timeoutThenSucceed = jest.fn(async () => {
+      attempts++;
+      if (attempts === 1) {
+        const err: any = new Error("timeout");
+        err.code = "ETIMEDOUT";
+        throw err;
+      }
+      return "ok";
+    });
+
+    const queue = fastQueue(timeoutThenSucceed, {
+      maxRetries: 3,
+      avgTxSizeBytes: 50_000,
+    });
+
+    const budgetBefore = queue.bytesRemaining;
+    await queue.enqueue(async () => timeoutThenSucceed());
+
+    // Budget should reflect BOTH submissions charged (ambiguous + retry success)
+    // because we didn't refund the ambiguous one
+    const budgetAfter = queue.bytesRemaining;
+    expect(budgetBefore - budgetAfter).toBeCloseTo(100_000, -3); // 50K × 2
+  });
+
+  it("DOES refund budget on ECONNREFUSED (definitely not accepted)", async () => {
+    let attempts = 0;
+    const connRefusedThenSucceed = jest.fn(async () => {
+      attempts++;
+      if (attempts === 1) {
+        const err: any = new Error("refused");
+        err.code = "ECONNREFUSED";
+        throw err;
+      }
+      return "ok";
+    });
+
+    const queue = fastQueue(connRefusedThenSucceed, {
+      maxRetries: 3,
+      avgTxSizeBytes: 50_000,
+    });
+
+    const budgetBefore = queue.bytesRemaining;
+    await queue.enqueue(async () => connRefusedThenSucceed());
+
+    // Budget should reflect only 1 submission (refunded the refused one)
+    const budgetAfter = queue.bytesRemaining;
+    expect(budgetBefore - budgetAfter).toBeCloseTo(50_000, -3);
+  });
+});
+
+describe("TransactionQueue — log failure resilience (P2 fix)", () => {
+  it("queue continues draining when log.record throws", async () => {
+    const brokenLog = new InMemoryTransactionLog();
+    let callCount = 0;
+    const origRecord = brokenLog.record.bind(brokenLog);
+    brokenLog.record = (async (entry: TransactionRecord) => {
+      callCount++;
+      // Fail on the 2nd call (the "submitting" transition)
+      if (callCount === 2) throw new Error("disk full");
+      return origRecord(entry);
+    }) as any;
+
+    const queue = fastQueue({ submit: jest.fn(async () => []) } as any, {
+      log: brokenLog,
+    });
+
+    // Should still complete despite log failure
+    const result = await queue.enqueue(async () => "survived");
+    expect(result).toBe("survived");
+  });
+});
+
+describe("TransactionQueue — double close() (P2 fix)", () => {
+  it("both close() callers resolve when queue drains", async () => {
+    const queue = fastQueue({ submit: jest.fn(async () => []) } as any);
+
+    queue.enqueue(async () => "a");
+
+    let close1Done = false;
+    let close2Done = false;
+
+    const p1 = queue.close().then(() => { close1Done = true; });
+    const p2 = queue.close().then(() => { close2Done = true; });
+
+    await Promise.all([p1, p2]);
+    expect(close1Done).toBe(true);
+    expect(close2Done).toBe(true);
+  });
+});
+
 describe("TransactionQueue — close() waits for retrying entries (P1 fix)", () => {
   it("close() waits for entry in retry backoff to finish", async () => {
     let attempts = 0;
