@@ -37,6 +37,8 @@ export interface TransactionRecord {
   costEstimate?: number;
   /** Actual traffic cost in bytes (from paid_traffic_cost on completion). */
   actualCost?: number;
+  /** JSON-serialized byte size of the commands (rough proxy for traffic cost). */
+  jsonSizeBytes?: number;
   /** Number of retry attempts so far. */
   retryCount: number;
   /** ISO timestamp of when the transaction was enqueued. */

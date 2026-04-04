@@ -722,6 +722,57 @@ describe("TransactionQueue — edge cases", () => {
   });
 });
 
+describe("TransactionQueue — JSON size estimation", () => {
+  it("enqueueCommands records jsonSizeBytes on the transaction", async () => {
+    const ledger = {
+      submit: jest.fn(async () => []),
+    } as unknown as Ledger;
+
+    const log = new InMemoryTransactionLog();
+    const queue = fastQueue(ledger, { log });
+
+    await queue.enqueueCommands([] as AnyCommand[]);
+
+    const all = await log.getAll();
+    expect(all).toHaveLength(1);
+    // Empty commands array → JSON is "[]" → 2 bytes
+    expect(all[0]!.jsonSizeBytes).toBe(2);
+  });
+
+  it("onSubmit callback receives jsonSizeBytes", async () => {
+    let receivedJsonSize: number | undefined;
+    const ledger = {
+      submit: jest.fn(async () => []),
+    } as unknown as Ledger;
+
+    const queue = fastQueue(ledger, {
+      onSubmit: (info) => { receivedJsonSize = info.jsonSizeBytes; },
+    });
+
+    await queue.enqueueCommands([] as AnyCommand[]);
+    expect(receivedJsonSize).toBe(2);
+  });
+
+  it("enqueue (generic) does not set jsonSizeBytes", async () => {
+    const log = new InMemoryTransactionLog();
+    const queue = fastQueue({ submit: jest.fn(async () => []) } as any, { log });
+
+    await queue.enqueue(async () => "result");
+
+    const all = await log.getAll();
+    expect(all[0]!.jsonSizeBytes).toBeUndefined();
+  });
+});
+
+describe("TransactionQueue — estimateCommandsJsonSize standalone", () => {
+  it("returns byte count of JSON-serialized commands", async () => {
+    // Import the standalone utility
+    const { estimateCommandsJsonSize } = await import("./queue");
+    const size = estimateCommandsJsonSize([]);
+    expect(size).toBe(2); // "[]"
+  });
+});
+
 describe("TransactionQueue — close() waits for retrying entries (P1 fix)", () => {
   it("close() waits for entry in retry backoff to finish", async () => {
     let attempts = 0;

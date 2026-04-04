@@ -20,10 +20,29 @@ import {
   type TransactionRecord,
   type TransactionState,
 } from "./transaction-log";
-import type { Ledger } from "./ledger";
+import { convertCommand, type Ledger } from "./ledger";
 import type { AnyCommand, Event } from "./types";
 import type { LedgerApiError } from "./client";
 import type { Party } from "@daml/types";
+
+/**
+ * Estimate the JSON-serialized byte size of Daml commands.
+ *
+ * This measures the JSON payload that would be sent to Canton's JSON API v2.
+ * It's a rough proxy for the actual protobuf envelope size that Canton charges
+ * for traffic — typically the envelope is smaller than JSON, so this is a
+ * conservative overestimate. Useful for:
+ * - Calibrating `avgTxSizeBytes` for time-spread mode
+ * - Debugging which transactions are unexpectedly large
+ * - Comparing relative sizes between different transaction types
+ *
+ * For exact traffic cost, use `Ledger.prepareSubmission()` which returns
+ * `CostEstimation.totalTrafficCostEstimation` from the Canton engine.
+ */
+export function estimateCommandsJsonSize(commands: AnyCommand[]): number {
+  const jsCommands = commands.map((command) => convertCommand(command));
+  return new TextEncoder().encode(JSON.stringify(jsCommands)).byteLength;
+}
 
 // ── Options ───────────────────────────────────────────────────────
 
@@ -107,6 +126,8 @@ export interface SubmitInfo {
   commandId: string;
   estimatedBytes: number;
   actualBytes?: number;
+  /** JSON-serialized byte size of the commands (if available). */
+  jsonSizeBytes?: number;
   budgetUtilization: number;
 }
 
@@ -252,11 +273,14 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     const id = this.generateId();
     const now = new Date().toISOString();
 
+    const jsonSizeBytes = estimateCommandsJsonSize(commands);
+
     const record: TransactionRecord = {
       id,
       commandId,
       state: "queued",
       costEstimate: options?.sizeEstimate ?? this.avgTxSizeBytes,
+      jsonSizeBytes,
       retryCount: 0,
       enqueuedAt: now,
       updatedAt: now,
@@ -495,10 +519,20 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       await this.txLog.record(entry.record);
       this.emit("stateChange", entry.record.id, "submitting", "completed");
 
+      const jsonSize = entry.record.jsonSizeBytes;
+      if (jsonSize !== undefined) {
+        logger.debug(
+          `Transaction ${entry.record.id} completed — ` +
+            `JSON size: ${jsonSize} bytes, budget estimate: ${costEstimate} bytes` +
+            (entry.record.tag ? `, tag: ${entry.record.tag}` : ""),
+        );
+      }
+
       this.onSubmit?.({
         txId: entry.record.id,
         commandId: entry.record.commandId,
         estimatedBytes: costEstimate,
+        jsonSizeBytes: jsonSize,
         budgetUtilization: this.budget.snapshot().utilization,
       });
 

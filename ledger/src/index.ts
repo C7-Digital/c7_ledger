@@ -18,6 +18,7 @@ export * from "./valueTypes";
 
 export {
   TransactionQueue,
+  estimateCommandsJsonSize,
   type TransactionQueueOptions,
   type TransactionQueueEvents,
   type ThrottleInfo,
