@@ -153,7 +153,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
 
   private queue: QueueEntry<any>[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
-  private retryTimers = new Set<ReturnType<typeof setTimeout>>();
+  private retryTimers = new Map<ReturnType<typeof setTimeout>, QueueEntry<any>>();
   private inflight = 0;
   private paused = false;
   private closed = false;
@@ -305,14 +305,20 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
       this.drainTimer = null;
     }
 
-    // Cancel all pending retry timers
-    for (const timer of this.retryTimers) {
-      clearTimeout(timer);
-    }
-    this.retryTimers.clear();
-
     const aborted: TransactionRecord[] = [];
     const abortError = new Error("TransactionQueue aborted");
+
+    // Cancel all pending retry timers and reject their entries
+    for (const [timer, entry] of this.retryTimers) {
+      clearTimeout(timer);
+      entry.record.state = "dead_lettered";
+      entry.record.updatedAt = new Date().toISOString();
+      entry.record.error = "Queue aborted during retry backoff";
+      aborted.push({ ...entry.record });
+      entry.reject(abortError);
+      this.txLog.record(entry.record).catch(() => {});
+    }
+    this.retryTimers.clear();
 
     for (const entry of this.queue) {
       entry.record.state = "dead_lettered";
@@ -495,7 +501,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
         this.queue.unshift(entry);
         this.scheduleDrain();
       }, backoff);
-      this.retryTimers.add(retryTimer);
+      this.retryTimers.set(retryTimer, entry);
     } else {
       // Dead-letter
       entry.record.error = err.message;
