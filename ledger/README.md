@@ -59,6 +59,8 @@ const choiceResult = await ledger.exercise(MyChoice, contractId, argument, [actA
 
 ## TransactionQueue (CIP-104 Traffic Management)
 
+> For the full design rationale, budget model, retry semantics, recovery procedures, and troubleshooting guide, see **[QUEUEING.md](QUEUEING.md)**.
+
 Canton's CIP-104 base rate imposes a traffic budget per participant (200KB per 20 minutes on mainnet as of 2026-04-04). Exceeding it rejects transactions; extra traffic costs $60/MB. The `TransactionQueue` throttles submissions to stay within the free budget.
 
 ### Basic Usage — Time-Spread Mode
