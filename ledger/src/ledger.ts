@@ -1140,7 +1140,8 @@ export class Ledger {
    */
   async submit(
     commands: AnyCommand[],
-    actAs?: Party[]
+    actAs?: Party[],
+    options?: { commandId?: string },
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));
 
@@ -1148,7 +1149,9 @@ export class Ledger {
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
       commands: jsCommands,
-      commandId: this.generateCommandId(),
+      commandId: options?.commandId
+        ? createLedgerString(options.commandId)
+        : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
       // Ends up being not optional
       userId: createUserIdString(this.tokenUserId),

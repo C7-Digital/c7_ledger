@@ -721,3 +721,129 @@ describe("TransactionQueue — edge cases", () => {
     expect(snapshot2.depth).toBe(0);
   });
 });
+
+describe("TransactionQueue — close() waits for retrying entries (P1 fix)", () => {
+  it("close() waits for entry in retry backoff to finish", async () => {
+    let attempts = 0;
+    const failOnceThenSucceed = jest.fn(async () => {
+      attempts++;
+      if (attempts === 1) throw transientError();
+      return "recovered";
+    });
+
+    const queue = fastQueue(failOnceThenSucceed, {
+      maxRetries: 3,
+      baseRetryDelayMs: 50,
+    });
+
+    const txPromise = queue.enqueue(async () => failOnceThenSucceed());
+
+    // Wait for first attempt to fail and enter retry backoff
+    await delay(120);
+    expect(attempts).toBe(1);
+
+    // close() should NOT resolve until the retry completes
+    await queue.close();
+    expect(attempts).toBe(2);
+
+    const result = await txPromise;
+    expect(result).toBe("recovered");
+  });
+
+  it("close() waits for multiple retrying entries", async () => {
+    let count = 0;
+    const failOnceThenSucceed = jest.fn(async () => {
+      count++;
+      if (count <= 2) throw transientError();
+      return "ok";
+    });
+
+    const queue = fastQueue(failOnceThenSucceed, {
+      maxRetries: 3,
+      baseRetryDelayMs: 30,
+    });
+
+    const p1 = queue.enqueue(async () => failOnceThenSucceed());
+    const p2 = queue.enqueue(async () => failOnceThenSucceed());
+
+    await queue.close();
+    // Both should have completed (retried and succeeded)
+    await expect(p1).resolves.toBe("ok");
+    await expect(p2).resolves.toBe("ok");
+  });
+});
+
+describe("TransactionQueue — commandId passthrough (P1 fix)", () => {
+  it("enqueueCommands passes its commandId to ledger.submit", async () => {
+    let capturedCommandId: string | undefined;
+    const ledger = {
+      submit: jest.fn(async (_cmds: any, _actAs: any, opts: any) => {
+        capturedCommandId = opts?.commandId;
+        return [];
+      }),
+    } as unknown as Ledger;
+
+    const log = new InMemoryTransactionLog();
+    const queue = fastQueue(ledger, { log });
+
+    await queue.enqueueCommands([] as AnyCommand[]);
+
+    // The commandId in the log should match what was passed to ledger.submit
+    const all = await log.getAll();
+    expect(all).toHaveLength(1);
+    expect(capturedCommandId).toBeDefined();
+    expect(all[0]!.commandId).toBe(capturedCommandId);
+  });
+
+  it("commandId starts with txq- prefix", async () => {
+    let capturedCommandId: string | undefined;
+    const ledger = {
+      submit: jest.fn(async (_cmds: any, _actAs: any, opts: any) => {
+        capturedCommandId = opts?.commandId;
+        return [];
+      }),
+    } as unknown as Ledger;
+
+    const queue = fastQueue(ledger);
+    await queue.enqueueCommands([] as AnyCommand[]);
+    expect(capturedCommandId).toMatch(/^txq-/);
+  });
+});
+
+describe("TransactionQueue — retry respects priority ordering (P2 fix)", () => {
+  it("retried low-priority entry does not jump ahead of high-priority entry", async () => {
+    const order: string[] = [];
+    let attempts = 0;
+    const failOnceThenLog = jest.fn(async () => {
+      attempts++;
+      if (attempts === 1) throw transientError();
+      order.push("retried-low");
+      return "ok";
+    });
+
+    const queue = fastQueue(
+      { submit: jest.fn(async () => []) } as any,
+      { maxRetries: 3, baseRetryDelayMs: 100 },
+    );
+
+    // Enqueue low-priority that will fail once
+    const pLow = queue.enqueue(async () => failOnceThenLog(), { priority: 0 });
+
+    // Wait for it to fail and enter retry backoff
+    await delay(120);
+    expect(attempts).toBe(1);
+
+    // Now enqueue a high-priority item while the retry is pending
+    const pHigh = queue.enqueue(async () => {
+      order.push("high");
+      return "urgent";
+    }, { priority: 100 });
+
+    // Wait for both to complete
+    await Promise.all([pLow.catch(() => {}), pHigh]);
+
+    // High-priority should have executed before the retried low-priority
+    expect(order[0]).toBe("high");
+    expect(order[1]).toBe("retried-low");
+  });
+});

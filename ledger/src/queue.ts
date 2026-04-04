@@ -25,7 +25,7 @@ import type { AnyCommand, Event } from "./types";
 import type { LedgerApiError } from "./client";
 import type { Party } from "@daml/types";
 
-// ── Options ────────���──────────────────────────────────────────────
+// ── Options ───────────────────────────────────────────────────────
 
 export interface TransactionQueueOptions {
   /** The Ledger instance to submit through. */
@@ -110,7 +110,7 @@ export interface SubmitInfo {
   budgetUtilization: number;
 }
 
-// ── Queue events ───────��──────────────────────────────────────────
+// ── Queue events ──────────────────────────────────────────────────
 
 export interface TransactionQueueEvents {
   stateChange: (txId: string, from: TransactionState, to: TransactionState) => void;
@@ -118,7 +118,7 @@ export interface TransactionQueueEvents {
   error: (txId: string, error: Error) => void;
 }
 
-// ── Internal entry ────────────────���───────────────────────────────
+// ── Internal entry ────────────────────────────────────────────────
 
 interface QueueEntry<R> {
   record: TransactionRecord;
@@ -136,7 +136,11 @@ export interface QueueSnapshot {
   transactions: TransactionRecord[];
 }
 
-// ── TransactionQueue ────────────────────────��─────────────────────
+// ── Shutdown state ────────────────────────────────────────────────
+
+type ShutdownState = "open" | "closing" | "aborted";
+
+// ── TransactionQueue ──────────────────────────────────────────────
 
 export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
   private readonly ledger: Ledger;
@@ -156,7 +160,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
   private retryTimers = new Map<ReturnType<typeof setTimeout>, QueueEntry<any>>();
   private inflight = 0;
   private paused = false;
-  private closed = false;
+  private shutdownState: ShutdownState = "open";
   private draining = false;
   private closeResolve?: () => void;
 
@@ -189,7 +193,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     txFn: () => Promise<R>,
     options?: { priority?: number; sizeEstimate?: number; tag?: string },
   ): Promise<R> {
-    if (this.closed) {
+    if (this.shutdownState !== "open") {
       return Promise.reject(new Error("TransactionQueue is closed"));
     }
 
@@ -212,14 +216,7 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
 
     const promise = new Promise<R>((resolve, reject) => {
       const entry: QueueEntry<R> = { record, txFn, resolve, reject };
-
-      // Insert sorted by priority (highest first)
-      const insertIdx = this.queue.findIndex((e) => e.record.priority < priority);
-      if (insertIdx === -1) {
-        this.queue.push(entry);
-      } else {
-        this.queue.splice(insertIdx, 0, entry);
-      }
+      this.insertByPriority(entry);
     });
 
     // Await the initial log write to ensure ordering before any
@@ -235,20 +232,58 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
 
   /**
    * Enqueue raw Daml commands for throttled submission.
-   * Convenience wrapper around enqueue() that calls ledger.submit().
+   * Passes the queue's commandId through to Ledger.submit() so the JSONL
+   * log records the same commandId that Canton uses for deduplication.
    */
   enqueueCommands(
     commands: AnyCommand[],
     actAs?: Party[],
     options?: { priority?: number; sizeEstimate?: number; tag?: string },
   ): Promise<Event<object, unknown>[]> {
-    return this.enqueue(
-      () => this.ledger.submit(commands, actAs),
-      options,
-    );
+    // Generate the commandId up front so it's recorded in the TransactionRecord
+    // AND passed through to the actual Canton submission
+    const commandId = `txq-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    if (this.shutdownState !== "open") {
+      return Promise.reject(new Error("TransactionQueue is closed"));
+    }
+
+    const priority = options?.priority ?? 0;
+    const id = this.generateId();
+    const now = new Date().toISOString();
+
+    const record: TransactionRecord = {
+      id,
+      commandId,
+      state: "queued",
+      costEstimate: options?.sizeEstimate ?? this.avgTxSizeBytes,
+      retryCount: 0,
+      enqueuedAt: now,
+      updatedAt: now,
+      priority,
+      tag: options?.tag,
+    };
+
+    const promise = new Promise<Event<object, unknown>[]>((resolve, reject) => {
+      const entry: QueueEntry<Event<object, unknown>[]> = {
+        record,
+        txFn: () => this.ledger.submit(commands, actAs, { commandId }),
+        resolve,
+        reject,
+      };
+      this.insertByPriority(entry);
+    });
+
+    this.txLog.record(record).catch((err) => {
+      logger.error(`Failed to log transaction ${id}: ${err}`);
+    }).then(() => {
+      this.scheduleDrain();
+    });
+
+    return promise;
   }
 
-  /** Current queue depth (waiting + in-flight). */
+  /** Current queue depth (waiting, not including in-flight or retrying). */
   get depth(): number {
     return this.queue.length;
   }
@@ -284,10 +319,13 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     this.scheduleDrain();
   }
 
-  /** Drain and close — waits for all queued and in-flight items to complete, then resolves. */
+  /**
+   * Graceful close — waits for all queued, in-flight, AND retrying items
+   * to complete, then resolves. No new enqueues accepted after calling.
+   */
   async close(): Promise<void> {
-    this.closed = true;
-    if (this.queue.length === 0 && this.inflight === 0) return;
+    this.shutdownState = "closing";
+    if (this.isFullyDrained()) return;
     return new Promise<void>((resolve) => {
       this.closeResolve = resolve;
       this.scheduleDrain();
@@ -295,11 +333,11 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
   }
 
   /**
-   * Abort — rejects all pending items and returns their transaction records.
+   * Abort — rejects all pending and retrying items, returns their records.
    * In-flight transactions (currently submitting) are NOT cancelled.
    */
   abort(): TransactionRecord[] {
-    this.closed = true;
+    this.shutdownState = "aborted";
     if (this.drainTimer) {
       clearTimeout(this.drainTimer);
       this.drainTimer = null;
@@ -359,6 +397,30 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     return `txq-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   }
 
+  /** Insert entry into the queue sorted by priority (highest first). */
+  private insertByPriority(entry: QueueEntry<any>): void {
+    const priority = entry.record.priority;
+    const insertIdx = this.queue.findIndex((e) => e.record.priority < priority);
+    if (insertIdx === -1) {
+      this.queue.push(entry);
+    } else {
+      this.queue.splice(insertIdx, 0, entry);
+    }
+  }
+
+  /** Check if all work is done: queue empty, nothing in-flight, no retries pending. */
+  private isFullyDrained(): boolean {
+    return this.queue.length === 0 && this.inflight === 0 && this.retryTimers.size === 0;
+  }
+
+  /** Try to resolve closeResolve if all work is done. */
+  private checkDrainComplete(): void {
+    if (this.isFullyDrained()) {
+      this.emit("drain");
+      this.closeResolve?.();
+    }
+  }
+
   private scheduleDrain(): void {
     if (this.paused || this.drainTimer || this.queue.length === 0) return;
 
@@ -370,9 +432,6 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
   }
 
   private scheduleTimeSpreadDrain(): void {
-    // Calculate delay: spread transactions so we don't exceed budget
-    // txns that fit per window = budgetBytes / avgTxSizeBytes
-    // delay between txns = spreadPeriodMs / txnsPerWindow
     const txnsPerWindow = this.budget.getEffectiveBudget() / this.avgTxSizeBytes;
     const delayMs = Math.max(50, this.spreadPeriodMs / txnsPerWindow);
 
@@ -454,9 +513,8 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
     // Continue draining or signal completion
     if (this.queue.length > 0) {
       this.scheduleDrain();
-    } else if (this.inflight === 0) {
-      this.emit("drain");
-      this.closeResolve?.();
+    } else {
+      this.checkDrainComplete();
     }
   }
 
@@ -488,17 +546,19 @@ export class TransactionQueue extends EventEmitter<TransactionQueueEvents> {
 
       const retryTimer = setTimeout(() => {
         this.retryTimers.delete(retryTimer);
-        // Guard: don't re-enqueue if the queue was aborted during backoff
-        if (this.closed) {
+
+        // Only dead-letter on hard abort — closing should let retries finish
+        if (this.shutdownState === "aborted") {
           entry.record.state = "dead_lettered";
           entry.record.updatedAt = new Date().toISOString();
-          entry.record.error = "Queue closed during retry backoff";
+          entry.record.error = "Queue aborted during retry backoff";
           this.txLog.record(entry.record).catch(() => {});
           entry.reject(new Error("TransactionQueue aborted"));
           return;
         }
-        // Re-insert at the front (preserve priority ordering for retries)
-        this.queue.unshift(entry);
+
+        // Re-insert respecting priority ordering
+        this.insertByPriority(entry);
         this.scheduleDrain();
       }, backoff);
       this.retryTimers.set(retryTimer, entry);
