@@ -12,7 +12,9 @@
  *                                                              ↓
  *                                                        dead_lettered
  */
-import { appendFile, readFile } from "node:fs/promises";
+// Dynamic import to avoid breaking browser/lite builds — node:fs/promises
+// is only needed by JsonlTransactionLog which is server-only.
+const fsPromises = () => import("node:fs/promises");
 
 // ── Transaction states ────────────────────────────────────────────
 
@@ -112,6 +114,7 @@ export class JsonlTransactionLog implements TransactionLog {
 
   async record(entry: TransactionRecord): Promise<void> {
     this.cache.set(entry.id, { ...entry });
+    const { appendFile } = await fsPromises();
     await appendFile(this.filePath, JSON.stringify(entry) + "\n", "utf-8");
   }
 
@@ -119,6 +122,7 @@ export class JsonlTransactionLog implements TransactionLog {
     if (this.loaded) return;
     this.loaded = true;
     try {
+      const { readFile } = await fsPromises();
       const content = await readFile(this.filePath, "utf-8");
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
