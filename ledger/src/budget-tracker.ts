@@ -92,10 +92,6 @@ export class BudgetTracker {
   /**
    * Estimate wait time in ms until a transaction of given size can fit.
    * Returns 0 if it can be submitted immediately.
-   */
-  /**
-   * Estimate wait time in ms until a transaction of given size can fit.
-   * Returns 0 if it can be submitted immediately.
    * Returns Infinity if the transaction can never fit (larger than effective budget).
    */
   estimateWaitMs(estimatedBytes: number): number {
