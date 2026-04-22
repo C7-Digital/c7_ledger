@@ -91,12 +91,19 @@ export interface TypedHttpClientConfig {
   baseUrl: string;
   validation?: ValidationMode;
   openApiSchemaPath?: string;
+  /**
+   * Artificial delay in milliseconds added before returning HTTP responses.
+   * Useful for simulating slow ledger interactions during local development.
+   * Defaults to 0 (no delay).
+   */
+  responseDelay?: number;
 }
 
 export class TypedHttpClient {
   public token: string;
   public readonly baseUrl: string;
   private validator?: SchemaValidator;
+  private responseDelay: number;
 
   constructor(config: TypedHttpClientConfig) {
     this.token = config.token;
@@ -104,6 +111,11 @@ export class TypedHttpClient {
     this.validator = config.validation
       ? new SchemaValidator("openapi", config.validation)
       : undefined;
+    const responseDelay = config.responseDelay;
+    this.responseDelay =
+      responseDelay !== undefined && Number.isFinite(responseDelay)
+        ? Math.max(0, Math.floor(responseDelay))
+        : 0;
   }
 
   private async request<TResponse>(
@@ -127,6 +139,10 @@ export class TypedHttpClient {
     }
 
     const response = await fetch(url, requestInit);
+
+    if (this.responseDelay > 0) {
+      await new Promise(resolve => setTimeout(resolve, this.responseDelay));
+    }
 
     if (!response.ok) {
       let body: unknown;
