@@ -111,7 +111,11 @@ export class TypedHttpClient {
     this.validator = config.validation
       ? new SchemaValidator("openapi", config.validation)
       : undefined;
-    this.responseDelay = config.responseDelay ?? 0;
+    const responseDelay = config.responseDelay;
+    this.responseDelay =
+      responseDelay !== undefined && Number.isFinite(responseDelay)
+        ? Math.max(0, Math.floor(responseDelay))
+        : 0;
   }
 
   private async request<TResponse>(
@@ -136,6 +140,10 @@ export class TypedHttpClient {
 
     const response = await fetch(url, requestInit);
 
+    if (this.responseDelay > 0) {
+      await new Promise(resolve => setTimeout(resolve, this.responseDelay));
+    }
+
     if (!response.ok) {
       let body: unknown;
       try {
@@ -151,10 +159,6 @@ export class TypedHttpClient {
     }
 
     const parsed = await response.json();
-
-    if (this.responseDelay > 0) {
-      await new Promise(resolve => setTimeout(resolve, this.responseDelay));
-    }
 
     if (this.validator && responseSchemaName) {
       if (isArrayResponse) {
