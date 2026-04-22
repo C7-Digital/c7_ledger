@@ -345,6 +345,12 @@ export interface LedgerOptions {
    * Defaults to true for backward compatibility.
    */
   autoReconnect?: boolean;
+  /**
+   * Artificial delay in milliseconds added before returning HTTP responses.
+   * Useful for simulating slow ledger interactions during local development.
+   * Defaults to 0 (no delay).
+   */
+  responseDelay?: number;
 }
 
 type FilterSpec 
@@ -779,6 +785,7 @@ export class Ledger {
       baseUrl: this.httpBaseUrl,
       validation: options.validation,
       openApiSchemaPath: options.openApiSchemaPath,
+      responseDelay: options.responseDelay,
     });
     this.options = options;
   }
