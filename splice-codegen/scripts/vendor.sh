@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # Configuration — must match the Scan API spec version
-SPLICE_TAG="0.5.10"
+SPLICE_TAG="0.6.1"
 SPLICE_REPO="https://github.com/hyperledger-labs/splice.git"
 
 # DARs needed for Scan API typed payloads.
 # These are the latest versions at the SPLICE_TAG that contain
 # the templates returned by the Scan API.
 DAR_FILES=(
-  "splice-amulet-0.1.15.dar"                # Splice.ValidatorLicense, Splice.AmuletRules, Splice.Round
-  "splice-amulet-name-service-0.1.16.dar"    # Splice.Ans (AnsEntry, AnsRules)
-  "splice-dso-governance-0.1.21.dar"         # Splice.DSO.SvState (SvNodeState)
+  "splice-amulet-0.1.18.dar"                 # Splice.ValidatorLicense, Splice.AmuletRules, Splice.Round
+  "splice-amulet-name-service-0.1.19.dar"    # Splice.Ans (AnsEntry, AnsRules)
+  "splice-dso-governance-0.1.24.dar"         # Splice.DSO.SvState (SvNodeState)
 )
 
 VENDOR_DIR="$(cd "$(dirname "$0")/.." && pwd)/vendor"
