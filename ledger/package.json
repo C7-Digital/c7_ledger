@@ -40,7 +40,7 @@
     "lint": "eslint --ext .ts src/"
   },
   "dependencies": {
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.4.11",
     "ajv": "^6.12.6",
     "eventemitter3": "^5.0.1",
     "isomorphic-ws": "^5.0.0",

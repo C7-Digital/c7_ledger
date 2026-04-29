@@ -26,7 +26,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --passWithNoTests"
   },
   "dependencies": {
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.4.11",
     "@mojotech/json-type-validation": "^3.1.0"
   },
   "engines": {

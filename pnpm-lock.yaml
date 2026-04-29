@@ -22,8 +22,8 @@ importers:
   ledger:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
       ajv:
         specifier: ^6.12.6
         version: 6.12.6
@@ -77,8 +77,8 @@ importers:
   react:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
     devDependencies:
       '@c7-digital/ledger':
         specifier: file:../ledger
@@ -96,8 +96,8 @@ importers:
   scan:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -170,8 +170,8 @@ importers:
   splice-codegen:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -357,8 +357,8 @@ packages:
       vite:
         optional: true
 
-  '@daml/types@3.4.9':
-    resolution: {integrity: sha512-qFnSsZ9nyE2sf+LqA40XxoMdxEirsT6dKLW4of2GqFiQ8ZSiI40A8wU2WCCy+qn0LHtSTLD+XqEYCBPB73UKpA==}
+  '@daml/types@3.4.11':
+    resolution: {integrity: sha512-lGskPPTFVtJpLbHi1XoqG7/mnOU/zJcomQixoszEbtU7D63t7xDAW9yvtaQa7C1Uz70OOBhM1z72Se63GR3NXg==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -2880,7 +2880,7 @@ snapshots:
     transitivePeerDependencies:
       - rollup
 
-  '@daml/types@3.4.9':
+  '@daml/types@3.4.11':
     dependencies:
       '@mojotech/json-type-validation': 3.1.0
       '@types/lodash': 4.17.23

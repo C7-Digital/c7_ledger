@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
 
-# NOTE: The Daml SDK version (currently 3.4.9) is pinned in
+# NOTE: The Daml SDK version (currently 3.4.11) is pinned in
 # scribe/e2e/daml/daml.yaml and must match ledger's @daml/types dependency.
 # When bumping, update both places.
 
@@ -32,7 +32,7 @@ jobs:
           echo "$HOME/.dpm/bin" >> $GITHUB_PATH
 
       - name: Install Daml SDK via dpm
-        run: $HOME/.dpm/bin/dpm install 3.4.9
+        run: $HOME/.dpm/bin/dpm install 3.4.11
 
       - run: pnpm install --no-frozen-lockfile
 

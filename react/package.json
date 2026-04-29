@@ -29,7 +29,7 @@
     "react": "^18.0.0"
   },
   "dependencies": {
-    "@daml/types": "3.4.9"
+    "@daml/types": "3.4.11"
   },
   "devDependencies": {
     "@c7-digital/ledger": "file:../ledger",
