@@ -31,14 +31,14 @@
   "scripts": {
     "vendor": "bash scripts/vendor.sh",
     "codegen": "bash scripts/codegen.sh",
-    "prebuild": "if [ ! -d codegen/js ]; then mkdir -p codegen && tar xzf codegen-js-3.4.9.tar.gz -C codegen; fi",
+    "prebuild": "if [ ! -d codegen/js ]; then mkdir -p codegen && tar xzf codegen-js-3.4.11.tar.gz -C codegen; fi",
     "build": "scribe --config scribe.yaml",
     "rebuild": "pnpm vendor && pnpm codegen && pnpm build",
-    "prepare": "mkdir -p codegen && tar xzf codegen-js-3.4.9.tar.gz -C codegen && scribe --config scribe.yaml",
+    "prepare": "mkdir -p codegen && tar xzf codegen-js-3.4.11.tar.gz -C codegen && scribe --config scribe.yaml",
     "clean": "rm -rf dist .scribe codegen/js"
   },
   "dependencies": {
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.4.11",
     "@mojotech/json-type-validation": "^3.1.0"
   },
   "devDependencies": {
