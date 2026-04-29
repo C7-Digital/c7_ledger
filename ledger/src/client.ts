@@ -11,7 +11,6 @@
 import { paths, operations } from "./generated/api";
 import { SchemaValidator, ValidationMode } from "./validation";
 import { isCantonError, type JsCantonError } from "./types";
-import fetch from "cross-fetch";
 
 /**
  * Error thrown when the Canton ledger API returns a non-OK HTTP response.

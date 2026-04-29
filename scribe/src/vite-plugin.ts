@@ -36,7 +36,6 @@ export function damlCodegenPlugin(options: DamlCodegenPluginOptions = {}) {
             "@c7-digital/ledger",
             "@c7-digital/react",
             "eventemitter3",
-            "cross-fetch",
             "jose",
             "isomorphic-ws",
           ],

@@ -42,7 +42,6 @@
   "dependencies": {
     "@daml/types": "3.4.9",
     "ajv": "^6.12.6",
-    "cross-fetch": "^3.2.0",
     "eventemitter3": "^5.0.1",
     "isomorphic-ws": "^5.0.0",
     "jose": "^6.0.10"

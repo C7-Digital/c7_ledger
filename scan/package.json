@@ -27,8 +27,7 @@
   },
   "dependencies": {
     "@daml/types": "3.4.9",
-    "@mojotech/json-type-validation": "^3.1.0",
-    "cross-fetch": "^3.2.0"
+    "@mojotech/json-type-validation": "^3.1.0"
   },
   "engines": {
     "node": ">=18.0.0",
