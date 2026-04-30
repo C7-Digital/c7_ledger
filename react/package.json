@@ -1,6 +1,6 @@
 {
   "name": "@c7-digital/react",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "React hooks for Daml ledger integration using Canton JSON API v2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

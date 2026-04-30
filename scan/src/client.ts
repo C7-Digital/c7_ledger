@@ -8,7 +8,6 @@ import { Party } from "@daml/types";
 import { operations, components } from "./generated/api.js";
 import type * as Typed from "./types.js";
 import { logger } from "./logger.js";
-import fetch from "cross-fetch";
 
 // ─── Party-refined types ──────────────────────────────────────────────
 // The OpenAPI spec uses plain `string` for party identifiers. We refine

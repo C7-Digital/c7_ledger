@@ -17,7 +17,6 @@ import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { writeFile, mkdir, rm, readFile } from "fs/promises";
 import { existsSync } from "fs";
-import fetch from "cross-fetch";
 import YAML from "yaml";
 
 const __filename = fileURLToPath(import.meta.url);
