@@ -13,14 +13,6 @@ export type {
 } from "./generated/com/digitalasset/canton/admin/participant/v30/participant_status_service.js";
 
 export type {
-  ListConnectedSynchronizersRequest,
-  ListConnectedSynchronizersResponse,
-  ListConnectedSynchronizersResponse_Result,
-  GetSynchronizerIdRequest,
-  GetSynchronizerIdResponse,
-} from "./generated/com/digitalasset/canton/admin/participant/v30/synchronizer_connectivity_service.js";
-
-export type {
   ListPackagesRequest,
   ListPackagesResponse,
   PackageDescription,

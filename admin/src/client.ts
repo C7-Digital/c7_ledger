@@ -18,14 +18,6 @@ import {
 } from "./generated/com/digitalasset/canton/admin/participant/v30/participant_status_service.js";
 
 import {
-  SynchronizerConnectivityServiceClient,
-  type ListConnectedSynchronizersRequest,
-  type ListConnectedSynchronizersResponse,
-  type GetSynchronizerIdRequest,
-  type GetSynchronizerIdResponse,
-} from "./generated/com/digitalasset/canton/admin/participant/v30/synchronizer_connectivity_service.js";
-
-import {
   PackageServiceClient,
   type ListPackagesRequest,
   type ListPackagesResponse,
@@ -83,15 +75,13 @@ export interface AdminClientConfig {
  * ```ts
  * const admin = new AdminClient({ endpoint: "localhost:5002" });
  * const status = await admin.getParticipantStatus();
- * const synchronizers = await admin.listConnectedSynchronizers();
- * const traffic = await admin.getTrafficControlState(synchronizers[0].synchronizerId);
+ * const traffic = await admin.getTrafficControlState(synchronizerId);
  * await admin.close();
  * ```
  */
 export class AdminClient {
   private readonly traffic: TrafficControlServiceClient;
   private readonly status: ParticipantStatusServiceClient;
-  private readonly connectivity: SynchronizerConnectivityServiceClient;
   private readonly packages: PackageServiceClient;
   private readonly defaultDeadlineMs: number;
   private readonly token?: string;
@@ -103,7 +93,6 @@ export class AdminClient {
 
     this.traffic = new TrafficControlServiceClient(config.endpoint, credentials);
     this.status = new ParticipantStatusServiceClient(config.endpoint, credentials);
-    this.connectivity = new SynchronizerConnectivityServiceClient(config.endpoint, credentials);
     this.packages = new PackageServiceClient(config.endpoint, credentials);
   }
 
@@ -133,33 +122,6 @@ export class AdminClient {
     const request: ParticipantStatusRequest = {};
     return this.unaryCall((cb) =>
       this.status.participantStatus(request, this.buildMetadata(), { deadline: this.deadline() }, cb),
-    );
-  }
-
-  /**
-   * List the synchronizers this participant is currently connected to.
-   * The orchestrator uses this to discover which synchronizer's traffic
-   * budget to monitor.
-   */
-  async listConnectedSynchronizers(): Promise<ListConnectedSynchronizersResponse> {
-    const request: ListConnectedSynchronizersRequest = {};
-    return this.unaryCall((cb) =>
-      this.connectivity.listConnectedSynchronizers(
-        request,
-        this.buildMetadata(),
-        { deadline: this.deadline() },
-        cb,
-      ),
-    );
-  }
-
-  /**
-   * Resolve a synchronizer alias to its synchronizer ID.
-   */
-  async getSynchronizerId(alias: string): Promise<GetSynchronizerIdResponse> {
-    const request: GetSynchronizerIdRequest = { synchronizerAlias: alias };
-    return this.unaryCall((cb) =>
-      this.connectivity.getSynchronizerId(request, this.buildMetadata(), { deadline: this.deadline() }, cb),
     );
   }
 
@@ -200,7 +162,6 @@ export class AdminClient {
   async close(): Promise<void> {
     this.traffic.close();
     this.status.close();
-    this.connectivity.close();
     this.packages.close();
   }
 
