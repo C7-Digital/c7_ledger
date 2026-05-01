@@ -1229,6 +1229,20 @@ export class Ledger {
     });
   }
 
+  /**
+   * List the synchronizers this participant is currently connected to.
+   * Useful for auto-discovering the synchronizer ID when wiring up traffic
+   * monitoring or other per-synchronizer state.
+   *
+   * @param params Optional filters: `party`, `participantId`, `identityProviderId`.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getConnectedSynchronizers(
+    params?: { party?: string; participantId?: string; identityProviderId?: string },
+  ) {
+    return this.client.getConnectedSynchronizers(params);
+  }
+
   private initClient(): WebSocketClient {
     const wsBaseUrl =
       this.options.wsBaseUrl ||
