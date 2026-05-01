@@ -7,10 +7,11 @@ This package wraps a small, read-only subset of the Canton admin API:
 | Service | RPC | Purpose |
 |---|---|---|
 | `ParticipantStatusService` | `ParticipantStatus` | Health + version |
-| `SynchronizerConnectivityService` | `ListConnectedSynchronizers` | Discover connected synchronizers |
-| `SynchronizerConnectivityService` | `GetSynchronizerId` | Resolve alias → ID |
 | `TrafficControlService` | `TrafficControlState` | Real-time traffic budget state |
-| `PackageService` | `ListPackages` | Vetted DARs |
+| `PackageService` | `ListPackages` | DAR/package inventory and metadata |
+
+Synchronizer ID for `TrafficControlState` is supplied by the caller — typically
+read from `canton.conf`, the node operator, or AmuletRules via Scan.
 
 The admin API runs on a separate port from the JSON Ledger API
 (typically `5002`) and uses
@@ -26,10 +27,7 @@ import { AdminClient } from "@c7-digital/admin";
 const admin = new AdminClient({ endpoint: "localhost:5002" });
 
 const status = await admin.getParticipantStatus();
-const synchronizers = await admin.listConnectedSynchronizers();
-const traffic = await admin.getTrafficControlState(
-  synchronizers.connectedSynchronizers[0].synchronizerId,
-);
+const traffic = await admin.getTrafficControlState(synchronizerId);
 console.log(`Base traffic remaining: ${traffic.trafficState?.baseTrafficRemainder} bytes`);
 
 await admin.close();

@@ -16,11 +16,9 @@ const OUT_DIR = resolve(ROOT, "src/generated");
 
 const PROTOS = [
   "com/digitalasset/canton/admin/health/v30/status_service.proto",
-  "com/digitalasset/canton/admin/sequencer/v30/sequencer_connection.proto",
   "com/digitalasset/canton/admin/time/v30/time_tracker_config.proto",
   "com/digitalasset/canton/admin/participant/v30/traffic_control_service.proto",
   "com/digitalasset/canton/admin/participant/v30/participant_status_service.proto",
-  "com/digitalasset/canton/admin/participant/v30/synchronizer_connectivity_service.proto",
   "com/digitalasset/canton/admin/participant/v30/package_service.proto",
 ];
 
