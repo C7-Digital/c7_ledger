@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "rootDir": ".",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationDir": "lib",
+    "outDir": "lib",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "composite": true,
+    "lib": ["ES2020"],
+    "types": ["node", "jest"]
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["node_modules", "lib"],
+  "tsc-alias": {
+    "verbose": true,
+    "resolveFullPaths": true
+  }
+}
