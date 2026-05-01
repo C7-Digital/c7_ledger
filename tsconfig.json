@@ -16,6 +16,7 @@
     { "path": "./ledger" },
     { "path": "./react" },
     { "path": "./scribe" },
-    { "path": "./scan" }
+    { "path": "./scan" },
+    { "path": "./admin" }
   ]
 }

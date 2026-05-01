@@ -4,6 +4,7 @@ packages:
   - 'scribe'
   - 'scan'
   - 'splice-codegen'
+  - 'admin'
 
 settings:
   inject-workspace-packages: true
