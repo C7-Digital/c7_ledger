@@ -266,7 +266,7 @@ export function exerciseCmd<T extends object, C, R, K = unknown>(
   };
 }
 
-function convertCommand(command: AnyCommand) : JsCommand {
+export function convertCommand(command: AnyCommand) : JsCommand {
   switch (command.type) {
     case 'create':
       return {
@@ -1160,7 +1160,8 @@ export class Ledger {
    */
   async submit(
     commands: AnyCommand[],
-    actAs?: Party[]
+    actAs?: Party[],
+    options?: { commandId?: string },
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));
 
@@ -1168,7 +1169,9 @@ export class Ledger {
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
       commands: jsCommands,
-      commandId: this.generateCommandId(),
+      commandId: options?.commandId
+        ? createLedgerString(options.commandId)
+        : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
       // Ends up being not optional
       userId: createUserIdString(this.tokenUserId),
@@ -1194,6 +1197,50 @@ export class Ledger {
     }
 
     return events;
+  }
+
+  /**
+   * Prepare a transaction via the interactive-submission API.
+   * Returns cost estimation (traffic bytes) and a prepared transaction blob.
+   * Useful for estimating traffic cost before committing.
+   *
+   * @param commands The commands to prepare
+   * @param actAs Defaults to the actAs parties of the user in the token.
+   * @param options.synchronizerId Target synchronizer (optional)
+   * @param options.verboseHashing Include hashing details for debugging (default false)
+   * @returns PrepareSubmission response with costEstimation and preparedTransaction
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async prepareSubmission(
+    commands: AnyCommand[],
+    actAs?: Party[],
+    options?: { synchronizerId?: string; verboseHashing?: boolean },
+  ) {
+    const jsCommands = commands.map((command) => convertCommand(command));
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+
+    return this.client.prepareSubmission({
+      commands: jsCommands,
+      commandId: this.generateCommandId(),
+      userId: createUserIdString(this.tokenUserId),
+      actAs: actAs_.map((party) => party.toString()),
+      synchronizerId: options?.synchronizerId ?? "",
+      verboseHashing: options?.verboseHashing ?? false,
+    });
+  }
+
+  /**
+   * List the synchronizers this participant is currently connected to.
+   * Useful for auto-discovering the synchronizer ID when wiring up traffic
+   * monitoring or other per-synchronizer state.
+   *
+   * @param params Optional filters: `party`, `participantId`, `identityProviderId`.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getConnectedSynchronizers(
+    params?: { party?: string; participantId?: string; identityProviderId?: string },
+  ) {
+    return this.client.getConnectedSynchronizers(params);
   }
 
   private initClient(): WebSocketClient {

@@ -83,6 +83,16 @@ type GetLedgerEndOperation = operations["getV2StateLedger-end"];
 type GetLedgerEndResponse =
   GetLedgerEndOperation["responses"]["200"]["content"]["application/json"];
 
+type PrepareSubmissionOperation = operations["postV2Interactive-submissionPrepare"];
+type PrepareSubmissionRequest =
+  PrepareSubmissionOperation["requestBody"]["content"]["application/json"];
+type PrepareSubmissionResponse =
+  PrepareSubmissionOperation["responses"]["200"]["content"]["application/json"];
+
+type GetConnectedSynchronizersOperation = operations["getV2StateConnected-synchronizers"];
+type GetConnectedSynchronizersResponse =
+  GetConnectedSynchronizersOperation["responses"]["200"]["content"]["application/json"];
+
 export type transaction_shape = "TRANSACTION_SHAPE_ACS_DELTA" | "TRANSACTION_SHAPE_LEDGER_EFFECTS";
 
 export interface TypedHttpClientConfig {
@@ -252,6 +262,45 @@ export class TypedHttpClient {
       "GET",
       undefined,
       "#/components/schemas/GetLedgerEndResponse"
+    );
+  }
+
+  /**
+   * List the synchronizers this participant is connected to.
+   * Filterable by `party` and/or `participantId` per the JSON Ledger API spec.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getConnectedSynchronizers(
+    params?: { party?: string; participantId?: string; identityProviderId?: string },
+  ): Promise<GetConnectedSynchronizersResponse> {
+    const qs = new URLSearchParams();
+    if (params?.party) qs.set("party", params.party);
+    if (params?.participantId) qs.set("participantId", params.participantId);
+    if (params?.identityProviderId) qs.set("identityProviderId", params.identityProviderId);
+    const path = qs.toString()
+      ? (`/v2/state/connected-synchronizers?${qs.toString()}` as keyof paths)
+      : ("/v2/state/connected-synchronizers" as keyof paths);
+    return this.request<GetConnectedSynchronizersResponse>(
+      path,
+      "GET",
+      undefined,
+      "#/components/schemas/GetConnectedSynchronizersResponse",
+    );
+  }
+
+  /**
+   * Prepare a transaction for interactive submission.
+   * Returns cost estimation and a prepared transaction blob.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async prepareSubmission(
+    request: PrepareSubmissionRequest,
+  ): Promise<PrepareSubmissionResponse> {
+    return this.request<PrepareSubmissionResponse>(
+      "/v2/interactive-submission/prepare",
+      "POST",
+      request,
+      "#/components/schemas/JsPrepareSubmissionResponse",
     );
   }
 }
