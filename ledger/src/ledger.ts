@@ -1160,13 +1160,14 @@ export class Ledger {
    *
    * @param commands
    * @param actAs Defaults to the actAs parties of the user in the token.
+   * @param commandId Optional command ID; a fresh one is generated if omitted.
    * @returns Stream of events resulting from the submitted commands.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async submit(
     commands: AnyCommand[],
     actAs?: Party[],
-    options?: { commandId?: string },
+    commandId?: string,
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));
 
@@ -1174,8 +1175,8 @@ export class Ledger {
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
       commands: jsCommands,
-      commandId: options?.commandId
-        ? createLedgerString(options.commandId)
+      commandId: commandId
+        ? createLedgerString(commandId)
         : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
       // Ends up being not optional
@@ -1211,15 +1212,16 @@ export class Ledger {
    *
    * @param commands The commands to prepare
    * @param actAs Defaults to the actAs parties of the user in the token.
-   * @param options.synchronizerId Target synchronizer (optional)
-   * @param options.verboseHashing Include hashing details for debugging (default false)
+   * @param synchronizerId Target synchronizer (optional)
+   * @param verboseHashing Include hashing details for debugging (default false)
    * @returns PrepareSubmission response with costEstimation and preparedTransaction
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async prepareSubmission(
     commands: AnyCommand[],
     actAs?: Party[],
-    options?: { synchronizerId?: string; verboseHashing?: boolean },
+    synchronizerId?: string,
+    verboseHashing?: boolean,
   ) {
     const jsCommands = commands.map((command) => convertCommand(command));
     const actAs_ = actAs || (await this.getTokenActAsParties());
@@ -1229,8 +1231,8 @@ export class Ledger {
       commandId: this.generateCommandId(),
       userId: createUserIdString(this.tokenUserId),
       actAs: actAs_.map((party) => party.toString()),
-      synchronizerId: options?.synchronizerId ?? "",
-      verboseHashing: options?.verboseHashing ?? false,
+      synchronizerId: synchronizerId ?? "",
+      verboseHashing: verboseHashing ?? false,
     });
   }
 
@@ -1239,13 +1241,17 @@ export class Ledger {
    * Useful for auto-discovering the synchronizer ID when wiring up traffic
    * monitoring or other per-synchronizer state.
    *
-   * @param params Optional filters: `party`, `participantId`, `identityProviderId`.
+   * @param party Optional filter — only synchronizers this party is connected on.
+   * @param participantId Optional filter by participant ID.
+   * @param identityProviderId Optional identity-provider ID filter.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async getConnectedSynchronizers(
-    params?: { party?: string; participantId?: string; identityProviderId?: string },
+    party?: Party,
+    participantId?: string,
+    identityProviderId?: string,
   ) {
-    return this.client.getConnectedSynchronizers(params);
+    return this.client.getConnectedSynchronizers(party, participantId, identityProviderId);
   }
 
   private initClient(): WebSocketClient {

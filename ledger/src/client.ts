@@ -8,6 +8,8 @@
  * Use this when you need full control over the API calls or access to
  * endpoints not covered by the higher-level Ledger abstraction.
  */
+import { Party } from "@daml/types";
+
 import { paths, operations } from "./generated/api";
 import { SchemaValidator, ValidationMode } from "./validation";
 import { isCantonError, type JsCantonError } from "./types";
@@ -271,12 +273,14 @@ export class TypedHttpClient {
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async getConnectedSynchronizers(
-    params?: { party?: string; participantId?: string; identityProviderId?: string },
+    party?: Party,
+    participantId?: string,
+    identityProviderId?: string,
   ): Promise<GetConnectedSynchronizersResponse> {
     const qs = new URLSearchParams();
-    if (params?.party) qs.set("party", params.party);
-    if (params?.participantId) qs.set("participantId", params.participantId);
-    if (params?.identityProviderId) qs.set("identityProviderId", params.identityProviderId);
+    if (party) qs.set("party", party);
+    if (participantId) qs.set("participantId", participantId);
+    if (identityProviderId) qs.set("identityProviderId", identityProviderId);
     const path = qs.toString()
       ? (`/v2/state/connected-synchronizers?${qs.toString()}` as keyof paths)
       : ("/v2/state/connected-synchronizers" as keyof paths);
