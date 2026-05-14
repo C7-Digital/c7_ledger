@@ -836,7 +836,12 @@ export class Ledger {
     }
 
     // Create new promise for ledger end request
-    this.ledgerEndPromise = this.client.getLedgerEnd().then(endResponse => endResponse.offset);
+    this.ledgerEndPromise = this.client.getLedgerEnd().then(endResponse => {
+      if (endResponse.offset === undefined) {
+        throw new Error("Ledger end response missing offset");
+      }
+      return endResponse.offset;
+    });
 
     try {
       const offset = await this.ledgerEndPromise;
@@ -920,7 +925,7 @@ export class Ledger {
     return response.reduce(
       (acc: CreateEvent<T, K>[], item: Schemas["JsGetActiveContractsResponse"]) => {
         // Skip non-active contract entries
-        if (!("JsActiveContract" in item.contractEntry)) {
+        if (!item.contractEntry || !("JsActiveContract" in item.contractEntry)) {
           logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
           return acc;
         }
@@ -997,7 +1002,7 @@ export class Ledger {
     return response.reduce(
       (acc: Interface<I>[], item: Schemas["JsGetActiveContractsResponse"]) => {
         // Skip non-active contract entries
-        if (!("JsActiveContract" in item.contractEntry)) {
+        if (!item.contractEntry || !("JsActiveContract" in item.contractEntry)) {
           logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
           return acc;
         }
