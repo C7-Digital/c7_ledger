@@ -29,7 +29,7 @@ function getSpliceVersion(): string {
   if (versionArg) {
     return versionArg.split("=")[1]!;
   }
-  return "0.5.10";
+  return "0.6.1";
 }
 
 async function discoverSpecFile(version?: string): Promise<{ specPath: string; version: string }> {

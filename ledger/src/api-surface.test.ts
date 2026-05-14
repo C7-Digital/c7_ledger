@@ -136,20 +136,20 @@ describe("Branded type verification", () => {
   });
 
   it.each([
-    ["contractId: LedgerString", /contractId:\s*LedgerString/],
-    ["templateId: PackageIdString", /templateId:\s*PackageIdString/],
-    ["userId: UserIdString", /userId:\s*UserIdString/],
-    ["choice: NameString", /choice:\s*NameString/],
-    ["partyIdHint: PartyIdString", /partyIdHint:\s*PartyIdString/],
+    ["contractId: LedgerString", /contractId\??:\s*LedgerString/],
+    ["templateId: PackageIdString", /templateId\??:\s*PackageIdString/],
+    ["userId: UserIdString", /userId\??:\s*UserIdString/],
+    ["choice: NameString", /choice\??:\s*NameString/],
+    ["partyIdHint: PartyIdString", /partyIdHint\??:\s*PartyIdString/],
   ])("api.ts uses branded type for %s", (_label, pattern) => {
     expect(apiContent).toMatch(pattern);
   });
 
   it.each([
-    ["contractId: LedgerString", /contractId:\s*LedgerString/],
-    ["templateId: PackageIdString", /templateId:\s*PackageIdString/],
-    ["userId: UserIdString", /userId:\s*UserIdString/],
-    ["choice: NameString", /choice:\s*NameString/],
+    ["contractId: LedgerString", /contractId\??:\s*LedgerString/],
+    ["templateId: PackageIdString", /templateId\??:\s*PackageIdString/],
+    ["userId: UserIdString", /userId\??:\s*UserIdString/],
+    ["choice: NameString", /choice\??:\s*NameString/],
   ])("async-api.ts uses branded type for %s", (_label, pattern) => {
     expect(asyncApiContent).toMatch(pattern);
   });
@@ -206,11 +206,13 @@ describe("Ledger method contract", () => {
 });
 
 describe("SDK version", () => {
-  it("SDK_VERSION equals 3.4.9", () => {
-    expect(LedgerPackage.SDK_VERSION).toBe("3.4.9");
+  it("SDK_VERSION equals 3.5.1-snapshot.20260423.18760.0", () => {
+    expect(LedgerPackage.SDK_VERSION).toBe("3.5.1-snapshot.20260423.18760.0");
   });
 
-  it("SDK_VERSION matches semver pattern", () => {
-    expect(LedgerPackage.SDK_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  it("SDK_VERSION matches semver-or-snapshot pattern", () => {
+    expect(LedgerPackage.SDK_VERSION).toMatch(
+      /^\d+\.\d+\.\d+(-snapshot\.\d{8}\.\d+\.\d+)?$/
+    );
   });
 });

@@ -1,8 +1,9 @@
 {
   "name": "@c7-digital/monorepo",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "private": true,
   "description": "Monorepo containing @c7-digital/ledger, @c7-digital/react, and @c7-digital/scribe packages",
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",

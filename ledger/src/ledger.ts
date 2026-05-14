@@ -266,7 +266,7 @@ export function exerciseCmd<T extends object, C, R, K = unknown>(
   };
 }
 
-function convertCommand(command: AnyCommand) : JsCommand {
+export function convertCommand(command: AnyCommand) : JsCommand {
   switch (command.type) {
     case 'create':
       return {
@@ -836,7 +836,12 @@ export class Ledger {
     }
 
     // Create new promise for ledger end request
-    this.ledgerEndPromise = this.client.getLedgerEnd().then(endResponse => endResponse.offset);
+    this.ledgerEndPromise = this.client.getLedgerEnd().then(endResponse => {
+      if (endResponse.offset === undefined) {
+        throw new Error("Ledger end response missing offset");
+      }
+      return endResponse.offset;
+    });
 
     try {
       const offset = await this.ledgerEndPromise;
@@ -920,7 +925,7 @@ export class Ledger {
     return response.reduce(
       (acc: CreateEvent<T, K>[], item: Schemas["JsGetActiveContractsResponse"]) => {
         // Skip non-active contract entries
-        if (!("JsActiveContract" in item.contractEntry)) {
+        if (!item.contractEntry || !("JsActiveContract" in item.contractEntry)) {
           logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
           return acc;
         }
@@ -997,7 +1002,7 @@ export class Ledger {
     return response.reduce(
       (acc: Interface<I>[], item: Schemas["JsGetActiveContractsResponse"]) => {
         // Skip non-active contract entries
-        if (!("JsActiveContract" in item.contractEntry)) {
+        if (!item.contractEntry || !("JsActiveContract" in item.contractEntry)) {
           logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
           return acc;
         }
@@ -1155,12 +1160,14 @@ export class Ledger {
    *
    * @param commands
    * @param actAs Defaults to the actAs parties of the user in the token.
+   * @param commandId Optional command ID; a fresh one is generated if omitted.
    * @returns Stream of events resulting from the submitted commands.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async submit(
     commands: AnyCommand[],
-    actAs?: Party[]
+    actAs?: Party[],
+    commandId?: string,
   ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));
 
@@ -1168,7 +1175,9 @@ export class Ledger {
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
       commands: jsCommands,
-      commandId: this.generateCommandId(),
+      commandId: commandId
+        ? createLedgerString(commandId)
+        : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
       // Ends up being not optional
       userId: createUserIdString(this.tokenUserId),
@@ -1194,6 +1203,55 @@ export class Ledger {
     }
 
     return events;
+  }
+
+  /**
+   * Prepare a transaction via the interactive-submission API.
+   * Returns cost estimation (traffic bytes) and a prepared transaction blob.
+   * Useful for estimating traffic cost before committing.
+   *
+   * @param commands The commands to prepare
+   * @param actAs Defaults to the actAs parties of the user in the token.
+   * @param synchronizerId Target synchronizer (optional)
+   * @param verboseHashing Include hashing details for debugging (default false)
+   * @returns PrepareSubmission response with costEstimation and preparedTransaction
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async prepareSubmission(
+    commands: AnyCommand[],
+    actAs?: Party[],
+    synchronizerId?: string,
+    verboseHashing?: boolean,
+  ) {
+    const jsCommands = commands.map((command) => convertCommand(command));
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+
+    return this.client.prepareSubmission({
+      commands: jsCommands,
+      commandId: this.generateCommandId(),
+      userId: createUserIdString(this.tokenUserId),
+      actAs: actAs_.map((party) => party.toString()),
+      synchronizerId: synchronizerId ?? "",
+      verboseHashing: verboseHashing ?? false,
+    });
+  }
+
+  /**
+   * List the synchronizers this participant is currently connected to.
+   * Useful for auto-discovering the synchronizer ID when wiring up traffic
+   * monitoring or other per-synchronizer state.
+   *
+   * @param party Optional filter — only synchronizers this party is connected on.
+   * @param participantId Optional filter by participant ID.
+   * @param identityProviderId Optional identity-provider ID filter.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getConnectedSynchronizers(
+    party?: Party,
+    participantId?: string,
+    identityProviderId?: string,
+  ) {
+    return this.client.getConnectedSynchronizers(party, participantId, identityProviderId);
   }
 
   private initClient(): WebSocketClient {

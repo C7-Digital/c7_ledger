@@ -292,7 +292,7 @@ Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodeg
     "prepare": "scribe --config scribe.yaml"
   },
   "dependencies": {
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.4.11",
     "@mojotech/json-type-validation": "^3.1.0"
   },
   "devDependencies": {
@@ -326,7 +326,7 @@ The Daml SDK version is pinned in two places:
 - `e2e/daml/daml.yaml` — `sdk-version` used to compile the test model
 - `.github/workflows/ci.yml` — version installed on CI runners
 
-Both must match `ledger`'s `@daml/types` dependency (currently **3.4.9**).
+Both must match `ledger`'s `@daml/types` dependency (currently **3.4.11**).
 
 ## Requirements
 

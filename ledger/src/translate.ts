@@ -5,6 +5,9 @@ type Schemas = components["schemas"];
 
 export function userRights(right: Schemas["Right"]): UserRight {
   const kind = right.kind;
+  if (!kind) {
+    throw new Error(`Right has no kind: ${JSON.stringify(right)}`);
+  }
   if ("CanActAs" in kind) {
     return {
       type: "canActAs",
