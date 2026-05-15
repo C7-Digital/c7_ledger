@@ -93,6 +93,10 @@ export type AuthProviderProps = {
  *   - mirroring of refreshed access tokens into credentials,
  *   - sessionStorage persistence so reloads don't kick the user out,
  *   - a logout that talks to Keycloak correctly (sends `id_token_hint`).
+ *
+ * Browser-only. Reads `window.sessionStorage`, `window.location`, and
+ * `window.history` directly; rendering this in an SSR environment will
+ * throw at first render.
  */
 export const AuthProvider: React.FC<AuthProviderProps> = ({
   oidcAuthority,
@@ -104,16 +108,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
   children,
 }) => {
   const oidcConfig: OidcAuthProviderProps = useMemo(
-    () => ({
-      ...createOidcConfig(oidcAuthority, oidcClientId, audience),
-      userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-      post_logout_redirect_uri: window.location.origin,
-      onSigninCallback: () => {
-        // Strip auth params off the URL after the redirect callback.
-        window.history.replaceState({}, document.title, window.location.pathname);
-        onSigninCallback?.();
-      },
-    }),
+    () => {
+      if (typeof window === "undefined") {
+        throw new Error(
+          "AuthProvider requires a browser environment (window/sessionStorage). " +
+            "It cannot be rendered server-side.",
+        );
+      }
+      return {
+        ...createOidcConfig(oidcAuthority, oidcClientId, audience),
+        userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+        post_logout_redirect_uri: window.location.origin,
+        onSigninCallback: () => {
+          // Strip auth params off the URL after the redirect callback.
+          window.history.replaceState({}, document.title, window.location.pathname);
+          onSigninCallback?.();
+        },
+      };
+    },
     [oidcAuthority, oidcClientId, audience, onSigninCallback],
   );
 
@@ -185,7 +197,7 @@ const CredentialsProvider: React.FC<{
       // User's id_token to send `id_token_hint` on the end-session request,
       // and Keycloak rejects post_logout_redirect_uri without it.
       // signoutRedirect() removes the user itself in the post-logout callback.
-      oidc.signoutRedirect();
+      void oidc.signoutRedirect();
     }
   }, [oidc, setCredentials]);
 

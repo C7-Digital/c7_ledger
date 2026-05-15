@@ -10,5 +10,3 @@ export type Credentials = {
   token: string;
   user: User;
 };
-
-export default Credentials;

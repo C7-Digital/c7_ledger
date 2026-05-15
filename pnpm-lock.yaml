@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@daml/types': 3.4.9
-
 importers:
 
   .:
@@ -144,8 +141,8 @@ importers:
   scan:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -218,8 +215,8 @@ importers:
   splice-codegen:
     dependencies:
       '@daml/types':
-        specifier: 3.4.9
-        version: 3.4.9
+        specifier: 3.4.11
+        version: 3.4.11
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -407,6 +404,9 @@ packages:
     peerDependenciesMeta:
       vite:
         optional: true
+
+  '@daml/types@3.4.11':
+    resolution: {integrity: sha512-lGskPPTFVtJpLbHi1XoqG7/mnOU/zJcomQixoszEbtU7D63t7xDAW9yvtaQa7C1Uz70OOBhM1z72Se63GR3NXg==}
 
   '@daml/types@3.4.9':
     resolution: {integrity: sha512-qFnSsZ9nyE2sf+LqA40XxoMdxEirsT6dKLW4of2GqFiQ8ZSiI40A8wU2WCCy+qn0LHtSTLD+XqEYCBPB73UKpA==}
@@ -3067,6 +3067,12 @@ snapshots:
       vite: 5.4.21(@types/node@22.19.15)
     transitivePeerDependencies:
       - rollup
+
+  '@daml/types@3.4.11':
+    dependencies:
+      '@mojotech/json-type-validation': 3.1.0
+      '@types/lodash': 4.17.23
+      lodash: 4.17.23
 
   '@daml/types@3.4.9':
     dependencies:
