@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@daml/types': 3.4.9
+
 importers:
 
   .:
@@ -57,9 +60,6 @@ importers:
 
   ledger:
     dependencies:
-      '@daml/types':
-        specifier: 3.4.11
-        version: 3.4.11
       ajv:
         specifier: ^6.12.6
         version: 6.12.6
@@ -73,6 +73,9 @@ importers:
         specifier: ^6.0.10
         version: 6.1.3
     devDependencies:
+      '@daml/types':
+        specifier: 3.4.9
+        version: 3.4.9
       '@types/ajv':
         specifier: ^0.0.5
         version: 0.0.5
@@ -112,19 +115,28 @@ importers:
 
   react:
     dependencies:
-      '@daml/types':
-        specifier: 3.4.11
-        version: 3.4.11
+      jose:
+        specifier: ^6.0.10
+        version: 6.1.3
     devDependencies:
       '@c7-digital/ledger':
         specifier: file:../ledger
         version: link:../ledger
+      '@daml/types':
+        specifier: 3.4.9
+        version: 3.4.9
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
+      oidc-client-ts:
+        specifier: ^3.2.0
+        version: 3.5.0
       react:
         specifier: ^18.3.1
         version: 18.3.1
+      react-oidc-context:
+        specifier: ^3.3.0
+        version: 3.3.1(oidc-client-ts@3.5.0)(react@18.3.1)
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -132,8 +144,8 @@ importers:
   scan:
     dependencies:
       '@daml/types':
-        specifier: 3.4.11
-        version: 3.4.11
+        specifier: 3.4.9
+        version: 3.4.9
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -206,8 +218,8 @@ importers:
   splice-codegen:
     dependencies:
       '@daml/types':
-        specifier: 3.4.11
-        version: 3.4.11
+        specifier: 3.4.9
+        version: 3.4.9
       '@mojotech/json-type-validation':
         specifier: ^3.1.0
         version: 3.1.0
@@ -396,8 +408,8 @@ packages:
       vite:
         optional: true
 
-  '@daml/types@3.4.11':
-    resolution: {integrity: sha512-lGskPPTFVtJpLbHi1XoqG7/mnOU/zJcomQixoszEbtU7D63t7xDAW9yvtaQa7C1Uz70OOBhM1z72Se63GR3NXg==}
+  '@daml/types@3.4.9':
+    resolution: {integrity: sha512-qFnSsZ9nyE2sf+LqA40XxoMdxEirsT6dKLW4of2GqFiQ8ZSiI40A8wU2WCCy+qn0LHtSTLD+XqEYCBPB73UKpA==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -2060,6 +2072,10 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
+  jwt-decode@4.0.0:
+    resolution: {integrity: sha512-+KJGIyHgkGuIq3IEBNftfhW/LfWhXUIY6OmyVWjliu5KH1y0fw7VQ8YndE2O4qZdMSd9SqbnC8GOcZEy0Om7sA==}
+    engines: {node: '>=18'}
+
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
@@ -2214,6 +2230,10 @@ packages:
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
 
+  oidc-client-ts@3.5.0:
+    resolution: {integrity: sha512-l2q8l9CTCTOlbX+AnK4p3M+4CEpKpyQhle6blQkdFhm0IsBqsxm15bYaSa11G7pWdsYr6epdsRZxJpCyCRbT8A==}
+    engines: {node: '>=18'}
+
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
@@ -2359,6 +2379,13 @@ packages:
 
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
+
+  react-oidc-context@3.3.1:
+    resolution: {integrity: sha512-/Azvm9W4DhhOtSDBE73kFInh1b6zZRRfILKbgmk2syExMF0PCYJOn/dGdOOi2BFX8x0rCeUe45NXHU+/+xDcrQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      oidc-client-ts: ^3.1.0
+      react: '>=16.14.0'
 
   react@18.3.1:
     resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
@@ -3041,7 +3068,7 @@ snapshots:
     transitivePeerDependencies:
       - rollup
 
-  '@daml/types@3.4.11':
+  '@daml/types@3.4.9':
     dependencies:
       '@mojotech/json-type-validation': 3.1.0
       '@types/lodash': 4.17.23
@@ -4901,6 +4928,8 @@ snapshots:
 
   json5@2.2.3: {}
 
+  jwt-decode@4.0.0: {}
+
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
@@ -5020,6 +5049,10 @@ snapshots:
       path-key: 3.1.1
 
   obug@2.1.1: {}
+
+  oidc-client-ts@3.5.0:
+    dependencies:
+      jwt-decode: 4.0.0
 
   once@1.4.0:
     dependencies:
@@ -5169,6 +5202,11 @@ snapshots:
   queue-microtask@1.2.3: {}
 
   react-is@18.3.1: {}
+
+  react-oidc-context@3.3.1(oidc-client-ts@3.5.0)(react@18.3.1):
+    dependencies:
+      oidc-client-ts: 3.5.0
+      react: 18.3.1
 
   react@18.3.1:
     dependencies:
