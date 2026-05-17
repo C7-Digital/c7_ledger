@@ -201,6 +201,7 @@ When using Keycloak/Auth0/any OIDC IdP, wrap the app with `AuthProvider` and rea
 - Calls `Ledger.getTokenUserInfo()` to derive the user's primary party
 - Persists credentials in `sessionStorage` so reloads don't kick the user back to login
 - Mirrors refreshed access tokens into credentials — so the `<DamlLedger token={…}/>` below it keeps a live token without remounting
+- Invalidates cached credentials when OIDC can't recover the session (refresh-token expiry, IdP session ended) or when the token's `exp` passes, so a stale `sessionStorage` blob can't keep the app "signed in" with a dead token
 
 ```tsx
 import { AuthProvider, useAuth } from "@c7-digital/react/auth";
@@ -372,8 +373,11 @@ type Credentials = {
   party: string;
   token: string;
   user: User;  // result of Ledger.getTokenUserInfo()
+  source?: "oidc" | "manual";  // who put them there; defaults to "manual"
 };
 ```
+
+`source` lets the provider tell OIDC-derived credentials apart from directly-injected ones. Only `"oidc"` credentials are dropped when the OIDC layer reports a dead session — `"manual"` (or `undefined`) credentials are preserved for dev/token-login flows. `oidcUserToLedgerAndCredentials` sets `source: "oidc"` for you; `setCredentials({...})` callers can leave it unset.
 
 #### `createOidcConfig(authority, clientId, audience?)`
 

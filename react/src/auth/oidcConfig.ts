@@ -59,6 +59,11 @@ export async function oidcUserToLedgerAndCredentials(
   }
   return {
     ledger,
-    credentials: { party: primaryParty, token, user: ledgerUser },
+    credentials: {
+      party: primaryParty,
+      token,
+      user: ledgerUser,
+      source: "oidc",
+    },
   };
 }

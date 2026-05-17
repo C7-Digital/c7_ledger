@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   useAuth as useOidcAuth,
 } from "react-oidc-context";
 import { User, WebStorageStateStore } from "oidc-client-ts";
+import { decodeJwt } from "jose";
 
 import type { Credentials } from "./Credentials";
 import { createOidcConfig, oidcUserToLedgerAndCredentials } from "./oidcConfig";
@@ -149,20 +151,35 @@ const CredentialsProvider: React.FC<{
   );
   const [isDerivingCredentials, setIsDerivingCredentials] = useState(false);
 
+  // Always-latest ref to credentials. Read inside async timer callbacks
+  // that need to compare against current state without re-subscribing.
+  const credentialsRef = useRef<Credentials | null>(credentials);
+  useEffect(() => {
+    credentialsRef.current = credentials;
+  });
+
   // Single writer: updates React state and mirrors through to sessionStorage.
+  // Normalizes `source` so the OIDC-invalidation effect can safely treat
+  // credentials without an explicit source as manual (the dev/token-login
+  // path predates the field).
   const setCredentials = useCallback(
     (next: Credentials | null): void => {
-      setCredentialsState(next);
-      writeStoredCredentials(storageKey, next);
+      const normalized: Credentials | null = next
+        ? { ...next, source: next.source ?? "manual" }
+        : null;
+      setCredentialsState(normalized);
+      writeStoredCredentials(storageKey, normalized);
     },
     [storageKey],
   );
 
   // Derive credentials whenever OIDC has a user but we don't have credentials
   // yet. Runs on the redirect callback AND on remount/reload when storage is
-  // empty.
+  // empty. Skipped when oidc.error is set — otherwise the invalidation
+  // effect below could clear credentials and we'd immediately re-derive
+  // them from the same broken session, looping.
   useEffect(() => {
-    if (!oidc.isAuthenticated || !oidc.user || credentials) return;
+    if (!oidc.isAuthenticated || !oidc.user || credentials || oidc.error) return;
     let cancelled = false;
     setIsDerivingCredentials(true);
     oidcUserToLedgerAndCredentials(oidc.user, httpBaseUrl)
@@ -179,7 +196,14 @@ const CredentialsProvider: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [oidc.isAuthenticated, oidc.user, credentials, setCredentials, httpBaseUrl]);
+  }, [
+    oidc.isAuthenticated,
+    oidc.user,
+    oidc.error,
+    credentials,
+    setCredentials,
+    httpBaseUrl,
+  ]);
 
   // Mirror refreshed access tokens into credentials so downstream consumers
   // (DamlLedger) see the new token in both state and storage.
@@ -189,6 +213,62 @@ const CredentialsProvider: React.FC<{
       setCredentials({ ...credentials, token: newToken });
     }
   }, [oidc.user?.access_token, credentials, setCredentials]);
+
+  // Drop stale OIDC-derived credentials once the OIDC layer has settled
+  // and reports either an error (silent renew failed) or no authenticated
+  // session. Without this, sessionStorage would keep the app "signed in"
+  // with a token the IdP no longer recognizes. Manually-injected
+  // credentials are intentionally left alone — they aren't tied to an
+  // OIDC session.
+  useEffect(() => {
+    if (!credentials || credentials.source !== "oidc") return;
+    if (oidc.isLoading) return;
+    if (!oidc.isAuthenticated || oidc.error) {
+      setCredentials(null);
+    }
+  }, [
+    oidc.isLoading,
+    oidc.isAuthenticated,
+    oidc.error,
+    credentials,
+    setCredentials,
+  ]);
+
+  // JWT exp watchdog: if the cached access token is already expired, drop
+  // it immediately; otherwise schedule a one-shot cleanup at exp so a
+  // tab that misses silent-renew (e.g. wake-from-sleep, network blip)
+  // doesn't keep using a dead token. Tokens without a parseable `exp`
+  // are left as-is — opaque tokens are assumed to be managed elsewhere.
+  useEffect(() => {
+    if (!credentials) return;
+    let exp: number | undefined;
+    try {
+      exp = decodeJwt(credentials.token).exp;
+    } catch {
+      setCredentials(null);
+      return;
+    }
+    if (typeof exp !== "number") return;
+    const msUntilExpiry = exp * 1000 - Date.now();
+    if (msUntilExpiry <= 0) {
+      setCredentials(null);
+      return;
+    }
+    // Compare-and-swap on fire: only invalidate if the token we scheduled
+    // against is still the one in play. In normal React flow the effect
+    // cleanup clears `timer` before it can fire when credentials rotate,
+    // but the cleanup itself runs *after* React commits the new state —
+    // if the timer's macrotask was already queued by the runtime before
+    // commit (long synchronous work, GC pause), it'd otherwise nuke a
+    // freshly-rotated token. CAS makes that a no-op.
+    const scheduledToken = credentials.token;
+    const timer = setTimeout(() => {
+      if (credentialsRef.current?.token === scheduledToken) {
+        setCredentials(null);
+      }
+    }, msUntilExpiry);
+    return () => clearTimeout(timer);
+  }, [credentials, setCredentials]);
 
   const logout = useCallback(() => {
     setCredentials(null); // also clears sessionStorage
