@@ -18,12 +18,12 @@ export function createOidcConfig(
   authority: string,
   clientId: string,
   audience?: string,
+  redirectUri?: string,
 ) {
   const config = {
     authority,
     client_id: clientId,
-    redirect_uri:
-      typeof window !== "undefined" ? window.location.origin + "/" : "/",
+    redirect_uri: redirectUri ?? (typeof window !== "undefined" ? window.location.origin + "/" : "/"),
     scope: "openid daml_ledger_api",
   };
   return audience
