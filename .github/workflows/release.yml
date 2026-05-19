@@ -154,7 +154,9 @@ jobs:
       - name: Publish tarballs
         run: |
           set -euo pipefail
-          for tarball in packed/*.tgz; do
+          # Prefix with ./ — bare "packed/foo.tgz" matches npm's <owner>/<repo>
+          # GitHub shorthand and npm will try to clone it instead of publishing it.
+          for tarball in ./packed/*.tgz; do
             echo "::group::Publishing $tarball"
             npm publish "$tarball" --access public --provenance
             echo "::endgroup::"
