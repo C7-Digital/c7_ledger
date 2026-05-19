@@ -46,6 +46,7 @@ import {
   CreateCommand,
   CreateAndExerciseCommand,
   CreateEvent,
+  DisclosedContract,
   ExerciseCommand,
   Event,
   Interface,
@@ -92,6 +93,7 @@ function isCreateEvent(
 
 function createEventWithoutDecoder(
   cantonEvent: CreatedEvent,
+  synchronizerId?: string,
 ): CreateEvent<object, unknown> {
    return {
     type: "create",
@@ -102,13 +104,15 @@ function createEventWithoutDecoder(
     observers: (cantonEvent.observers || []) as Party[],
     key: undefined,
     createdEventBlob: cantonEvent.createdEventBlob || "",
+    synchronizerId,
   };
 }
 
 // This term is so overloaded, lets add a '_' to help differentiate
 function createEvent_<T extends object, K = unknown>(
   cantonEvent: CreatedEvent,
-  versionedRegistry?: VersionedRegistry
+  versionedRegistry?: VersionedRegistry,
+  synchronizerId?: string,
 ): CreateEvent<T, K> {
   let t: Template<T, K>;
   let packageVersion: string | undefined;
@@ -144,6 +148,7 @@ function createEvent_<T extends object, K = unknown>(
     key: cantonEvent.contractKey
       ? (t.keyDecoder?.runWithException(cantonEvent.contractKey) as K)
       : undefined,
+    synchronizerId,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     packageVersion,
   };
@@ -438,8 +443,8 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     );
   }
 
-  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
-    this.eventEmitter.emit("create", createEvent_(createdEvent, this.versionedRegistry));
+  protected handleCreatedEvent(createdEvent: CreatedEvent, synchronizerId?: string): void {
+    this.eventEmitter.emit("create", createEvent_(createdEvent, this.versionedRegistry, synchronizerId));
   }
 
   protected handleArchivedEvent(archivedEvent: ArchivedEvent): void {
@@ -469,7 +474,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
         );
         this.offset = activeContract.createdEvent.offset;
       }
-      this.handleCreatedEvent(activeContract.createdEvent)
+      this.handleCreatedEvent(activeContract.createdEvent, activeContract.synchronizerId)
     }
   }
 
@@ -537,7 +542,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
       for (const event of jsTransaction.events || []) {
         if ("CreatedEvent" in event) {
           this.offset = Math.max(this.offset, event.CreatedEvent.offset);
-          this.handleCreatedEvent(event.CreatedEvent)
+          this.handleCreatedEvent(event.CreatedEvent, jsTransaction.synchronizerId)
         } else if ("ArchivedEvent" in event) {
           this.offset = Math.max(this.offset, event.ArchivedEvent.offset);
           this.handleArchivedEvent(event.ArchivedEvent)
@@ -749,8 +754,8 @@ class InterfaceStreamImpl<I extends object> extends LedgerStream<object, unknown
     this.eventEmitter.off(type, listener);
   }
 
-  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
-    this.eventEmitter.emit("create", createEventWithoutDecoder(createdEvent));
+  protected handleCreatedEvent(createdEvent: CreatedEvent, synchronizerId?: string): void {
+    this.eventEmitter.emit("create", createEventWithoutDecoder(createdEvent, synchronizerId));
     for (const interfaceView of createdEvent.interfaceViews ?? []) {
       this.eventEmitter.emit("interfaceView", interfaceEvent_(createdEvent, interfaceView, this.versionedRegistry!));
     }
@@ -934,6 +939,7 @@ export class Ledger {
           JsActiveContract: Schemas["JsActiveContract"];
         };
         const createEvent = contractEntry.JsActiveContract.createdEvent;
+        const synchronizerId = contractEntry.JsActiveContract.synchronizerId;
 
         // Verify we got the correct template
         if (!matchesPartiallyQualified(createEvent.templateId, template.templateId)) {
@@ -943,7 +949,7 @@ export class Ledger {
           return acc; // Skip contracts with mismatched template IDs
         }
 
-        acc.push(createEvent_(createEvent, this.options.versionedRegistry));
+        acc.push(createEvent_(createEvent, this.options.versionedRegistry, synchronizerId));
         return acc;
       },
       []
@@ -1068,7 +1074,7 @@ export class Ledger {
           );
           if (matchesTemplate) {
             logger.debug(`Event matches template, adding to results`);
-            acc.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+            acc.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
           } else {
             logger.debug(
               `Event templateId: ${event.CreatedEvent.templateId}, ` +
@@ -1140,7 +1146,7 @@ export class Ledger {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
         // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
       } else if ("ArchivedEvent" in event) {
         // Convert to our Event format
         events.push(archiveEvent_(event.ArchivedEvent));
@@ -1169,9 +1175,45 @@ export class Ledger {
     actAs?: Party[],
     commandId?: string,
   ): Promise<Event<object, unknown>[]> {
-    const jsCommands = commands.map((command) => convertCommand(command));
+    return this.submitInternal(commands, actAs, commandId, undefined);
+  }
 
-    // Extract actAs from meta or use a default
+  /**
+   * Submit a batch of commands together with a set of disclosed contracts.
+   *
+   * Disclosed contracts are how Splice/Canton-token-standard workflows let
+   * a submitter reference contracts they don't otherwise have visibility
+   * into (e.g., the DSO's `AmuletRules`, an `OpenMiningRound`, a featured
+   * app right). The off-ledger registry — typically the Splice scan node —
+   * is what supplies the `createdEventBlob` for each disclosure.
+   *
+   * Identical event-decoding behaviour to {@link submit}; the only
+   * difference is the additional `disclosedContracts` field on the
+   * underlying `JsCommands`.
+   *
+   * @param commands           Commands to submit atomically.
+   * @param disclosedContracts Disclosed contracts to attach to the request.
+   * @param actAs              Defaults to the actAs parties of the user in the token.
+   * @param commandId          Optional command id; a fresh one is generated if omitted.
+   * @returns                  Stream of events resulting from the submitted commands.
+   * @throws {LedgerApiError}  on non-OK HTTP response from the ledger.
+   */
+  async submitWithDisclosures(
+    commands: AnyCommand[],
+    disclosedContracts: DisclosedContract[],
+    actAs?: Party[],
+    commandId?: string,
+  ): Promise<Event<object, unknown>[]> {
+    return this.submitInternal(commands, actAs, commandId, disclosedContracts);
+  }
+
+  private async submitInternal(
+    commands: AnyCommand[],
+    actAs: Party[] | undefined,
+    commandId: string | undefined,
+    disclosedContracts: DisclosedContract[] | undefined,
+  ): Promise<Event<object, unknown>[]> {
+    const jsCommands = commands.map((command) => convertCommand(command));
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
       commands: jsCommands,
@@ -1179,8 +1221,8 @@ export class Ledger {
         ? createLedgerString(commandId)
         : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
-      // Ends up being not optional
       userId: createUserIdString(this.tokenUserId),
+      ...(disclosedContracts !== undefined && { disclosedContracts }),
     };
 
     const request = { commands: requestCommands };
@@ -1191,10 +1233,8 @@ export class Ledger {
     for (const event of transaction.events || []) {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
-        // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
       } else if ("ArchivedEvent" in event) {
-        // Convert to our Event format
         events.push(archiveEvent_(event.ArchivedEvent));
       } else {
         // Since we are using ACS_DELTA we can ignore ExercisedEvent
