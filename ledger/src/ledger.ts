@@ -1206,6 +1206,63 @@ export class Ledger {
   }
 
   /**
+   * Submit a batch of commands together with a set of disclosed contracts.
+   *
+   * Disclosed contracts are how Splice/Canton-token-standard workflows let
+   * a submitter reference contracts they don't otherwise have visibility
+   * into (e.g., the DSO's `AmuletRules`, an `OpenMiningRound`, a featured
+   * app right). The off-ledger registry — typically the Splice scan node —
+   * is what supplies the `createdEventBlob` for each disclosure.
+   *
+   * Identical event-decoding behaviour to {@link submit}; the only
+   * difference is the additional `disclosedContracts` field on the
+   * underlying `JsCommands`.
+   *
+   * @param commands           Commands to submit atomically.
+   * @param disclosedContracts Disclosed contracts to attach to the request.
+   * @param actAs              Defaults to the actAs parties of the user in the token.
+   * @param commandId          Optional command id; a fresh one is generated if omitted.
+   * @returns                  Stream of events resulting from the submitted commands.
+   * @throws {LedgerApiError}  on non-OK HTTP response from the ledger.
+   */
+  async submitWithDisclosures(
+    commands: AnyCommand[],
+    disclosedContracts: components["schemas"]["DisclosedContract"][],
+    actAs?: Party[],
+    commandId?: string,
+  ): Promise<Event<object, unknown>[]> {
+    const jsCommands = commands.map((command) => convertCommand(command));
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+    const requestCommands: JsCommands = {
+      commands: jsCommands,
+      commandId: commandId
+        ? createLedgerString(commandId)
+        : this.generateCommandId(),
+      actAs: actAs_.map(party => createPartyIdString(party)),
+      userId: createUserIdString(this.tokenUserId),
+      disclosedContracts,
+    };
+
+    const request = { commands: requestCommands };
+    const response = await this.client.submitAndWaitForTransaction(request);
+    const transaction = response.transaction;
+    const events: Event<object>[] = [];
+
+    for (const event of transaction.events || []) {
+      logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
+      if ("CreatedEvent" in event) {
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+      } else if ("ArchivedEvent" in event) {
+        events.push(archiveEvent_(event.ArchivedEvent));
+      } else {
+        throw new Error(`Unexpected event type: ${JSON.stringify(event)}`);
+      }
+    }
+
+    return events;
+  }
+
+  /**
    * Prepare a transaction via the interactive-submission API.
    * Returns cost estimation (traffic bytes) and a prepared transaction blob.
    * Useful for estimating traffic cost before committing.
