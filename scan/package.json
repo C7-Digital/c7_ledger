@@ -11,6 +11,11 @@
     "scripts"
   ],
   "description": "TypeScript client for the Canton Network Scan API",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/C7-Digital/c7_ledger.git",
+    "directory": "scan"
+  },
   "exports": {
     ".": {
       "import": "./lib/src/index.js",

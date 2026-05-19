@@ -4,6 +4,11 @@
   "version": "0.0.4",
   "type": "module",
   "description": "Transform DAML codegen output into unified TypeScript packages for use with @c7-digital/ledger",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/C7-Digital/c7_ledger.git",
+    "directory": "scribe"
+  },
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
   "files": [

@@ -13,6 +13,11 @@
     "BUILD.md"
   ],
   "description": "OpenAPI v2 compatible Daml ledger client",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/C7-Digital/c7_ledger.git",
+    "directory": "ledger"
+  },
   "exports": {
     ".": {
       "import": "./lib/src/index.js",
