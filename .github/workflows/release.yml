@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Packages to publish: "all" or comma-separated subset (ledger,react,scribe,scan)'
+        required: true
+        default: 'all'
+        type: string
+      dry_run:
+        description: 'Dry run (build + test + pack, skip publish)'
+        required: false
+        default: false
+        type: boolean
+
+# Serialize releases so two manual runs cannot interleave and publish a
+# half-set of packages.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    # Hard guard: releases are only valid from main. Any other ref is rejected
+    # before any code runs.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.pkgs.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dpm (Daml Package Manager)
+        run: |
+          curl -sSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> $GITHUB_PATH
+
+      - name: Install Daml SDK via dpm
+        run: $HOME/.dpm/bin/dpm install 3.4.11
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Scribe E2E Tests
+        run: pnpm --filter @c7-digital/scribe test:e2e
+
+      - name: Resolve & validate package list
+        id: pkgs
+        env:
+          PACKAGES_INPUT: ${{ inputs.packages }}
+        run: |
+          set -euo pipefail
+          input=$(printf '%s' "$PACKAGES_INPUT" | xargs)
+          if [ -z "$input" ]; then
+            echo "::error::packages input must not be empty"
+            exit 1
+          fi
+          if [ "$input" = "all" ]; then
+            list="ledger react scribe scan"
+          else
+            list=$(printf '%s' "$input" | tr ',' ' ' | xargs)
+          fi
+          if [ -z "$list" ]; then
+            echo "::error::Resolved package list is empty"
+            exit 1
+          fi
+          for p in $list; do
+            case "$p" in
+              ledger|react|scribe|scan) ;;
+              *) echo "::error::Invalid package: $p (allowed: ledger, react, scribe, scan)"; exit 1 ;;
+            esac
+          done
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Will publish: $list"
+
+      - name: Verify versions are not already published
+        env:
+          PACKAGE_LIST: ${{ steps.pkgs.outputs.list }}
+        run: |
+          set -euo pipefail
+          for pkg in $PACKAGE_LIST; do
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "::error::$name@$version is already published on npm. Bump the version before releasing."
+              exit 1
+            fi
+            echo "✓ $name@$version is publishable"
+          done
+
+      - name: Pack tarballs
+        env:
+          PACKAGE_LIST: ${{ steps.pkgs.outputs.list }}
+        run: |
+          set -euo pipefail
+          mkdir -p packed
+          for pkg in $PACKAGE_LIST; do
+            (cd "$pkg" && npm pack --pack-destination "$GITHUB_WORKSPACE/packed")
+          done
+          ls -la packed/
+
+      - name: Upload tarballs
+        if: ${{ !inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarballs
+          path: packed/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build-test
+    if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    # OIDC trusted publishing needs id-token: write. Scoped to this job only
+    # so build/test (and any third-party code they invoke) never see it.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      # Pinned for reproducibility. Bump deliberately when validating a newer
+      # trusted-publishing-compatible npm.
+      - name: Pin npm
+        run: npm install -g npm@11.5.1
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: release-tarballs
+          path: packed/
+
+      - name: Publish tarballs
+        run: |
+          set -euo pipefail
+          for tarball in packed/*.tgz; do
+            echo "::group::Publishing $tarball"
+            npm publish "$tarball" --access public --provenance
+            echo "::endgroup::"
+          done
