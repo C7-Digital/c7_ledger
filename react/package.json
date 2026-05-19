@@ -1,9 +1,21 @@
 {
   "name": "@c7-digital/react",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "React hooks for Daml ledger integration using Canton JSON API v2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js",
+      "default": "./dist/auth/index.js"
+    }
+  },
   "files": [
     "dist/**/*"
   ],
@@ -12,7 +24,9 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepare": "tsc",
-    "prepublishOnly": "pnpm run clean && pnpm run build"
+    "prepublishOnly": "pnpm run clean && pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "daml",
@@ -26,16 +40,36 @@
   "license": "Apache-2.0",
   "peerDependencies": {
     "@c7-digital/ledger": ">=0.0.17 <0.1.0",
-    "react": "^18.0.0"
+    "@daml/types": ">=3.4.0 <4.0.0",
+    "react": "^18.0.0",
+    "react-oidc-context": "^3.3.0",
+    "oidc-client-ts": "^3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "react-oidc-context": {
+      "optional": true
+    },
+    "oidc-client-ts": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@daml/types": "3.4.11"
+    "jose": "^6.0.10"
   },
   "devDependencies": {
     "@c7-digital/ledger": "file:../ledger",
+    "@daml/types": "3.4.9",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "jsdom": "^25.0.1",
     "react": "^18.3.1",
-    "typescript": "^5.8.3"
+    "react-dom": "^18.3.1",
+    "react-oidc-context": "^3.3.0",
+    "oidc-client-ts": "^3.2.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18.0.0",

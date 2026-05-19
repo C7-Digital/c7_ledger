@@ -37,3 +37,7 @@ export type {
 
 // Re-export commonly used types from the ledger package
 export type { Ledger, User, CreateEvent, ArchiveEvent, Event, Interface } from "@c7-digital/ledger/lite";
+
+// NOTE: OIDC auth (AuthProvider/useAuth/createOidcConfig/Credentials) lives
+// at the `@c7-digital/react/auth` subpath so consumers that only use the
+// ledger hooks don't have to install react-oidc-context + oidc-client-ts.
