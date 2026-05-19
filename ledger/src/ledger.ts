@@ -1175,40 +1175,7 @@ export class Ledger {
     actAs?: Party[],
     commandId?: string,
   ): Promise<Event<object, unknown>[]> {
-    const jsCommands = commands.map((command) => convertCommand(command));
-
-    // Extract actAs from meta or use a default
-    const actAs_ = actAs || (await this.getTokenActAsParties());
-    const requestCommands: JsCommands = {
-      commands: jsCommands,
-      commandId: commandId
-        ? createLedgerString(commandId)
-        : this.generateCommandId(),
-      actAs: actAs_.map(party => createPartyIdString(party)),
-      // Ends up being not optional
-      userId: createUserIdString(this.tokenUserId),
-    };
-
-    const request = { commands: requestCommands };
-    const response = await this.client.submitAndWaitForTransaction(request);
-    const transaction = response.transaction;
-    const events: Event<object>[] = [];
-
-    for (const event of transaction.events || []) {
-      logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
-      if ("CreatedEvent" in event) {
-        // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
-      } else if ("ArchivedEvent" in event) {
-        // Convert to our Event format
-        events.push(archiveEvent_(event.ArchivedEvent));
-      } else {
-        // Since we are using ACS_DELTA we can ignore ExercisedEvent
-        throw new Error(`Unexpected event type: ${JSON.stringify(event)}`);
-      }
-    }
-
-    return events;
+    return this.submitInternal(commands, actAs, commandId, undefined);
   }
 
   /**
@@ -1237,6 +1204,15 @@ export class Ledger {
     actAs?: Party[],
     commandId?: string,
   ): Promise<Event<object, unknown>[]> {
+    return this.submitInternal(commands, actAs, commandId, disclosedContracts);
+  }
+
+  private async submitInternal(
+    commands: AnyCommand[],
+    actAs: Party[] | undefined,
+    commandId: string | undefined,
+    disclosedContracts: DisclosedContract[] | undefined,
+  ): Promise<Event<object, unknown>[]> {
     const jsCommands = commands.map((command) => convertCommand(command));
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
@@ -1246,7 +1222,7 @@ export class Ledger {
         : this.generateCommandId(),
       actAs: actAs_.map(party => createPartyIdString(party)),
       userId: createUserIdString(this.tokenUserId),
-      disclosedContracts,
+      ...(disclosedContracts !== undefined && { disclosedContracts }),
     };
 
     const request = { commands: requestCommands };
@@ -1261,6 +1237,7 @@ export class Ledger {
       } else if ("ArchivedEvent" in event) {
         events.push(archiveEvent_(event.ArchivedEvent));
       } else {
+        // Since we are using ACS_DELTA we can ignore ExercisedEvent
         throw new Error(`Unexpected event type: ${JSON.stringify(event)}`);
       }
     }
