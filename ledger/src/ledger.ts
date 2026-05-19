@@ -46,6 +46,7 @@ import {
   CreateCommand,
   CreateAndExerciseCommand,
   CreateEvent,
+  DisclosedContract,
   ExerciseCommand,
   Event,
   Interface,
@@ -92,6 +93,7 @@ function isCreateEvent(
 
 function createEventWithoutDecoder(
   cantonEvent: CreatedEvent,
+  synchronizerId?: string,
 ): CreateEvent<object, unknown> {
    return {
     type: "create",
@@ -102,13 +104,15 @@ function createEventWithoutDecoder(
     observers: (cantonEvent.observers || []) as Party[],
     key: undefined,
     createdEventBlob: cantonEvent.createdEventBlob || "",
+    synchronizerId,
   };
 }
 
 // This term is so overloaded, lets add a '_' to help differentiate
 function createEvent_<T extends object, K = unknown>(
   cantonEvent: CreatedEvent,
-  versionedRegistry?: VersionedRegistry
+  versionedRegistry?: VersionedRegistry,
+  synchronizerId?: string,
 ): CreateEvent<T, K> {
   let t: Template<T, K>;
   let packageVersion: string | undefined;
@@ -144,6 +148,7 @@ function createEvent_<T extends object, K = unknown>(
     key: cantonEvent.contractKey
       ? (t.keyDecoder?.runWithException(cantonEvent.contractKey) as K)
       : undefined,
+    synchronizerId,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     packageVersion,
   };
@@ -438,8 +443,8 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     );
   }
 
-  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
-    this.eventEmitter.emit("create", createEvent_(createdEvent, this.versionedRegistry));
+  protected handleCreatedEvent(createdEvent: CreatedEvent, synchronizerId?: string): void {
+    this.eventEmitter.emit("create", createEvent_(createdEvent, this.versionedRegistry, synchronizerId));
   }
 
   protected handleArchivedEvent(archivedEvent: ArchivedEvent): void {
@@ -469,7 +474,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
         );
         this.offset = activeContract.createdEvent.offset;
       }
-      this.handleCreatedEvent(activeContract.createdEvent)
+      this.handleCreatedEvent(activeContract.createdEvent, activeContract.synchronizerId)
     }
   }
 
@@ -537,7 +542,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
       for (const event of jsTransaction.events || []) {
         if ("CreatedEvent" in event) {
           this.offset = Math.max(this.offset, event.CreatedEvent.offset);
-          this.handleCreatedEvent(event.CreatedEvent)
+          this.handleCreatedEvent(event.CreatedEvent, jsTransaction.synchronizerId)
         } else if ("ArchivedEvent" in event) {
           this.offset = Math.max(this.offset, event.ArchivedEvent.offset);
           this.handleArchivedEvent(event.ArchivedEvent)
@@ -749,8 +754,8 @@ class InterfaceStreamImpl<I extends object> extends LedgerStream<object, unknown
     this.eventEmitter.off(type, listener);
   }
 
-  protected handleCreatedEvent(createdEvent: CreatedEvent): void {
-    this.eventEmitter.emit("create", createEventWithoutDecoder(createdEvent));
+  protected handleCreatedEvent(createdEvent: CreatedEvent, synchronizerId?: string): void {
+    this.eventEmitter.emit("create", createEventWithoutDecoder(createdEvent, synchronizerId));
     for (const interfaceView of createdEvent.interfaceViews ?? []) {
       this.eventEmitter.emit("interfaceView", interfaceEvent_(createdEvent, interfaceView, this.versionedRegistry!));
     }
@@ -934,6 +939,7 @@ export class Ledger {
           JsActiveContract: Schemas["JsActiveContract"];
         };
         const createEvent = contractEntry.JsActiveContract.createdEvent;
+        const synchronizerId = contractEntry.JsActiveContract.synchronizerId;
 
         // Verify we got the correct template
         if (!matchesPartiallyQualified(createEvent.templateId, template.templateId)) {
@@ -943,7 +949,7 @@ export class Ledger {
           return acc; // Skip contracts with mismatched template IDs
         }
 
-        acc.push(createEvent_(createEvent, this.options.versionedRegistry));
+        acc.push(createEvent_(createEvent, this.options.versionedRegistry, synchronizerId));
         return acc;
       },
       []
@@ -1068,7 +1074,7 @@ export class Ledger {
           );
           if (matchesTemplate) {
             logger.debug(`Event matches template, adding to results`);
-            acc.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+            acc.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
           } else {
             logger.debug(
               `Event templateId: ${event.CreatedEvent.templateId}, ` +
@@ -1140,7 +1146,7 @@ export class Ledger {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
         // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
       } else if ("ArchivedEvent" in event) {
         // Convert to our Event format
         events.push(archiveEvent_(event.ArchivedEvent));
@@ -1192,7 +1198,7 @@ export class Ledger {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
         // Convert to our Event format
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
       } else if ("ArchivedEvent" in event) {
         // Convert to our Event format
         events.push(archiveEvent_(event.ArchivedEvent));
@@ -1227,7 +1233,7 @@ export class Ledger {
    */
   async submitWithDisclosures(
     commands: AnyCommand[],
-    disclosedContracts: components["schemas"]["DisclosedContract"][],
+    disclosedContracts: DisclosedContract[],
     actAs?: Party[],
     commandId?: string,
   ): Promise<Event<object, unknown>[]> {
@@ -1251,7 +1257,7 @@ export class Ledger {
     for (const event of transaction.events || []) {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
-        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry));
+        events.push(createEvent_(event.CreatedEvent, this.options.versionedRegistry, transaction.synchronizerId));
       } else if ("ArchivedEvent" in event) {
         events.push(archiveEvent_(event.ArchivedEvent));
       } else {

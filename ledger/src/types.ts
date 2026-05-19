@@ -6,9 +6,37 @@ import {
   PackageIdString,
 } from "./valueTypes";
 import type { components } from "./generated/async-api";
+import type { components as apiComponents } from "./generated/api";
 
 // Error type from the Canton AsyncAPI schema
 export type JsCantonError = components["schemas"]["JsCantonError"];
+
+/**
+ * An on-ledger contract attached to a command submission so the
+ * Daml engine can resolve a contract lookup the submitter doesn't
+ * have visibility into otherwise.
+ *
+ * Two ways to come by one:
+ *
+ *   1. **From your own ACS.** `useStreamQuery` / `useQuery` /
+ *      `streamQuery` already return a {@link CreateEvent} with
+ *      `createdEventBlob` populated (when `includeCreatedEventBlob`
+ *      is true — the default for the React hooks). Pass the event
+ *      to {@link toDisclosedContract} together with the synchronizer
+ *      id the contract is hosted on.
+ *
+ *   2. **From a registry/scan node.** For DSO-owned contracts you
+ *      don't see — `AmuletRules`, an `OpenMiningRound`, a
+ *      `LockedAmulet` whose holders you're not party to — the Splice
+ *      scan node mirrors the ACS and exposes the same fields
+ *      (`contract_id`, `created_event_blob`, `template_id`, plus a
+ *      `domain_id` at the wrapper). Pack them by hand:
+ *
+ *      ```ts
+ *      { contractId, createdEventBlob, templateId, synchronizerId }
+ *      ```
+ */
+export type DisclosedContract = apiComponents["schemas"]["DisclosedContract"];
 
 // Type guard to check if a response is a JsCantonError
 export function isCantonError(response: unknown): response is JsCantonError {
@@ -36,7 +64,50 @@ export type CreateEvent<T extends object, K = unknown> = {
    * Only present if using VersionedRegistry
    */
   packageVersion?: string;
+  /**
+   * Synchronizer (Canton domain) the contract is hosted on. Carried
+   * through from `JsActiveContract.synchronizerId` (ACS path) or
+   * `JsTransaction.synchronizerId` (transaction stream / `submit`
+   * response). Always populated by streamed contracts from this
+   * library; pass to {@link toDisclosedContract} so callers don't
+   * have to thread the synchronizer separately.
+   */
+  synchronizerId?: string;
 };
+
+/**
+ * Convert a {@link CreateEvent} streamed from the ledger into a
+ * {@link DisclosedContract} suitable for `submitWithDisclosures`.
+ *
+ * The CreateEvent must have been streamed with
+ * `includeCreatedEventBlob: true` — the default for `useStreamQuery` /
+ * `useQuery` — otherwise the disclosed blob is empty and the JSON
+ * API will reject the submission. Both `createdEventBlob` and
+ * `synchronizerId` are populated by every decode path in this
+ * library; if either is missing, the event was sourced from
+ * somewhere unusual — construct a `DisclosedContract` directly
+ * instead of going through this helper.
+ */
+export function toDisclosedContract<T extends object, K = unknown>(
+  event: CreateEvent<T, K>,
+): DisclosedContract {
+  if (!event.createdEventBlob) {
+    throw new Error(
+      `toDisclosedContract: contract ${event.contractId} has no createdEventBlob — re-stream with includeCreatedEventBlob: true`,
+    );
+  }
+  if (!event.synchronizerId) {
+    throw new Error(
+      `toDisclosedContract: contract ${event.contractId} has no synchronizerId — was it decoded by this library?`,
+    );
+  }
+  return {
+    contractId: event.contractId as unknown as string,
+    createdEventBlob: event.createdEventBlob,
+    templateId: event.templateId,
+    synchronizerId: event.synchronizerId,
+  };
+}
 
 /** 
  * An ArchiveEvent of a given template
