@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Packages to publish: "all" or comma-separated subset (ledger,react,scribe,scan)'
+        required: true
+        default: 'all'
+        type: string
+      dry_run:
+        description: 'Dry run (build + test, skip publish)'
+        required: false
+        default: false
+        type: boolean
+
+# OIDC trusted publishing needs id-token: write so npm can exchange the
+# GitHub-issued token for a short-lived publish credential.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing requires npm >= 11.5.1. Node 22 ships with npm 10.x.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install dpm (Daml Package Manager)
+        run: |
+          curl -sSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> $GITHUB_PATH
+
+      - name: Install Daml SDK via dpm
+        run: $HOME/.dpm/bin/dpm install 3.4.11
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Scribe E2E Tests
+        run: pnpm --filter @c7-digital/scribe test:e2e
+
+      - name: Resolve package list
+        id: pkgs
+        run: |
+          input="${{ inputs.packages }}"
+          if [ "$input" = "all" ]; then
+            list="ledger react scribe scan"
+          else
+            list=$(echo "$input" | tr ',' ' ' | xargs)
+          fi
+          for p in $list; do
+            case "$p" in
+              ledger|react|scribe|scan) ;;
+              *) echo "::error::Invalid package: $p (allowed: ledger, react, scribe, scan)"; exit 1 ;;
+            esac
+          done
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Will publish: $list"
+
+      - name: Publish packages
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for pkg in ${{ steps.pkgs.outputs.list }}; do
+            version=$(node -p "require('./$pkg/package.json').version")
+            name=$(node -p "require('./$pkg/package.json').name")
+            echo "::group::Publishing $name@$version"
+            (cd "$pkg" && npm publish --access public --provenance)
+            echo "::endgroup::"
+          done
+
+      - name: Dry run notice
+        if: ${{ inputs.dry_run }}
+        run: echo "Dry run complete — skipped publish step."
