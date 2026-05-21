@@ -1518,13 +1518,19 @@ export class Ledger {
   }
 
   /**
-   * Create a ledger user that can act as the given parties (the `primaryParty`
-   * defaults to the first). The user-side counterpart to `allocateParty` — lets
-   * callers provision a party + a user to authenticate as it without hand-rolling
-   * a `/v2/users` request.
+   * Create a ledger user with `CanActAs` rights for `actAs` and `CanReadAs`
+   * rights for `readAs` (the `primaryParty` defaults to the first actAs party).
+   * The user-side counterpart to `allocateParty` — lets callers provision a
+   * party + a user to authenticate as it without hand-rolling a `/v2/users`
+   * request.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
-  async createUser(userId: string, actAs: Party[], primaryParty?: Party): Promise<void> {
+  async createUser(
+    userId: string,
+    actAs: Party[],
+    readAs: Party[] = [],
+    primaryParty?: Party
+  ): Promise<void> {
     const request: Schemas["CreateUserRequest"] = {
       user: {
         id: userId,
@@ -1532,9 +1538,14 @@ export class Ledger {
         isDeactivated: false,
         identityProviderId: "",
       },
-      rights: actAs.map((party) => ({
-        kind: { CanActAs: { value: { party: createPartyIdString(party) } } },
-      })),
+      rights: [
+        ...actAs.map((party) => ({
+          kind: { CanActAs: { value: { party: createPartyIdString(party) } } },
+        })),
+        ...readAs.map((party) => ({
+          kind: { CanReadAs: { value: { party: createPartyIdString(party) } } },
+        })),
+      ],
     };
     await this.client.createUser(request);
   }
