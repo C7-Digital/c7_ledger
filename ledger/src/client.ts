@@ -81,6 +81,11 @@ type AllocatePartyRequest = AllocatePartyOperation["requestBody"]["content"]["ap
 type AllocatePartyResponse =
   AllocatePartyOperation["responses"]["200"]["content"]["application/json"];
 
+type CreateUserOperation = operations["postV2Users"];
+type CreateUserRequest = CreateUserOperation["requestBody"]["content"]["application/json"];
+type CreateUserResponse =
+  CreateUserOperation["responses"]["200"]["content"]["application/json"];
+
 type GetLedgerEndOperation = operations["getV2StateLedger-end"];
 type GetLedgerEndResponse =
   GetLedgerEndOperation["responses"]["200"]["content"]["application/json"];
@@ -254,6 +259,16 @@ export class TypedHttpClient {
       "POST",
       request,
       "#/components/schemas/AllocatePartyResponse"
+    );
+  }
+
+  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
+  async createUser(request: CreateUserRequest): Promise<CreateUserResponse> {
+    return this.request<CreateUserResponse>(
+      "/v2/users",
+      "POST",
+      request,
+      "#/components/schemas/CreateUserResponse"
     );
   }
 
