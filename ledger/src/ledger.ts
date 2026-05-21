@@ -1531,13 +1531,22 @@ export class Ledger {
     readAs: Party[] = [],
     primaryParty?: Party
   ): Promise<void> {
+    // Normalise/validate identifiers via the branded constructors, like the
+    // rest of this file. `primaryParty` and `identityProviderId` are optional
+    // in the API: omit `primaryParty` when there's none to set (a read-only
+    // user with no primary party is valid — sending "" would be invalid), and
+    // omit `identityProviderId` so the ledger uses its default identity provider.
+    const primary = primaryParty ?? actAs[0];
+    const user: Schemas["CreateUserRequest"]["user"] = {
+      id: createUserIdString(userId),
+      isDeactivated: false,
+    };
+    if (primary) {
+      user.primaryParty = createPartyIdString(primary);
+    }
+
     const request: Schemas["CreateUserRequest"] = {
-      user: {
-        id: userId,
-        primaryParty: primaryParty ?? actAs[0] ?? "",
-        isDeactivated: false,
-        identityProviderId: "",
-      },
+      user,
       rights: [
         ...actAs.map((party) => ({
           kind: { CanActAs: { value: { party: createPartyIdString(party) } } },
