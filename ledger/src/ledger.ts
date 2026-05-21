@@ -892,8 +892,8 @@ export class Ledger {
    * @returns
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
-  async query<T extends object, K = unknown>(
-    template: Template<T, K, PackageIdString>,
+  async query<T extends object, K = unknown, TTemplateId extends string = string>(
+    template: Template<T, K, TTemplateId>,
     atOffset: LedgerOffset = "end",
     includeCreatedEventBlob: boolean = false,
     verbose: boolean = false,
@@ -907,8 +907,10 @@ export class Ledger {
       acc[key as string] = {
         cumulative: [
           {
-            identifierFilter: 
-              templateFilter(template.templateId, includeCreatedEventBlob),
+            identifierFilter:
+              // `query` is generic over the template-id (like `create`) so codegen
+              // companions pass without a cast; the brand is internalised here.
+              templateFilter(template.templateId as unknown as PackageIdString, includeCreatedEventBlob),
           },
         ],
       };
@@ -966,8 +968,8 @@ export class Ledger {
    * @returns
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
-  async queryInterface<I extends object, K = unknown>(
-    interface_: InterfaceCompanion<I, K, PackageIdString>,
+  async queryInterface<I extends object, K = unknown, TTemplateId extends string = string>(
+    interface_: InterfaceCompanion<I, K, TTemplateId>,
     atOffset: LedgerOffset = "end",
     includeCreatedEventBlob: boolean = false,
     verbose: boolean = false,
@@ -985,8 +987,8 @@ export class Ledger {
       acc[key as string] = {
         cumulative: [
           {
-            identifierFilter: 
-              interfaceFilter(interface_.templateId, includeCreatedEventBlob),
+            identifierFilter:
+              interfaceFilter(interface_.templateId as unknown as PackageIdString, includeCreatedEventBlob),
           },
         ],
       };
@@ -1513,5 +1515,47 @@ export class Ledger {
         isLocal: response.partyDetails?.isLocal || false,
       },
     };
+  }
+
+  /**
+   * Create a ledger user with `CanActAs` rights for `actAs` and `CanReadAs`
+   * rights for `readAs` (the `primaryParty` defaults to the first actAs party).
+   * The user-side counterpart to `allocateParty` — lets callers provision a
+   * party + a user to authenticate as it without hand-rolling a `/v2/users`
+   * request.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async createUser(
+    userId: string,
+    actAs: Party[],
+    readAs: Party[] = [],
+    primaryParty?: Party
+  ): Promise<void> {
+    // Normalise/validate identifiers via the branded constructors, like the
+    // rest of this file. `primaryParty` and `identityProviderId` are optional
+    // in the API: omit `primaryParty` when there's none to set (a read-only
+    // user with no primary party is valid — sending "" would be invalid), and
+    // omit `identityProviderId` so the ledger uses its default identity provider.
+    const primary = primaryParty ?? actAs[0];
+    const user: Schemas["CreateUserRequest"]["user"] = {
+      id: createUserIdString(userId),
+      isDeactivated: false,
+    };
+    if (primary) {
+      user.primaryParty = createPartyIdString(primary);
+    }
+
+    const request: Schemas["CreateUserRequest"] = {
+      user,
+      rights: [
+        ...actAs.map((party) => ({
+          kind: { CanActAs: { value: { party: createPartyIdString(party) } } },
+        })),
+        ...readAs.map((party) => ({
+          kind: { CanReadAs: { value: { party: createPartyIdString(party) } } },
+        })),
+      ],
+    };
+    await this.client.createUser(request);
   }
 }
