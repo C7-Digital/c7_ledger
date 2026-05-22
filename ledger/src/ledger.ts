@@ -1492,11 +1492,16 @@ export class Ledger {
   /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async allocateParty(request: AllocatePartyRequest): Promise<AllocatePartyResponse> {
     const allocateRequest: Schemas["AllocatePartyRequest"] = {
-      partyIdHint: request.partyIdHint
-        ? createPartyIdString(request.partyIdHint)
-        : createPartyIdString(""),
-      identityProviderId: "default", // Use default identity provider
-      synchronizerId: "", 
+      ...(request.partyIdHint && {
+        partyIdHint: createPartyIdString(request.partyIdHint),
+      }),
+      // The default identity provider is the EMPTY string, not the literal
+      // "default" — Canton rejects "default" with INVALID_ARGUMENT
+      // ("identity_provider_id Id(default) has not been found"). Matches how
+      // `createUser` (below) explicitly sets `identityProviderId: ""` to use
+      // the default IDP.
+      identityProviderId: "",
+      synchronizerId: "",
       userId: "", // Do not assign to user.
       ...(request.displayName && {
         localMetadata: {
@@ -1532,14 +1537,16 @@ export class Ledger {
     primaryParty?: Party
   ): Promise<void> {
     // Normalise/validate identifiers via the branded constructors, like the
-    // rest of this file. `primaryParty` and `identityProviderId` are optional
-    // in the API: omit `primaryParty` when there's none to set (a read-only
-    // user with no primary party is valid — sending "" would be invalid), and
-    // omit `identityProviderId` so the ledger uses its default identity provider.
+    // rest of this file. `primaryParty` is optional — omit it when there's none
+    // to set (a read-only user with no primary party is valid; sending "" would
+    // be invalid). `identityProviderId` is REQUIRED by the JSON Ledger API
+    // (omitting it returns 400 "Missing required field at 'identityProviderId'");
+    // "" selects the default identity provider.
     const primary = primaryParty ?? actAs[0];
     const user: Schemas["CreateUserRequest"]["user"] = {
       id: createUserIdString(userId),
       isDeactivated: false,
+      identityProviderId: "",
     };
     if (primary) {
       user.primaryParty = createPartyIdString(primary);
