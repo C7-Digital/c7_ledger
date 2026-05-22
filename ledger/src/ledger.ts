@@ -1492,9 +1492,9 @@ export class Ledger {
   /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
   async allocateParty(request: AllocatePartyRequest): Promise<AllocatePartyResponse> {
     const allocateRequest: Schemas["AllocatePartyRequest"] = {
-      partyIdHint: request.partyIdHint
-        ? createPartyIdString(request.partyIdHint)
-        : createPartyIdString(""),
+      ...(request.partyIdHint && {
+        partyIdHint: createPartyIdString(request.partyIdHint),
+      }),
       // The default identity provider is the EMPTY string, not the literal
       // "default" — Canton rejects "default" with INVALID_ARGUMENT
       // ("identity_provider_id Id(default) has not been found"). Matches how
