@@ -357,7 +357,6 @@ function useStreamBase<
 
   // Use refs to prevent garbage collection
   const streamRef = useRef<TStream | null>(null);
-  const isCleanedUpRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const reload = useCallback(async (): Promise<void> => {
@@ -383,16 +382,32 @@ function useStreamBase<
 
   // Setup real streaming connection
   useEffect(() => {
-    isCleanedUpRef.current = false;
+    // Per-effect-run cancellation flag. A shared ref does NOT work here: on a
+    // StrictMode double-mount (or any unmount→remount / dependency change) the
+    // next effect run resets a shared flag back to false before this run's
+    // awaited createStream() resolves, so this run could not tell it had been
+    // cleaned up and would leak. A closure variable is unique to THIS run.
+    let cancelled = false;
 
     const setupStream = async (): Promise<void> => {
-      if (isCleanedUpRef.current) return;
+      if (cancelled) return;
 
       try {
         setLoading(true);
         setError(null);
 
-        streamRef.current = await createStream();
+        const stream = await createStream();
+
+        // If THIS effect run was cleaned up while we were awaiting
+        // createStream() (its `streamRef.current` was still null, so cleanup
+        // closed nothing), close the freshly created stream now and bail —
+        // otherwise it leaks as a live, auto-reconnecting WebSocket that nothing
+        // holds a reference to, accumulating toward the browser's socket cap.
+        if (cancelled) {
+          stream.close();
+          return;
+        }
+        streamRef.current = stream;
 
         // Handle common create events
         streamRef.current.on("create", (event: CreateEvent<TContract, TKey>) => {
@@ -430,7 +445,7 @@ function useStreamBase<
 
         streamRef.current.start();
       } catch (err) {
-        if (!isCleanedUpRef.current) {
+        if (!cancelled) {
           const errorMessage = err instanceof Error ? `${err.name}: ${err.message}` : "Failed to setup stream";
           setError(errorMessage);
           setConnected(false);
@@ -446,7 +461,7 @@ function useStreamBase<
     void setupStream();
 
     return (): void => {
-      isCleanedUpRef.current = true;
+      cancelled = true;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -578,7 +593,6 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
 
   // Use refs to prevent garbage collection
   const streamRef = useRef<TStream | null>(null);
-  const isCleanedUpRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const reload = useCallback(async (): Promise<void> => {
@@ -604,16 +618,27 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
 
   // Setup real streaming connection
   useEffect(() => {
-    isCleanedUpRef.current = false;
+    // Per-effect-run cancellation flag — see useStreamBase for why a shared ref
+    // is unsafe across StrictMode double-mounts / remounts / dependency changes.
+    let cancelled = false;
 
     const setupStream = async (): Promise<void> => {
-      if (isCleanedUpRef.current) return;
+      if (cancelled) return;
 
       try {
         setLoading(true);
         setError(null);
 
-        streamRef.current = await createStream();
+        const stream = await createStream();
+
+        // If THIS effect run was cleaned up while awaiting createStream(), close
+        // the freshly created stream and bail — otherwise it leaks as a live,
+        // auto-reconnecting WebSocket nothing holds a reference to.
+        if (cancelled) {
+          stream.close();
+          return;
+        }
+        streamRef.current = stream;
 
         // Handle connection state
         streamRef.current.onState((state: StreamState) => {
@@ -638,7 +663,7 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
         setLoading(false);
 
         // Retry on setup failure (unless cleaned up)
-        if (!isCleanedUpRef.current) {
+        if (!cancelled) {
           reconnectTimeoutRef.current = setTimeout(() => {
             void setupStream();
           }, 5000);
@@ -649,7 +674,7 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
     void setupStream();
 
     return (): void => {
-      isCleanedUpRef.current = true;
+      cancelled = true;
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
