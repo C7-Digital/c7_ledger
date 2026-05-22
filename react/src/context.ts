@@ -392,7 +392,20 @@ function useStreamBase<
         setLoading(true);
         setError(null);
 
-        streamRef.current = await createStream();
+        const stream = await createStream();
+
+        // The effect's cleanup may have already run while we were awaiting
+        // createStream() (StrictMode double-mount, a fast unmount/remount, or a
+        // dependency change). In that case `streamRef.current` was still null
+        // when cleanup ran, so cleanup closed nothing — close the freshly
+        // created stream now and bail. Otherwise it leaks as a live,
+        // auto-reconnecting WebSocket that nothing holds a reference to, which
+        // accumulates toward the browser's per-host socket cap.
+        if (isCleanedUpRef.current) {
+          stream.close();
+          return;
+        }
+        streamRef.current = stream;
 
         // Handle common create events
         streamRef.current.on("create", (event: CreateEvent<TContract, TKey>) => {
@@ -613,7 +626,20 @@ function useMultiStreamBase<TStream extends { onState: Function; onError: Functi
         setLoading(true);
         setError(null);
 
-        streamRef.current = await createStream();
+        const stream = await createStream();
+
+        // The effect's cleanup may have already run while we were awaiting
+        // createStream() (StrictMode double-mount, a fast unmount/remount, or a
+        // dependency change). In that case `streamRef.current` was still null
+        // when cleanup ran, so cleanup closed nothing — close the freshly
+        // created stream now and bail. Otherwise it leaks as a live,
+        // auto-reconnecting WebSocket that nothing holds a reference to, which
+        // accumulates toward the browser's per-host socket cap.
+        if (isCleanedUpRef.current) {
+          stream.close();
+          return;
+        }
+        streamRef.current = stream;
 
         // Handle connection state
         streamRef.current.onState((state: StreamState) => {
