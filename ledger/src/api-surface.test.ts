@@ -14,6 +14,7 @@ import type { channels } from "./generated/async-api";
 import { Ledger } from "./ledger";
 import { TypedHttpClient } from "./client";
 import { WebSocketClient } from "./websocket";
+import { createPartyIdString } from "./valueTypes";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,6 +204,43 @@ describe("Ledger method contract", () => {
     "streamUpdates",
   ])("WebSocketClient.prototype has method %s", (method) => {
     expect(typeof WebSocketClient.prototype[method as keyof WebSocketClient]).toBe("function");
+  });
+});
+
+describe("allocateParty request shape", () => {
+  it("targets the default identity provider via empty id, not the literal 'default'", async () => {
+    const ledger = new Ledger({ token: TEST_TOKEN, httpBaseUrl: "http://localhost:7575" });
+    let captured: any;
+    // Spy on the underlying HTTP client so we assert the request body without a
+    // live ledger. Canton's default IDP id is "" — sending "default" fails with
+    // INVALID_ARGUMENT ("identity_provider_id Id(default) has not been found").
+    (ledger as any).client.allocateParty = async (req: any) => {
+      captured = req;
+      return { partyDetails: { party: "alice::1220abcd", isLocal: true } };
+    };
+
+    await ledger.allocateParty({ partyIdHint: createPartyIdString("alice") });
+
+    expect(captured.identityProviderId).toBe("");
+    expect(captured.identityProviderId).not.toBe("default");
+  });
+});
+
+describe("createUser request shape", () => {
+  it("sets user.identityProviderId to '' (required by the JSON Ledger API)", async () => {
+    const ledger = new Ledger({ token: TEST_TOKEN, httpBaseUrl: "http://localhost:7575" });
+    let captured: any;
+    // The JSON Ledger API rejects createUser without `user.identityProviderId`
+    // (HTTP 400 "Missing required field at 'identityProviderId'"); "" selects the
+    // default identity provider.
+    (ledger as any).client.createUser = async (req: any) => {
+      captured = req;
+      return { user: req.user };
+    };
+
+    await ledger.createUser("bdd-user", ["alice::1220abcd"] as any);
+
+    expect(captured.user.identityProviderId).toBe("");
   });
 });
 
