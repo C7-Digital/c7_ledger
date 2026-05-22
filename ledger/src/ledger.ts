@@ -1498,7 +1498,8 @@ export class Ledger {
       // The default identity provider is the EMPTY string, not the literal
       // "default" — Canton rejects "default" with INVALID_ARGUMENT
       // ("identity_provider_id Id(default) has not been found"). Matches how
-      // `createUser` (below) omits the field to fall back to the default IDP.
+      // `createUser` (below) explicitly sets `identityProviderId: ""` to use
+      // the default IDP.
       identityProviderId: "",
       synchronizerId: "",
       userId: "", // Do not assign to user.
