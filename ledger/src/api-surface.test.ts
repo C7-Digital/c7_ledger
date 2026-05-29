@@ -43,6 +43,9 @@ describe("Public API surface", () => {
     "createAndExerciseCmd",
     "exerciseCmd",
     "setLogger",
+    "toDisclosedContract",
+    "disclosedContractFromWire",
+    "createContractId",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });

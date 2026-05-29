@@ -4,6 +4,7 @@ import {
   PartyIdString,
   UserIdString,
   PackageIdString,
+  isValidLedgerString,
 } from "./valueTypes";
 import type { components } from "./generated/async-api";
 import type { components as apiComponents } from "./generated/api";
@@ -107,6 +108,74 @@ export function toDisclosedContract<T extends object, K = unknown>(
     templateId: event.templateId,
     synchronizerId: event.synchronizerId,
   };
+}
+
+/**
+ * The plain-string shape a disclosure arrives in when it travels over an
+ * untyped channel — your own backend API, or a registry/scan node response.
+ * All fields are wire strings (no brands), mirroring `created_event_blob` /
+ * `contract_id` / `template_id` / `domain_id` from those sources.
+ */
+export type WireDisclosedContract = {
+  contractId: string;
+  createdEventBlob: string;
+  /** Full template id in package-id-reference format (`pkgId:Module:Entity`). */
+  templateId: string;
+  synchronizerId: string;
+};
+
+/**
+ * Build a {@link DisclosedContract} from raw wire strings. This is the
+ * constructor counterpart to {@link toDisclosedContract}: use that when you
+ * hold a library-decoded {@link CreateEvent}, and use this when a disclosure
+ * round-tripped through an untyped channel (your tRPC/REST API, a scan node)
+ * and all you have are plain strings — see case 2 in the {@link
+ * DisclosedContract} docs. Branding happens here, once, instead of at every
+ * call site.
+ *
+ * `createdEventBlob` and `synchronizerId` must be non-empty (the JSON API
+ * rejects a submission otherwise).
+ */
+export function disclosedContractFromWire(
+  wire: WireDisclosedContract,
+): DisclosedContract {
+  if (!wire.createdEventBlob) {
+    throw new Error(
+      "disclosedContractFromWire: createdEventBlob is empty — the JSON API will reject the submission",
+    );
+  }
+  if (!wire.synchronizerId) {
+    throw new Error(
+      "disclosedContractFromWire: synchronizerId is empty — the contract's hosting synchronizer is required",
+    );
+  }
+  return {
+    contractId: wire.contractId,
+    createdEventBlob: wire.createdEventBlob,
+    // A template id carries colons (`pkgId:Module:Entity`), so it is not a
+    // *bare* PackageIdString — brand it directly without the package-id
+    // validator. (The schema types this field as PackageIdString and treats it
+    // as validation-only; the createdEventBlob is authoritative.)
+    templateId: wire.templateId as PackageIdString,
+    synchronizerId: wire.synchronizerId,
+  };
+}
+
+/**
+ * Brand a raw contract-id string into a typed {@link ContractId}. Reach for
+ * this at a wire boundary where the id arrives as a plain string (relayed
+ * through your own backend, a registry response) but a typed API — e.g. an
+ * {@link ExerciseCommand}'s `contractId: ContractId<T>` — needs the brand.
+ * The value is validated against the `LedgerString` format that contract ids
+ * use; the unchecked brand cast lives here, once, not at every call site.
+ */
+export function createContractId<T extends object>(value: string): ContractId<T> {
+  if (!isValidLedgerString(value)) {
+    throw new Error(
+      `Invalid ContractId: "${value}". Must match the LedgerString format [A-Za-z0-9#:\\-_/ ]+ (≤ 255 chars)`,
+    );
+  }
+  return value as unknown as ContractId<T>;
 }
 
 /** 
