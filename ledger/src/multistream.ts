@@ -12,7 +12,7 @@ import {
   StreamState,
   TemplateMapping,
 } from "./types";
-import { PackageIdString } from "./valueTypes";
+import { IdentifierString } from "./valueTypes";
 import { logger } from "./logger";
 import { PackageIdEmitterMap, } from "./PackageIdEmitterMap";
 
@@ -43,7 +43,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
   /**
    * Get or create an EventEmitter for a specific package ID
    */
-  protected getEmitterForPackageId(packageId: PackageIdString): EventEmitter {
+  protected getEmitterForPackageId(packageId: IdentifierString): EventEmitter {
     if (!this.packageIdEmitters.has(packageId)) {
       this.packageIdEmitters.set(packageId, new EventEmitter());
     }
@@ -95,7 +95,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"] & object, TM[TID]["keyType"]>) => void
   ): void {
-    const emitter = this.getEmitterForPackageId(templateId as PackageIdString);
+    const emitter = this.getEmitterForPackageId(templateId as IdentifierString);
     emitter.on("create", (event: CreateEvent<object, unknown>) => {
       // Type assertion: we know the event has the correct type based on templateId
       listener(event as CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>);
@@ -106,7 +106,7 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
-    const emitter = this.getEmitterForPackageId(templateId as PackageIdString);
+    const emitter = this.getEmitterForPackageId(templateId as IdentifierString);
     emitter.on("archive", (event: ArchiveEvent<object>) => {
       // Type assertion: we know the event has the correct type based on templateId
       listener(event as ArchiveEvent<TM[TID]["contractType"]>);
@@ -125,8 +125,8 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: CreateEvent<TM[TID]["contractType"], TM[TID]["keyType"]>) => void
   ): void {
-    if (this.packageIdEmitters.has(templateId as PackageIdString)) {
-      this.packageIdEmitters.get(templateId as PackageIdString)!.off("create", listener);
+    if (this.packageIdEmitters.has(templateId as IdentifierString)) {
+      this.packageIdEmitters.get(templateId as IdentifierString)!.off("create", listener);
     }
   }
 
@@ -134,8 +134,8 @@ export class MultiStreamAdapter<TM extends TemplateMapping> implements MultiStre
     templateId: TID,
     listener: (event: ArchiveEvent<TM[TID]["contractType"]>) => void
   ): void {
-    if (this.packageIdEmitters.has(templateId as PackageIdString)) {
-      this.packageIdEmitters.get(templateId as PackageIdString)!.off("archive", listener);
+    if (this.packageIdEmitters.has(templateId as IdentifierString)) {
+      this.packageIdEmitters.get(templateId as IdentifierString)!.off("archive", listener);
     }
   }
 
@@ -211,7 +211,7 @@ export class InterfaceMultiStreamImpl<IM extends InterfaceMapping> extends Multi
     interfaceId: IID,
     listener: (event: Interface<IM[IID]["contractType"]>) => void
   ): void {
-    const emitter = this.getEmitterForPackageId(interfaceId as PackageIdString);
+    const emitter = this.getEmitterForPackageId(interfaceId as IdentifierString);
     emitter.on("interfaceView", (event: Interface<object>) => {
       listener(event as Interface<IM[IID]["contractType"]>);
     });
@@ -221,8 +221,8 @@ export class InterfaceMultiStreamImpl<IM extends InterfaceMapping> extends Multi
     interfaceId: IID,
     listener: (event: Interface<IM[IID]["contractType"]>) => void
   ): void {
-    if (this.packageIdEmitters.has(interfaceId as PackageIdString)) {
-      this.packageIdEmitters.get(interfaceId as PackageIdString)!.off("interfaceView", listener);
+    if (this.packageIdEmitters.has(interfaceId as IdentifierString)) {
+      this.packageIdEmitters.get(interfaceId as IdentifierString)!.off("interfaceView", listener);
     }
   }
 }

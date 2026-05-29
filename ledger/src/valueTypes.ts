@@ -8,6 +8,11 @@ type Brand<T, TBrand> = T & { [__brand]: TBrand };
 // String format types from value.proto
 export type NameString = Brand<string, "NameString">;
 export type PackageIdString = Brand<string, "PackageIdString">;
+// A fully-qualified Daml template/interface identifier in flat string form —
+// "<package-ref>:<Module>:<Entity>", where package-ref is a package-id or a
+// "#<package-name>" reference. Distinct from PackageIdString, which is only the
+// bare package-id segment; a value.proto Identifier is the structured form.
+export type IdentifierString = Brand<string, "IdentifierString">;
 export type PartyIdString = Brand<string, "PartyIdString">;
 export type LedgerString = Brand<string, "LedgerString">;
 export type UserIdString = Brand<string, "UserIdString">;
@@ -15,6 +20,10 @@ export type UserIdString = Brand<string, "UserIdString">;
 // Validation patterns from value.proto
 const NAME_STRING_PATTERN = /^[A-Za-z\$_][A-Za-z0-9\$_]*$/;
 const PACKAGE_ID_STRING_PATTERN = /^[A-Za-z0-9\-_ ]+$/;
+// "<package-ref>:<Module>:<Entity>" — three colon-separated segments, optional
+// leading "#" for the package-name reference form.
+const IDENTIFIER_STRING_PATTERN =
+  /^#?[A-Za-z0-9._-]+:[A-Za-z0-9._-]+:[A-Za-z0-9._-]+$/;
 const PARTY_ID_STRING_PATTERN = /^[A-Za-z0-9:\-_ ]+$/;
 const LEDGER_STRING_PATTERN = /^[A-Za-z0-9#:\-_/ ]+$/;
 const USER_ID_STRING_PATTERN = /^[a-zA-Z0-9@^$.!\`\-#+'~_|:]+$/;
@@ -22,6 +31,7 @@ const USER_ID_STRING_PATTERN = /^[a-zA-Z0-9@^$.!\`\-#+'~_|:]+$/;
 // Length constraints from value.proto
 const MAX_NAME_STRING_LENGTH = 1000;
 const MAX_PACKAGE_ID_STRING_LENGTH = 64;
+const MAX_IDENTIFIER_STRING_LENGTH = 1000;
 const MAX_PARTY_ID_STRING_LENGTH = 255;
 const MAX_LEDGER_STRING_LENGTH = 255;
 const MAX_USER_ID_STRING_LENGTH = 128;
@@ -33,6 +43,10 @@ export function isValidNameString(value: string): value is NameString {
 
 export function isValidPackageIdString(value: string): value is PackageIdString {
   return value.length <= MAX_PACKAGE_ID_STRING_LENGTH && PACKAGE_ID_STRING_PATTERN.test(value);
+}
+
+export function isValidIdentifierString(value: string): value is IdentifierString {
+  return value.length <= MAX_IDENTIFIER_STRING_LENGTH && IDENTIFIER_STRING_PATTERN.test(value);
 }
 
 export function isValidPartyIdString(value: string): value is PartyIdString {
@@ -66,6 +80,15 @@ export function createPackageIdString(value: string): PackageIdString {
   return value as PackageIdString;
 }
 
+export function createIdentifierString(value: string): IdentifierString {
+  if (!isValidIdentifierString(value)) {
+    throw new Error(
+      `Invalid IdentifierString: "${value}". Expected a Daml template/interface id "<package>:<module>:<entity>" and ≤ ${MAX_IDENTIFIER_STRING_LENGTH} chars`
+    );
+  }
+  return value as IdentifierString;
+}
+
 export function createPartyIdString(value: string): PartyIdString {
   if (!isValidPartyIdString(value)) {
     throw new Error(
@@ -97,6 +120,7 @@ export function createUserIdString(value: string): UserIdString {
 export const ValueStringValidators = {
   isValidNameString,
   isValidPackageIdString,
+  isValidIdentifierString,
   isValidPartyIdString,
   isValidLedgerString,
   isValidUserIdString,
@@ -105,6 +129,7 @@ export const ValueStringValidators = {
 export const ValueStringCreators = {
   createNameString,
   createPackageIdString,
+  createIdentifierString,
   createPartyIdString,
   createLedgerString,
   createUserIdString,

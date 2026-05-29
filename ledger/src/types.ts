@@ -3,8 +3,9 @@ import { ContractId, Party, Choice, Template, InterfaceCompanion } from "@daml/t
 import {
   PartyIdString,
   UserIdString,
-  PackageIdString,
+  IdentifierString,
   isValidLedgerString,
+  createIdentifierString,
 } from "./valueTypes";
 import type { components } from "./generated/async-api";
 import type { components as apiComponents } from "./generated/api";
@@ -53,7 +54,7 @@ export function isCantonError(response: unknown): response is JsCantonError {
 // Generic CreateEvent
 export type CreateEvent<T extends object, K = unknown> = {
   type: "create";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<T>;
   payload: T;
   signatories: Party[];
@@ -152,11 +153,11 @@ export function disclosedContractFromWire(
   return {
     contractId: wire.contractId,
     createdEventBlob: wire.createdEventBlob,
-    // A template id carries colons (`pkgId:Module:Entity`), so it is not a
-    // *bare* PackageIdString — brand it directly without the package-id
-    // validator. (The schema types this field as PackageIdString and treats it
-    // as validation-only; the createdEventBlob is authoritative.)
-    templateId: wire.templateId as PackageIdString,
+    // A template id is a qualified identifier ("pkgId:Module:Entity"), so it
+    // carries the IdentifierString brand — validated and branded here, not a
+    // bare PackageIdString cast (the bare-package-id validator would reject the
+    // colons).
+    templateId: createIdentifierString(wire.templateId),
     synchronizerId: wire.synchronizerId,
   };
 }
@@ -183,7 +184,7 @@ export function createContractId<T extends object>(value: string): ContractId<T>
  */
 export type ArchiveEvent<T extends object> = {
   type: "archive";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<T>;
   witnessParties: Party[];
   offset: number;
@@ -199,7 +200,7 @@ export type Event<T extends object, K = unknown> = CreateEvent<T, K> | ArchiveEv
  */
 export type Interface<I extends object> = {
   type: "interface";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<I>;
   payload?: any;
   signatories: Party[];
@@ -207,7 +208,7 @@ export type Interface<I extends object> = {
   key?: any;
   createdEventBlob: string;
   interfaceView: I;
-  interfaceId: PackageIdString;
+  interfaceId: IdentifierString;
   /**
    * Package version string (e.g., "0.0.6")
    * Only present if using VersionedRegistry
