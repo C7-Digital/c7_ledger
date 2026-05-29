@@ -72,7 +72,7 @@ import {
   createNameString,
   createUserIdString,
   LedgerString,
-  PackageIdString,
+  IdentifierString,
   NameString,
 } from "./valueTypes";
 
@@ -206,7 +206,7 @@ function interfaceEvent_<I extends object, K = unknown>(
 
 type IdentifierFilter = components["schemas"]["IdentifierFilter"];
 function templateFilter(
-  templateId: PackageIdString,
+  templateId: IdentifierString,
   includeCreatedEventBlob: boolean
 ): IdentifierFilter {
   return {
@@ -220,7 +220,7 @@ function templateFilter(
 }
 
 function interfaceFilter(
-  interfaceId: PackageIdString,
+  interfaceId: IdentifierString,
   includeCreatedEventBlob: boolean
 ): IdentifierFilter {
   return {
@@ -359,8 +359,8 @@ export interface LedgerOptions {
 }
 
 type FilterSpec 
-  = { type: "template", templateId: PackageIdString } 
-  | { type: "interface", interfaceId: PackageIdString };
+  = { type: "template", templateId: IdentifierString } 
+  | { type: "interface", interfaceId: IdentifierString };
 
 /**
  * Internal stream implementation for active contracts
@@ -910,7 +910,7 @@ export class Ledger {
             identifierFilter:
               // `query` is generic over the template-id (like `create`) so codegen
               // companions pass without a cast; the brand is internalised here.
-              templateFilter(template.templateId as unknown as PackageIdString, includeCreatedEventBlob),
+              templateFilter(template.templateId as unknown as IdentifierString, includeCreatedEventBlob),
           },
         ],
       };
@@ -988,7 +988,7 @@ export class Ledger {
         cumulative: [
           {
             identifierFilter:
-              interfaceFilter(interface_.templateId as unknown as PackageIdString, includeCreatedEventBlob),
+              interfaceFilter(interface_.templateId as unknown as IdentifierString, includeCreatedEventBlob),
           },
         ],
       };
@@ -1331,7 +1331,7 @@ export class Ledger {
     const activeAtOffset = await this.resolveOffset(offset);
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     return new LedgerStream<T, K>(
-      [ { type: "template", templateId: template.templateId as PackageIdString }],
+      [ { type: "template", templateId: template.templateId as IdentifierString }],
       parties_,
       this.initClient(),
       activeAtOffset,
@@ -1355,7 +1355,7 @@ export class Ledger {
       throw new Error("VersionedRegistry expected for streamQueryInterface provided");
     }
     return new InterfaceStreamImpl<I>(
-      [ { type: "interface", interfaceId: interface_.templateId as PackageIdString }],
+      [ { type: "interface", interfaceId: interface_.templateId as IdentifierString }],
       parties_,
       this.initClient(),
       activeAtOffset,
@@ -1415,7 +1415,7 @@ export class Ledger {
     const activeAtOffset = await this.resolveOffset(offset);
 
     const filters : FilterSpec[] = Object.keys(tm).map((id) => {
-      return {type: 'template', templateId: id as PackageIdString };
+      return {type: 'template', templateId: id as IdentifierString };
     });
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     const stream = new LedgerStream<object, unknown>(
@@ -1442,7 +1442,7 @@ export class Ledger {
     const activeAtOffset = await this.resolveOffset(offset);
 
     const filters : FilterSpec[] = Object.keys(im).map((id) => {
-      return {type: 'interface', interfaceId: id as PackageIdString };
+      return {type: 'interface', interfaceId: id as IdentifierString };
     });
     const parties_ = readAsParties || (await this.getTokenActAsParties());
     

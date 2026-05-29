@@ -43,6 +43,9 @@ describe("Public API surface", () => {
     "createAndExerciseCmd",
     "exerciseCmd",
     "setLogger",
+    "toDisclosedContract",
+    "disclosedContractFromWire",
+    "createContractId",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });
@@ -65,6 +68,7 @@ describe("Public API surface", () => {
   it.each([
     "isValidNameString",
     "isValidPackageIdString",
+    "isValidIdentifierString",
     "isValidPartyIdString",
     "isValidLedgerString",
     "isValidUserIdString",
@@ -76,6 +80,7 @@ describe("Public API surface", () => {
   it.each([
     "createNameString",
     "createPackageIdString",
+    "createIdentifierString",
     "createPartyIdString",
     "createLedgerString",
     "createUserIdString",
@@ -126,19 +131,19 @@ describe("Branded type verification", () => {
 
   it("api.ts starts with branded type imports", () => {
     expect(apiContent).toMatch(
-      /^import \{ LedgerString, PartyIdString, UserIdString, NameString, PackageIdString \} from "\.\.\/valueTypes\.js"/
+      /^import \{ LedgerString, PartyIdString, UserIdString, NameString, PackageIdString, IdentifierString \} from "\.\.\/valueTypes\.js"/
     );
   });
 
   it("async-api.ts starts with branded type imports", () => {
     expect(asyncApiContent).toMatch(
-      /^import \{ LedgerString, PartyIdString, UserIdString, NameString, PackageIdString \} from "\.\.\/valueTypes\.js"/
+      /^import \{ LedgerString, PartyIdString, UserIdString, NameString, PackageIdString, IdentifierString \} from "\.\.\/valueTypes\.js"/
     );
   });
 
   it.each([
     ["contractId: LedgerString", /contractId\??:\s*LedgerString/],
-    ["templateId: PackageIdString", /templateId\??:\s*PackageIdString/],
+    ["templateId: IdentifierString", /templateId\??:\s*IdentifierString/],
     ["userId: UserIdString", /userId\??:\s*UserIdString/],
     ["choice: NameString", /choice\??:\s*NameString/],
     ["partyIdHint: PartyIdString", /partyIdHint\??:\s*PartyIdString/],
@@ -148,7 +153,7 @@ describe("Branded type verification", () => {
 
   it.each([
     ["contractId: LedgerString", /contractId\??:\s*LedgerString/],
-    ["templateId: PackageIdString", /templateId\??:\s*PackageIdString/],
+    ["templateId: IdentifierString", /templateId\??:\s*IdentifierString/],
     ["userId: UserIdString", /userId\??:\s*UserIdString/],
     ["choice: NameString", /choice\??:\s*NameString/],
   ])("async-api.ts uses branded type for %s", (_label, pattern) => {

@@ -3,7 +3,9 @@ import { ContractId, Party, Choice, Template, InterfaceCompanion } from "@daml/t
 import {
   PartyIdString,
   UserIdString,
-  PackageIdString,
+  IdentifierString,
+  isValidLedgerString,
+  createIdentifierString,
 } from "./valueTypes";
 import type { components } from "./generated/async-api";
 import type { components as apiComponents } from "./generated/api";
@@ -52,7 +54,7 @@ export function isCantonError(response: unknown): response is JsCantonError {
 // Generic CreateEvent
 export type CreateEvent<T extends object, K = unknown> = {
   type: "create";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<T>;
   payload: T;
   signatories: Party[];
@@ -109,12 +111,80 @@ export function toDisclosedContract<T extends object, K = unknown>(
   };
 }
 
+/**
+ * The plain-string shape a disclosure arrives in when it travels over an
+ * untyped channel — your own backend API, or a registry/scan node response.
+ * All fields are wire strings (no brands), mirroring `created_event_blob` /
+ * `contract_id` / `template_id` / `domain_id` from those sources.
+ */
+export type WireDisclosedContract = {
+  contractId: string;
+  createdEventBlob: string;
+  /** Full template id in package-id-reference format (`pkgId:Module:Entity`). */
+  templateId: string;
+  synchronizerId: string;
+};
+
+/**
+ * Build a {@link DisclosedContract} from raw wire strings. This is the
+ * constructor counterpart to {@link toDisclosedContract}: use that when you
+ * hold a library-decoded {@link CreateEvent}, and use this when a disclosure
+ * round-tripped through an untyped channel (your tRPC/REST API, a scan node)
+ * and all you have are plain strings — see case 2 in the {@link
+ * DisclosedContract} docs. Branding happens here, once, instead of at every
+ * call site.
+ *
+ * `createdEventBlob` and `synchronizerId` must be non-empty (the JSON API
+ * rejects a submission otherwise).
+ */
+export function disclosedContractFromWire(
+  wire: WireDisclosedContract,
+): DisclosedContract {
+  if (!wire.createdEventBlob) {
+    throw new Error(
+      "disclosedContractFromWire: createdEventBlob is empty — the JSON API will reject the submission",
+    );
+  }
+  if (!wire.synchronizerId) {
+    throw new Error(
+      "disclosedContractFromWire: synchronizerId is empty — the contract's hosting synchronizer is required",
+    );
+  }
+  return {
+    contractId: wire.contractId,
+    createdEventBlob: wire.createdEventBlob,
+    // A template id is a qualified identifier ("pkgId:Module:Entity"), so it
+    // carries the IdentifierString brand — validated and branded here, not a
+    // bare PackageIdString cast (the bare-package-id validator would reject the
+    // colons).
+    templateId: createIdentifierString(wire.templateId),
+    synchronizerId: wire.synchronizerId,
+  };
+}
+
+/**
+ * Brand a raw contract-id string into a typed {@link ContractId}. Reach for
+ * this at a wire boundary where the id arrives as a plain string (relayed
+ * through your own backend, a registry response) but a typed API — e.g. an
+ * {@link ExerciseCommand}'s `contractId: ContractId<T>` — needs the brand.
+ * The value is validated against the `LedgerString` format that contract ids
+ * use; the unchecked brand cast lives here, once, not at every call site.
+ */
+export function createContractId<T extends object>(value: string): ContractId<T> {
+  if (!isValidLedgerString(value)) {
+    throw new Error(
+      `Invalid ContractId: "${value}". Must match the LedgerString format [A-Za-z0-9#:\\-_/ ]+ (≤ 255 chars)`,
+    );
+  }
+  return value as unknown as ContractId<T>;
+}
+
 /** 
  * An ArchiveEvent of a given template
  */
 export type ArchiveEvent<T extends object> = {
   type: "archive";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<T>;
   witnessParties: Party[];
   offset: number;
@@ -130,7 +200,7 @@ export type Event<T extends object, K = unknown> = CreateEvent<T, K> | ArchiveEv
  */
 export type Interface<I extends object> = {
   type: "interface";
-  templateId: PackageIdString;
+  templateId: IdentifierString;
   contractId: ContractId<I>;
   payload?: any;
   signatories: Party[];
@@ -138,7 +208,7 @@ export type Interface<I extends object> = {
   key?: any;
   createdEventBlob: string;
   interfaceView: I;
-  interfaceId: PackageIdString;
+  interfaceId: IdentifierString;
   /**
    * Package version string (e.g., "0.0.6")
    * Only present if using VersionedRegistry

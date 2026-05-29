@@ -44,9 +44,12 @@ const VALUE_PROTO_PATTERNS: ValueProtoPattern[] = [
     commentPattern: "Must be a valid PackageIdString",
     targetType: "PackageIdString",
   },
+  // A field "in package-id reference format" is a full template/interface
+  // identifier ("<package>:<module>:<entity>"), NOT a bare package id — so it
+  // gets the IdentifierString brand, whose validator accepts the colon form.
   {
     commentPattern: "The identifier uses the package-id reference format",
-    targetType: "PackageIdString",
+    targetType: "IdentifierString",
   },
 ];
 
@@ -57,7 +60,7 @@ function brandApiTypes(inputPath: string, outputPath: string, label: string): nu
 
   // Add imports at the top if not already present
   if (!content.includes('from "../valueTypes.js"')) {
-    const importStatement = `import { LedgerString, PartyIdString, UserIdString, NameString, PackageIdString } from "../valueTypes.js";\n\n`;
+    const importStatement = `import { LedgerString, PartyIdString, UserIdString, NameString, PackageIdString, IdentifierString } from "../valueTypes.js";\n\n`;
     brandedContent = importStatement + brandedContent;
   }
 

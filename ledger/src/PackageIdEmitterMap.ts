@@ -1,5 +1,5 @@
 import { EventEmitter } from "eventemitter3";
-import { PackageIdString } from "./valueTypes";
+import { IdentifierString } from "./valueTypes";
 import { partiallyQualified } from "./util";
 
 /**
@@ -8,14 +8,14 @@ import { partiallyQualified } from "./util";
  * Can be used for both template IDs and interface IDs.
  */
 export class PackageIdEmitterMap {
-  private emitters: Map<string, { fullId: PackageIdString; emitter: EventEmitter }> = new Map();
+  private emitters: Map<string, { fullId: IdentifierString; emitter: EventEmitter }> = new Map();
 
   /**
    * Set an EventEmitter for a specific package ID
    * @param packageId The full package ID (template or interface)
    * @param emitter The EventEmitter instance
    */
-  set(packageId: PackageIdString, emitter: EventEmitter): void {
+  set(packageId: IdentifierString, emitter: EventEmitter): void {
     const partialId = partiallyQualified(packageId);
     this.emitters.set(partialId, { fullId: packageId, emitter });
   }
@@ -25,7 +25,7 @@ export class PackageIdEmitterMap {
    * @param packageId The package ID (full or partial)
    * @returns The EventEmitter or undefined if not found
    */
-  get(packageId: PackageIdString): EventEmitter | undefined {
+  get(packageId: IdentifierString): EventEmitter | undefined {
     const partialId = partiallyQualified(packageId);
     return this.emitters.get(partialId)?.emitter;
   }
@@ -35,7 +35,7 @@ export class PackageIdEmitterMap {
    * @param packageId The package ID (full or partial)
    * @returns True if an emitter exists, false otherwise
    */
-  has(packageId: PackageIdString): boolean {
+  has(packageId: IdentifierString): boolean {
     const partialId = partiallyQualified(packageId);
     return this.emitters.has(partialId);
   }
