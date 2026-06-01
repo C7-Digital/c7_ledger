@@ -1,7 +1,7 @@
-// Helpers for poking at the `Event[]` returned by `Ledger.exercise` and
-// `Ledger.submitWithDisclosures`. The ledger client's value-add over the
-// raw JSON Ledger API is that it returns typed `CreateEvent<T>` /
-// `ArchiveEvent<T>`; these helpers let consumers find a specific
+// Helpers for poking at the `Event[]` returned by `Ledger.exercise`,
+// `Ledger.submit`, and `Ledger.submitWithDisclosures`. The ledger client's
+// value-add over the raw JSON Ledger API is that it returns typed
+// `CreateEvent<T>` / `ArchiveEvent<T>`; these helpers let consumers find a specific
 // side-effect contract WITHOUT having to hand-roll a `typeof` /
 // `templateId` regex guard at every call site.
 //
