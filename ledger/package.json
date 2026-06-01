@@ -64,7 +64,7 @@
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.4.11",
     "@types/ajv": "^0.0.5",
     "@types/jest": "^30.0.0",
     "@types/node": "^18.15.11",

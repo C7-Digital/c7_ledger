@@ -57,6 +57,7 @@ import {
   InterfaceMultiStream,
   StreamState,
   PartyDetails,
+  SortedEvents,
   User,
   StreamCloseEvent,
   MultiStream,
@@ -105,6 +106,7 @@ function createEventWithoutDecoder(
     key: undefined,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     synchronizerId,
+    nodeId: cantonEvent.nodeId,
   };
 }
 
@@ -151,6 +153,7 @@ function createEvent_<T extends object, K = unknown>(
     synchronizerId,
     createdEventBlob: cantonEvent.createdEventBlob || "",
     packageVersion,
+    nodeId: cantonEvent.nodeId,
   };
 }
 
@@ -161,7 +164,36 @@ function archiveEvent_<T extends object>(cantonEvent: ArchivedEvent): ArchiveEve
     contractId: cantonEvent.contractId as unknown as ContractId<T>,
     witnessParties: (cantonEvent.witnessParties || []) as Party[],
     offset: cantonEvent.offset,
+    nodeId: cantonEvent.nodeId,
   };
+}
+
+/**
+ * Return the events sorted by `nodeId` ascending — the canonical
+ * preorder-traversal position of each event within the originating
+ * transaction tree — branded as {@link SortedEvents}.
+ *
+ * The brand is the type system's record of the sort having happened;
+ * `Ledger.exercise` and `Ledger.submitWithDisclosures` apply this
+ * before returning, so consumers (and helpers like `lookupCreatedEvent`,
+ * whose input type is `SortedEvents`) get the guarantee at compile
+ * time. We normalise here because the Ledger API proto declares only
+ * `repeated Event events = 5` — no explicit ordering guarantee — even
+ * though canton's indexer currently emits events ordered by their
+ * internal `event_sequential_id` (which corresponds to `nodeId`).
+ *
+ * Exported so callers that assemble events from other sources (e.g. a
+ * relay over their own backend) can produce the branded shape that the
+ * lookup helpers require.
+ */
+export function sortEventsByNodeId<T extends object, K = unknown>(
+  events: ReadonlyArray<Event<T, K>>,
+): SortedEvents<T, K> {
+  // The brand is phantom-only — no runtime field. The double-cast is the
+  // unchecked boundary that records the sort having happened.
+  return [...events].sort(
+    (a, b) => a.nodeId - b.nodeId,
+  ) as unknown as SortedEvents<T, K>;
 }
 
 // It is possible that we query for a given interface that we are interested in,
@@ -1106,12 +1138,19 @@ export class Ledger {
   }
 
   /**
-   * Exercise a choice of a given contract
+   * Exercise a choice of a given contract.
+   *
+   * The returned `Event[]` is the full ACS_DELTA event stream for the
+   * resulting transaction, **sorted by `nodeId` ascending** — i.e. in
+   * the canonical preorder-traversal position each event occupies in
+   * the originating transaction tree. Consumers (and helpers such as
+   * `lookupCreatedEvent`) can rely on this order without re-sorting.
+   *
    * @param choice
    * @param contractId
    * @param argument
    * @param actAs
-   * @returns
+   * @returns The transaction's events in `nodeId` order.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async exercise<T extends object, C, R, K = unknown>(
@@ -1119,7 +1158,7 @@ export class Ledger {
     contractId: ContractId<T>,
     argument: C,
     actAs?: Party[]
-  ): Promise<Event<object, unknown>[]> {
+  ): Promise<SortedEvents<object, unknown>> {
     // Extract actAs from meta or use a default
     const exerciseCommand = {
       templateId: choice.template().templateId,
@@ -1158,7 +1197,7 @@ export class Ledger {
       }
     }
 
-    return events;
+    return sortEventsByNodeId(events);
   }
 
   /**
@@ -1166,17 +1205,20 @@ export class Ledger {
    * transaction. Similar to `create` and `exercise` one can use `createCmd`
    * and `exerciseCmd` to create commands, that are then passed to `submit`.
    *
+   * The returned `Event[]` is sorted by `nodeId` ascending — see
+   * {@link Ledger.exercise} for the ordering guarantee.
+   *
    * @param commands
    * @param actAs Defaults to the actAs parties of the user in the token.
    * @param commandId Optional command ID; a fresh one is generated if omitted.
-   * @returns Stream of events resulting from the submitted commands.
+   * @returns The transaction's events in `nodeId` order.
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async submit(
     commands: AnyCommand[],
     actAs?: Party[],
     commandId?: string,
-  ): Promise<Event<object, unknown>[]> {
+  ): Promise<SortedEvents<object, unknown>> {
     return this.submitInternal(commands, actAs, commandId, undefined);
   }
 
@@ -1191,13 +1233,15 @@ export class Ledger {
    *
    * Identical event-decoding behaviour to {@link submit}; the only
    * difference is the additional `disclosedContracts` field on the
-   * underlying `JsCommands`.
+   * underlying `JsCommands`. As with {@link Ledger.exercise} and
+   * {@link Ledger.submit}, the returned `Event[]` is sorted by
+   * `nodeId` ascending.
    *
    * @param commands           Commands to submit atomically.
    * @param disclosedContracts Disclosed contracts to attach to the request.
    * @param actAs              Defaults to the actAs parties of the user in the token.
    * @param commandId          Optional command id; a fresh one is generated if omitted.
-   * @returns                  Stream of events resulting from the submitted commands.
+   * @returns                  The transaction's events in `nodeId` order.
    * @throws {LedgerApiError}  on non-OK HTTP response from the ledger.
    */
   async submitWithDisclosures(
@@ -1205,7 +1249,7 @@ export class Ledger {
     disclosedContracts: DisclosedContract[],
     actAs?: Party[],
     commandId?: string,
-  ): Promise<Event<object, unknown>[]> {
+  ): Promise<SortedEvents<object, unknown>> {
     return this.submitInternal(commands, actAs, commandId, disclosedContracts);
   }
 
@@ -1214,7 +1258,7 @@ export class Ledger {
     actAs: Party[] | undefined,
     commandId: string | undefined,
     disclosedContracts: DisclosedContract[] | undefined,
-  ): Promise<Event<object, unknown>[]> {
+  ): Promise<SortedEvents<object, unknown>> {
     const jsCommands = commands.map((command) => convertCommand(command));
     const actAs_ = actAs || (await this.getTokenActAsParties());
     const requestCommands: JsCommands = {
@@ -1244,7 +1288,7 @@ export class Ledger {
       }
     }
 
-    return events;
+    return sortEventsByNodeId(events);
   }
 
   /**

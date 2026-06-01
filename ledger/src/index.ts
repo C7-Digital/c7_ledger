@@ -14,6 +14,7 @@ export {
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";
+export * from "./events";
 export * from "./valueTypes";
 
 export { SDK_VERSION } from "./generated/sdk-version";

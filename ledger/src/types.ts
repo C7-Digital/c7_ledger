@@ -75,6 +75,15 @@ export type CreateEvent<T extends object, K = unknown> = {
    * have to thread the synchronizer separately.
    */
   synchronizerId?: string;
+  /**
+   * The position of this event within the originating transaction tree.
+   * Required by the Ledger API on every wire CreatedEvent; carried
+   * through here so callers can order events deterministically (and so
+   * event-lookup helpers can sort defensively rather than trust the
+   * response array's order — the proto declares `repeated Event events`
+   * without an explicit ordering guarantee).
+   */
+  nodeId: number;
 };
 
 /**
@@ -179,7 +188,7 @@ export function createContractId<T extends object>(value: string): ContractId<T>
   return value as unknown as ContractId<T>;
 }
 
-/** 
+/**
  * An ArchiveEvent of a given template
  */
 export type ArchiveEvent<T extends object> = {
@@ -188,9 +197,47 @@ export type ArchiveEvent<T extends object> = {
   contractId: ContractId<T>;
   witnessParties: Party[];
   offset: number;
+  /**
+   * The position of this event within the originating transaction tree.
+   * See {@link CreateEvent.nodeId} — same semantics; required by the
+   * Ledger API on every wire ArchivedEvent.
+   */
+  nodeId: number;
 };
 
 export type Event<T extends object, K = unknown> = CreateEvent<T, K> | ArchiveEvent<T>;
+
+// Phantom marker for the {@link SortedEvents} brand below. `declare const`
+// + `unique symbol` produces a compile-time-only identifier — there is no
+// runtime property added to the array.
+declare const NodeIdSorted: unique symbol;
+
+/**
+ * A readonly array of events that is GUARANTEED to be sorted by `nodeId`
+ * ascending — i.e. in canonical preorder-traversal position within the
+ * originating transaction tree.
+ *
+ * The brand is type-only (the phantom `[NodeIdSorted]` property never
+ * exists at runtime), so the only way to obtain a `SortedEvents` value is
+ * via {@link sortEventsByNodeId} or by accepting one from
+ * {@link Ledger.exercise} / {@link Ledger.submit} /
+ * {@link Ledger.submitWithDisclosures} — all of which apply the sort.
+ *
+ * Consumer helpers (`lookupCreatedEvent`, etc.) declare their input as
+ * `SortedEvents`, so callers can't accidentally feed them an unordered
+ * array — the type-checker forces an explicit `sortEventsByNodeId` call
+ * at the boundary if they're assembling events from a non-ledger source.
+ *
+ * Assignable to `ReadonlyArray<Event<T, K>>` (it's a subtype via the
+ * intersection), so existing functions that take a plain event array
+ * accept it without change.
+ */
+export type SortedEvents<T extends object = object, K = unknown> =
+  ReadonlyArray<Event<T, K>> & { readonly [NodeIdSorted]: true };
+
+// `lookupCreatedEvent` / `lookupCreatedEvents` / `lookupArchivedEvent` live
+// in `./events` — they're functions, not types. Re-exported from this
+// package's entry point.
 
 /**
  * The Daml interface of the subscribed 'interfaceId'
