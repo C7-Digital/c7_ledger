@@ -1226,8 +1226,10 @@ export class Ledger {
    * its body) are intentionally ignored — the caller asked for THIS
    * choice's result. For choices that also create/archive contracts
    * AND need the events list, follow this with a separate
-   * {@link exercise} call (the cost is one extra round-trip), or use
-   * the lower-level {@link Ledger.client} helpers directly.
+   * {@link exercise} call (the cost is one extra round-trip), or
+   * drop down to the exported {@link TypedHttpClient} and call
+   * `submitAndWaitForTransaction` directly with the
+   * `TRANSACTION_SHAPE_LEDGER_EFFECTS` shape.
    *
    * @param choice
    * @param contractId

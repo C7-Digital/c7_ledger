@@ -261,3 +261,153 @@ describe("SDK version", () => {
     );
   });
 });
+
+// ─── exerciseResult ────────────────────────────────────────────────────
+//
+// `exerciseResult` is the only public method whose behaviour depends on
+// the LEDGER_EFFECTS transaction shape — the response carries an
+// `ExercisedEvent` whose `exerciseResult` field is the JSON-encoded
+// Daml return value. The tests stub `client.submitAndWaitForTransaction`
+// (same pattern as `allocateParty` / `createUser` shape tests above) to
+// verify three contract points:
+//
+//   1. The request opts into TRANSACTION_SHAPE_LEDGER_EFFECTS — without
+//      it the server would default to ACS_DELTA and the response would
+//      carry no ExercisedEvent at all.
+//   2. The matching ExercisedEvent's `exerciseResult` is decoded via
+//      the choice's `resultDecoder` and returned.
+//   3. The two error paths throw a clear, debuggable message rather
+//      than returning `undefined` or the raw wire JSON.
+//
+// All three use a hand-rolled minimal Choice stub — the same trick
+// `events.test.ts` uses for Template stubs. The library's
+// `Ledger.exerciseResult` only reads `template().templateId`,
+// `choiceName`, `argumentEncode`, and `resultDecoder` off it, so we
+// don't need a real codegen-emitted Choice.
+
+interface Quote {
+  amount: number;
+}
+
+function fakeQuoteChoice(opts?: {
+  templateId?: string;
+  choiceName?: string;
+}): any {
+  return {
+    template: () => ({
+      templateId: opts?.templateId ?? "#c7lock-model:C7Lock:Loan",
+    }),
+    choiceName: opts?.choiceName ?? "QuoteNextPayment",
+    argumentEncode: (_: unknown) => ({}),
+    resultDecoder: {
+      runWithException: (raw: unknown) => raw as Quote,
+    },
+  };
+}
+
+const FAKE_CID = "00abcd1234567890" as any;
+
+describe("exerciseResult", () => {
+  it("requests LEDGER_EFFECTS and returns the decoded result on the happy path", async () => {
+    const ledger = new Ledger({
+      token: TEST_TOKEN,
+      httpBaseUrl: "http://localhost:7575",
+    });
+    const choice = fakeQuoteChoice();
+    let captured: any;
+    (ledger as any).client.submitAndWaitForTransaction = async (req: any) => {
+      captured = req;
+      return {
+        transaction: {
+          events: [
+            {
+              ExercisedEvent: {
+                choice: choice.choiceName,
+                contractId: FAKE_CID,
+                exerciseResult: { amount: 42 },
+              },
+            },
+          ],
+        },
+      };
+    };
+
+    const result = await ledger.exerciseResult<object, {}, Quote>(
+      choice,
+      FAKE_CID,
+      {},
+      [createPartyIdString("alice")]
+    );
+
+    expect(result).toEqual({ amount: 42 });
+    expect(captured.transactionFormat.transactionShape).toBe(
+      "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+    );
+    // The eventFormat MUST carry a wildcard entry for the active party so
+    // the LEDGER_EFFECTS server includes our root exercise event — a
+    // missing or wrong-party filter would drop the only event we care about.
+    expect(
+      captured.transactionFormat.eventFormat.filtersByParty
+    ).toHaveProperty("alice");
+  });
+
+  it("throws when no ExercisedEvent matches the (choice, contractId) pair", async () => {
+    const ledger = new Ledger({
+      token: TEST_TOKEN,
+      httpBaseUrl: "http://localhost:7575",
+    });
+    const choice = fakeQuoteChoice();
+    (ledger as any).client.submitAndWaitForTransaction = async () => ({
+      transaction: {
+        events: [
+          // Wrong choice name + wrong contract id — covers both "no
+          // exercise event at all" and "exercise event but for a
+          // different choice".
+          {
+            ExercisedEvent: {
+              choice: "SomeOtherChoice",
+              contractId: "some-other-cid",
+              exerciseResult: { amount: 99 },
+            },
+          },
+        ],
+      },
+    });
+
+    await expect(
+      ledger.exerciseResult<object, {}, Quote>(choice, FAKE_CID, {}, [
+        createPartyIdString("alice"),
+      ])
+    ).rejects.toThrow(/no matching ExercisedEvent/i);
+  });
+
+  it("throws when the matching ExercisedEvent has no exerciseResult", async () => {
+    const ledger = new Ledger({
+      token: TEST_TOKEN,
+      httpBaseUrl: "http://localhost:7575",
+    });
+    const choice = fakeQuoteChoice();
+    (ledger as any).client.submitAndWaitForTransaction = async () => ({
+      transaction: {
+        events: [
+          {
+            ExercisedEvent: {
+              choice: choice.choiceName,
+              contractId: FAKE_CID,
+              // exerciseResult intentionally omitted — simulates a
+              // server that returned LEDGER_EFFECTS but stripped the
+              // result field (would be a bug, but the library should
+              // surface it loudly, not return `undefined`).
+            },
+          },
+        ],
+      },
+    });
+
+    await expect(
+      ledger.exerciseResult<object, {}, Quote>(choice, FAKE_CID, {}, [
+        createPartyIdString("alice"),
+      ])
+    ).rejects.toThrow(/no exerciseResult/i);
+  });
+});
