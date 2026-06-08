@@ -175,6 +175,7 @@ describe("Ledger method contract", () => {
     "queryInterface",
     "create",
     "exercise",
+    "exerciseResult",
     "submit",
     "submitWithDisclosures",
     "streamQuery",
