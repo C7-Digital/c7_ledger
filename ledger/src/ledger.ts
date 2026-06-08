@@ -1181,8 +1181,12 @@ export class Ledger {
     const transaction = response.transaction;
     const events: Event<object>[] = [];
 
-    // TODO: Convert this to the other transaction format to capture the
-    // exercise result and the resulting events.
+    // ACS_DELTA shape: only Created/Archived events are surfaced (the
+    // choice's `exerciseResult` is dropped). Callers who need the
+    // return value of a read-only / nonconsuming choice — e.g.
+    // `QuoteNextPayment : NextPaymentInfo` — should use
+    // {@link Ledger.exerciseResult} instead, which opts into
+    // LEDGER_EFFECTS for that one submission.
     for (const event of transaction.events || []) {
       logger.log(`Processing exercise resulting event: ${JSON.stringify(event)}`);
       if ("CreatedEvent" in event) {
@@ -1198,6 +1202,120 @@ export class Ledger {
     }
 
     return sortEventsByNodeId(events);
+  }
+
+  /**
+   * Exercise a choice and return its DECODED Daml return value (the
+   * choice's `R`), not the events list.
+   *
+   * Use this for nonconsuming / read-only quote choices where {@link exercise}
+   * surfaces only the empty ACS-delta event stream because the choice
+   * creates no contracts. The Daml return value goes to
+   * `/dev/null` under the ACS_DELTA shape the standard `exercise`
+   * uses.
+   *
+   * Mechanically this opts into the `LEDGER_EFFECTS` transaction shape
+   * for this one submission: the response then includes the top-level
+   * `ExercisedEvent` whose `exerciseResult` carries the JSON-encoded
+   * return value. We locate the root exercise node by matching
+   * `(choice, contractId)` and decode the result via the choice's
+   * `resultDecoder`.
+   *
+   * **Limitations**: only the TOP-LEVEL `ExercisedEvent`'s result is
+   * returned. Child exercises (a choice that calls another choice in
+   * its body) are intentionally ignored — the caller asked for THIS
+   * choice's result. For choices that also create/archive contracts
+   * AND need the events list, follow this with a separate
+   * {@link exercise} call (the cost is one extra round-trip), or
+   * drop down to the exported {@link TypedHttpClient} and call
+   * `submitAndWaitForTransaction` directly with the
+   * `TRANSACTION_SHAPE_LEDGER_EFFECTS` shape.
+   *
+   * @param choice
+   * @param contractId
+   * @param argument
+   * @param actAs Defaults to the actAs parties of the user in the token.
+   * @returns The decoded choice return value.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger.
+   * @throws if the LEDGER_EFFECTS response contains no matching
+   *         `ExercisedEvent` or its `exerciseResult` is missing — both
+   *         indicate the server returned an unexpected shape.
+   */
+  async exerciseResult<T extends object, C, R, K = unknown>(
+    choice: Choice<T, C, R, K>,
+    contractId: ContractId<T>,
+    argument: C,
+    actAs?: Party[]
+  ): Promise<R> {
+    const exerciseCommand = {
+      templateId: choice.template().templateId,
+      contractId: createLedgerString(contractId.toString()),
+      choice: createNameString(choice.choiceName),
+      choiceArgument: choice.argumentEncode(argument),
+    };
+
+    const actAs_ = actAs || (await this.getTokenActAsParties());
+    const commands: JsCommands = {
+      commands: [{ ExerciseCommand: exerciseCommand }],
+      commandId: this.generateCommandId(),
+      actAs: actAs_.map(party => createPartyIdString(party)),
+      userId: createUserIdString(this.tokenUserId),
+    };
+
+    // Opt in to LEDGER_EFFECTS so the response contains an
+    // ExercisedEvent with `exerciseResult`. The default shape
+    // (ACS_DELTA) only surfaces Created/Archived events — for a
+    // nonconsuming read-only choice that's an empty list.
+    //
+    // filtersByParty: an empty Filters object per acting party means
+    // "wildcard" — see the Filters schema doc on the OpenAPI spec
+    // ("If no CumulativeFilter defined, the default of a single
+    // WildcardFilter ... is used.") We want the root exercise event,
+    // and its witnesses include the choice's controller (which is one
+    // of our act-as parties), so the wildcard filter covers it.
+    const transactionFormat = {
+      transactionShape:
+        "TRANSACTION_SHAPE_LEDGER_EFFECTS" as const,
+      eventFormat: {
+        filtersByParty: Object.fromEntries(
+          actAs_.map(p => [p.toString(), {}])
+        ),
+        verbose: true,
+      },
+    };
+    const request = { commands, transactionFormat };
+    const response = await this.client.submitAndWaitForTransaction(request);
+    const events = response.transaction.events || [];
+
+    for (const event of events) {
+      if ("ExercisedEvent" in event) {
+        const ee = event.ExercisedEvent;
+        // Root exercise = the one we submitted. Match by (choice,
+        // contractId) so a future change that surfaces child
+        // exercises (Daml choices that internally exercise other
+        // choices) doesn't pick up the wrong result.
+        if (
+          ee.choice === choice.choiceName &&
+          ee.contractId === contractId.toString()
+        ) {
+          if (ee.exerciseResult === undefined) {
+            throw new Error(
+              `exerciseResult: LEDGER_EFFECTS response for ` +
+                `${choice.template().templateId}::${choice.choiceName} ` +
+                `has no exerciseResult — the server returned an unexpected shape.`
+            );
+          }
+          return choice.resultDecoder.runWithException(ee.exerciseResult);
+        }
+      }
+    }
+
+    throw new Error(
+      `exerciseResult: no matching ExercisedEvent for ` +
+        `${choice.template().templateId}::${choice.choiceName} ` +
+        `on contract ${contractId}. The submission may have used a ` +
+        `transaction shape that does not include exercise nodes.`
+    );
   }
 
   /**
