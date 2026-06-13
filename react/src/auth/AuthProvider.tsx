@@ -29,6 +29,17 @@ export type AuthContextValue = {
   isDerivingCredentials: boolean;
   /** OIDC error, if any. */
   error: Error | undefined;
+  /**
+   * Last error thrown while deriving ledger credentials from the OIDC user —
+   * typically a "user not authorized on the ledger" / "user not found"
+   * response from `GET /v2/users/{sub}` when the IdP-issued `sub` has no
+   * matching Daml user. Set in the derive effect's `.catch`, cleared at the
+   * start of each derivation attempt, on successful derivation, on
+   * `setCredentials(...)`, and on `logout()`. Apps render this on the login
+   * surface so the user sees a real error instead of being silently bounced
+   * back to "sign in".
+   */
+  derivationError: Error | undefined;
   /** Raw OIDC user (access_token, id_token, profile). */
   user: User | null | undefined;
   /** Start the OIDC redirect login flow. */
@@ -150,6 +161,9 @@ const CredentialsProvider: React.FC<{
     readStoredCredentials(storageKey),
   );
   const [isDerivingCredentials, setIsDerivingCredentials] = useState(false);
+  const [derivationError, setDerivationError] = useState<Error | undefined>(
+    undefined,
+  );
 
   // Always-latest ref to credentials. Read inside async timer callbacks
   // that need to compare against current state without re-subscribing.
@@ -158,40 +172,72 @@ const CredentialsProvider: React.FC<{
     credentialsRef.current = credentials;
   });
 
-  // Single writer: updates React state and mirrors through to sessionStorage.
-  // Normalizes `source` so the OIDC-invalidation effect can safely treat
-  // credentials without an explicit source as manual (the dev/token-login
-  // path predates the field).
-  const setCredentials = useCallback(
-    (next: Credentials | null): void => {
+  // Monotonic attempt counter: every fresh derivation bumps it; the in-flight
+  // promise stamps a local copy, and the .finally only clears
+  // isDerivingCredentials if its stamp is still the latest. Without this, a
+  // mid-flight cancellation (e.g. manual setCredentials while the OIDC derive
+  // is still running) would leave isDerivingCredentials stuck on `true` —
+  // the cancelled-guard short-circuit skipped the finally before this fix.
+  const derivationAttemptRef = useRef(0);
+
+  // Single writer: updates credentials state + sessionStorage AND the
+  // derivationError partner in one shot, so both stay in sync. The catch in
+  // the derive effect calls this with (null, normalizedError); external
+  // callers (logout, manual injection, the token-mirror effect) call it
+  // with (next, undefined) via the `setCredentials` wrapper to mean "fresh
+  // write — any prior derivation error is moot now".
+  const writeAuthState = useCallback(
+    (next: Credentials | null, error: Error | undefined): void => {
       const normalized: Credentials | null = next
         ? { ...next, source: next.source ?? "manual" }
         : null;
       setCredentialsState(normalized);
       writeStoredCredentials(storageKey, normalized);
+      setDerivationError(error);
     },
     [storageKey],
+  );
+
+  const setCredentials = useCallback(
+    (next: Credentials | null): void => {
+      writeAuthState(next, undefined);
+    },
+    [writeAuthState],
   );
 
   // Derive credentials whenever OIDC has a user but we don't have credentials
   // yet. Runs on the redirect callback AND on remount/reload when storage is
   // empty. Skipped when oidc.error is set — otherwise the invalidation
   // effect below could clear credentials and we'd immediately re-derive
-  // them from the same broken session, looping.
+  // them from the same broken session, looping. On failure, the thrown
+  // Error lands on `derivationError` so apps can render it; before v0.0.22
+  // it was logged to console only and the user saw a silent bounce back to
+  // the login screen.
   useEffect(() => {
     if (!oidc.isAuthenticated || !oidc.user || credentials || oidc.error) return;
     let cancelled = false;
+    const myAttempt = ++derivationAttemptRef.current;
     setIsDerivingCredentials(true);
+    setDerivationError(undefined);
     oidcUserToLedgerAndCredentials(oidc.user, httpBaseUrl)
       .then(({ credentials: derived }) => {
         if (!cancelled) setCredentials(derived);
       })
-      .catch((err) => {
-        console.error("Failed to derive credentials from OIDC user", err);
-        if (!cancelled) setCredentials(null);
+      .catch((err: unknown) => {
+        const normalized =
+          err instanceof Error ? err : new Error(String(err));
+        console.error("Failed to derive credentials from OIDC user", normalized);
+        if (!cancelled) writeAuthState(null, normalized);
       })
       .finally(() => {
-        if (!cancelled) setIsDerivingCredentials(false);
+        // Only the latest in-flight attempt clears the flag. A cancelled
+        // attempt whose .finally races a fresh attempt's set-true must not
+        // flip it back to false, and a cancelled attempt whose promise
+        // outlives the cancellation still has to clear the flag (otherwise
+        // a mid-flight manual setCredentials leaves it stuck `true`).
+        if (derivationAttemptRef.current === myAttempt) {
+          setIsDerivingCredentials(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -202,6 +248,7 @@ const CredentialsProvider: React.FC<{
     oidc.error,
     credentials,
     setCredentials,
+    writeAuthState,
     httpBaseUrl,
   ]);
 
@@ -271,7 +318,7 @@ const CredentialsProvider: React.FC<{
   }, [credentials, setCredentials]);
 
   const logout = useCallback(() => {
-    setCredentials(null); // also clears sessionStorage
+    setCredentials(null); // also clears sessionStorage + derivationError
     if (oidc.isAuthenticated) {
       // Do NOT call oidc.removeUser() first: signoutRedirect() reads the
       // User's id_token to send `id_token_hint` on the end-session request,
@@ -287,6 +334,7 @@ const CredentialsProvider: React.FC<{
     isLoading: oidc.isLoading,
     isDerivingCredentials,
     error: oidc.error,
+    derivationError,
     user: oidc.user,
     loginWithOidc: () => {
       void oidc.signinRedirect();

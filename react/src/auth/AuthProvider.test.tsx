@@ -123,6 +123,10 @@ const Probe: React.FC<{ onRender?: (auth: ReturnType<typeof useAuth>) => void }>
       <span data-testid="token">{auth.credentials?.token ?? "none"}</span>
       <span data-testid="source">{auth.credentials?.source ?? "none"}</span>
       <span data-testid="is-auth">{String(auth.isAuthenticated)}</span>
+      <span data-testid="is-deriving">{String(auth.isDerivingCredentials)}</span>
+      <span data-testid="derivation-error">
+        {auth.derivationError ? auth.derivationError.message : "none"}
+      </span>
       <button onClick={auth.logout}>logout</button>
       <button
         onClick={() =>
@@ -201,6 +205,134 @@ describe("AuthProvider — derive effect", () => {
     });
     expect(screen.getByTestId("source").textContent).toBe("oidc");
     expect(screen.getByTestId("token").textContent).toBe(TOKEN_FUTURE);
+    expect(screen.getByTestId("derivation-error").textContent).toBe("none");
+  });
+
+  it("surfaces a derivation failure as derivationError so apps can render it", async () => {
+    // Models the production failure mode: the IdP issues a token with a `sub`
+    // that does not exist as a Daml user, so GET /v2/users/{sub} comes back
+    // with "not authorized" / "not found" and `getTokenUserInfo()` rejects.
+    // Before v0.0.22 the error was logged to console only and the UI silently
+    // bounced back to "sign in".
+    mockGetTokenUserInfo.mockRejectedValueOnce(
+      new Error("User 'joe' is not authorized"),
+    );
+
+    renderProvider();
+
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE, profile: { sub: "joe" } },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("derivation-error").textContent).toBe(
+        "User 'joe' is not authorized",
+      );
+    });
+    expect(screen.getByTestId("party").textContent).toBe("none");
+    expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("clears derivationError on logout", async () => {
+    mockGetTokenUserInfo.mockRejectedValueOnce(new Error("nope"));
+
+    renderProvider();
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE, id_token: "id-token-here" },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("nope"),
+    );
+
+    act(() => {
+      screen.getByText("logout").click();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("none"),
+    );
+  });
+
+  it("clears isDerivingCredentials when a derivation is cancelled mid-flight by manual setCredentials", async () => {
+    // Regression for the "stuck isDerivingCredentials" path Copilot flagged
+    // on PR #42: when the user manually injects credentials while the OIDC
+    // derive promise is still in flight, the derive effect re-runs, the
+    // cancelled-guard short-circuits the .finally setIsDerivingCredentials,
+    // and the flag is stuck true until the next successful derivation.
+    // Resolved via the attempt-stamp ref: only the latest attempt clears the
+    // flag, but a cancelled attempt whose stamp is still current (no fresh
+    // attempt ever started, because the manual write satisfied the
+    // "credentials present" predicate) still gets to clear it.
+    let resolveOidcLookup: ((v: { id: string; primaryParty: string }) => void)
+      | undefined;
+    mockGetTokenUserInfo.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOidcLookup = resolve;
+        }),
+    );
+
+    renderProvider();
+
+    // Kick off a derivation we won't let resolve right away.
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("is-deriving").textContent).toBe("true"),
+    );
+
+    // Manual injection while the OIDC derive promise is still pending.
+    act(() => {
+      screen.getByText("inject-manual").click();
+    });
+    expect(screen.getByTestId("party").textContent).toBe("manual-party");
+
+    // Now let the dangling derive resolve. The .finally must still clear the
+    // flag — otherwise isDerivingCredentials would be stuck on "true".
+    act(() => {
+      resolveOidcLookup?.({ id: "alice", primaryParty: "alice::1220abcd" });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("is-deriving").textContent).toBe("false"),
+    );
+    // The cancelled .then was a no-op, so the manual credentials survive.
+    expect(screen.getByTestId("party").textContent).toBe("manual-party");
+  });
+
+  it("clears derivationError when credentials are injected manually", async () => {
+    mockGetTokenUserInfo.mockRejectedValueOnce(new Error("nope"));
+
+    renderProvider();
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("nope"),
+    );
+
+    act(() => {
+      screen.getByText("inject-manual").click();
+    });
+
+    expect(screen.getByTestId("derivation-error").textContent).toBe("none");
+    expect(screen.getByTestId("party").textContent).toBe("manual-party");
   });
 });
 
