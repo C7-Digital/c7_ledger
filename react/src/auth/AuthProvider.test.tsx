@@ -123,6 +123,9 @@ const Probe: React.FC<{ onRender?: (auth: ReturnType<typeof useAuth>) => void }>
       <span data-testid="token">{auth.credentials?.token ?? "none"}</span>
       <span data-testid="source">{auth.credentials?.source ?? "none"}</span>
       <span data-testid="is-auth">{String(auth.isAuthenticated)}</span>
+      <span data-testid="derivation-error">
+        {auth.derivationError ? auth.derivationError.message : "none"}
+      </span>
       <button onClick={auth.logout}>logout</button>
       <button
         onClick={() =>
@@ -201,6 +204,83 @@ describe("AuthProvider — derive effect", () => {
     });
     expect(screen.getByTestId("source").textContent).toBe("oidc");
     expect(screen.getByTestId("token").textContent).toBe(TOKEN_FUTURE);
+    expect(screen.getByTestId("derivation-error").textContent).toBe("none");
+  });
+
+  it("surfaces a derivation failure as derivationError so apps can render it", async () => {
+    // Models the production failure mode: the IdP issues a token with a `sub`
+    // that does not exist as a Daml user, so GET /v2/users/{sub} comes back
+    // with "not authorized" / "not found" and `getTokenUserInfo()` rejects.
+    // Before v0.0.22 the error was logged to console only and the UI silently
+    // bounced back to "sign in".
+    mockGetTokenUserInfo.mockRejectedValueOnce(
+      new Error("User 'joe' is not authorized"),
+    );
+
+    renderProvider();
+
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE, profile: { sub: "joe" } },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("derivation-error").textContent).toBe(
+        "User 'joe' is not authorized",
+      );
+    });
+    expect(screen.getByTestId("party").textContent).toBe("none");
+    expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("clears derivationError on logout", async () => {
+    mockGetTokenUserInfo.mockRejectedValueOnce(new Error("nope"));
+
+    renderProvider();
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE, id_token: "id-token-here" },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("nope"),
+    );
+
+    act(() => {
+      screen.getByText("logout").click();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("none"),
+    );
+  });
+
+  it("clears derivationError when credentials are injected manually", async () => {
+    mockGetTokenUserInfo.mockRejectedValueOnce(new Error("nope"));
+
+    renderProvider();
+    act(() => {
+      oidcHarness.setState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: { access_token: TOKEN_FUTURE },
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("derivation-error").textContent).toBe("nope"),
+    );
+
+    act(() => {
+      screen.getByText("inject-manual").click();
+    });
+
+    expect(screen.getByTestId("derivation-error").textContent).toBe("none");
+    expect(screen.getByTestId("party").textContent).toBe("manual-party");
   });
 });
 
