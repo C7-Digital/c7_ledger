@@ -172,21 +172,37 @@ const CredentialsProvider: React.FC<{
     credentialsRef.current = credentials;
   });
 
-  // Single writer: updates React state and mirrors through to sessionStorage.
-  // Normalizes `source` so the OIDC-invalidation effect can safely treat
-  // credentials without an explicit source as manual (the dev/token-login
-  // path predates the field). Also clears any prior derivation error: a
-  // fresh write supersedes whatever the previous OIDC attempt threw.
-  const setCredentials = useCallback(
-    (next: Credentials | null): void => {
+  // Monotonic attempt counter: every fresh derivation bumps it; the in-flight
+  // promise stamps a local copy, and the .finally only clears
+  // isDerivingCredentials if its stamp is still the latest. Without this, a
+  // mid-flight cancellation (e.g. manual setCredentials while the OIDC derive
+  // is still running) would leave isDerivingCredentials stuck on `true` —
+  // the cancelled-guard short-circuit skipped the finally before this fix.
+  const derivationAttemptRef = useRef(0);
+
+  // Single writer: updates credentials state + sessionStorage AND the
+  // derivationError partner in one shot, so both stay in sync. The catch in
+  // the derive effect calls this with (null, normalizedError); external
+  // callers (logout, manual injection, the token-mirror effect) call it
+  // with (next, undefined) via the `setCredentials` wrapper to mean "fresh
+  // write — any prior derivation error is moot now".
+  const writeAuthState = useCallback(
+    (next: Credentials | null, error: Error | undefined): void => {
       const normalized: Credentials | null = next
         ? { ...next, source: next.source ?? "manual" }
         : null;
       setCredentialsState(normalized);
       writeStoredCredentials(storageKey, normalized);
-      setDerivationError(undefined);
+      setDerivationError(error);
     },
     [storageKey],
+  );
+
+  const setCredentials = useCallback(
+    (next: Credentials | null): void => {
+      writeAuthState(next, undefined);
+    },
+    [writeAuthState],
   );
 
   // Derive credentials whenever OIDC has a user but we don't have credentials
@@ -200,6 +216,7 @@ const CredentialsProvider: React.FC<{
   useEffect(() => {
     if (!oidc.isAuthenticated || !oidc.user || credentials || oidc.error) return;
     let cancelled = false;
+    const myAttempt = ++derivationAttemptRef.current;
     setIsDerivingCredentials(true);
     setDerivationError(undefined);
     oidcUserToLedgerAndCredentials(oidc.user, httpBaseUrl)
@@ -210,15 +227,17 @@ const CredentialsProvider: React.FC<{
         const normalized =
           err instanceof Error ? err : new Error(String(err));
         console.error("Failed to derive credentials from OIDC user", normalized);
-        if (cancelled) return;
-        // Order matters: setCredentials clears derivationError, so the
-        // error has to land AFTER it.
-        setCredentialsState(null);
-        writeStoredCredentials(storageKey, null);
-        setDerivationError(normalized);
+        if (!cancelled) writeAuthState(null, normalized);
       })
       .finally(() => {
-        if (!cancelled) setIsDerivingCredentials(false);
+        // Only the latest in-flight attempt clears the flag. A cancelled
+        // attempt whose .finally races a fresh attempt's set-true must not
+        // flip it back to false, and a cancelled attempt whose promise
+        // outlives the cancellation still has to clear the flag (otherwise
+        // a mid-flight manual setCredentials leaves it stuck `true`).
+        if (derivationAttemptRef.current === myAttempt) {
+          setIsDerivingCredentials(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -229,8 +248,8 @@ const CredentialsProvider: React.FC<{
     oidc.error,
     credentials,
     setCredentials,
+    writeAuthState,
     httpBaseUrl,
-    storageKey,
   ]);
 
   // Mirror refreshed access tokens into credentials so downstream consumers
