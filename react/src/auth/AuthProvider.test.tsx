@@ -616,6 +616,80 @@ describe("AuthProvider — JWT exp watchdog", () => {
 
     expect(screen.getByTestId("party").textContent).toBe("none");
   });
+
+  it("clamps msUntilExpiry to the setTimeout int32 ceiling for long-lived tokens", async () => {
+    // Regression: an access token with TTL > 2^31-1 ms (≈ 24.855 days) would
+    // overflow setTimeout's internal int32 and fire on the next macrotask,
+    // wiping a brand-new credential. The derive effect would re-create the
+    // same credential, the watchdog would re-overflow, and the LoginScreen
+    // would loop with no error surfaced. Hit by a customer's Auth0 tenant
+    // configured for a 30-day Access Token Lifetime. The clamp caps the
+    // delay; on its expiry the CAS finds the same token still in play and
+    // the next render's watchdog schedules a fresh, shorter delay.
+    const TIMER_MAX_MS = 2_147_483_647;
+    const recordedDelays: number[] = [];
+    const origSetTimeout = window.setTimeout;
+    const setTimeoutSpy = vi
+      .spyOn(window, "setTimeout")
+      .mockImplementation(((cb: () => void, delay?: number) => {
+        // The watchdog's delay is in the seconds-to-days range; ignore React's
+        // microtask shims and other short timers.
+        if (typeof delay === "number" && delay > 1000) {
+          recordedDelays.push(delay);
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return origSetTimeout(cb, delay);
+      }) as typeof setTimeout);
+
+    try {
+      const now = Date.now();
+      const tokenExp30Days = makeJwt({
+        sub: "alice",
+        exp: Math.floor(now / 1000) + 30 * 24 * 60 * 60, // +30 days
+      });
+      const creds: Credentials = {
+        party: "alice::long",
+        token: tokenExp30Days,
+        user: { primaryParty: "alice::long" } as never,
+        source: "oidc",
+      };
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
+
+      renderProvider();
+
+      // Credentials survive: a pre-clamp build would null `party` here
+      // because the overflowed timer fired in the same tick.
+      expect(screen.getByTestId("party").textContent).toBe("alice::long");
+      expect(recordedDelays).toHaveLength(1);
+      expect(recordedDelays[0]).toBe(TIMER_MAX_MS);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("leaves credentials in place when the token is not a parseable JWT", async () => {
+    // The watchdog's `try { decodeJwt(...) } catch { ... }` used to wipe
+    // credentials on parse failure, which (a) contradicted the block's own
+    // comment ("opaque tokens are assumed to be managed elsewhere") and (b)
+    // looped the LoginScreen if the IdP issued an opaque access_token the
+    // participant nevertheless accepted. The catch is now a bare return.
+    const creds: Credentials = {
+      party: "alice::opaque",
+      token: "opaque-reference-token-not-a-jwt",
+      user: { primaryParty: "alice::opaque" } as never,
+      source: "oidc",
+    };
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
+
+    renderProvider();
+    // Give effects a tick to run.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.getByTestId("party").textContent).toBe("alice::opaque");
+    expect(window.sessionStorage.getItem(STORAGE_KEY)).not.toBeNull();
+  });
 });
 
 describe("AuthProvider — sessionStorage persistence", () => {
