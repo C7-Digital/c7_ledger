@@ -54,6 +54,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const DEFAULT_STORAGE_KEY = "auth_credentials";
 
+// Maximum delay setTimeout accepts before its internal signed-int32
+// truncates the value and the callback fires immediately. The exp
+// watchdog clamps against this; see the comment in the watchdog effect
+// for the loop-on-overflow scenario.
+const TIMER_MAX_MS = 2_147_483_647;
+
 const readStoredCredentials = (storageKey: string): Credentials | null => {
   if (typeof window === "undefined") return null;
   try {
@@ -292,7 +298,6 @@ const CredentialsProvider: React.FC<{
     try {
       exp = decodeJwt(credentials.token).exp;
     } catch {
-      setCredentials(null);
       return;
     }
     if (typeof exp !== "number") return;
@@ -308,12 +313,29 @@ const CredentialsProvider: React.FC<{
     // if the timer's macrotask was already queued by the runtime before
     // commit (long synchronous work, GC pause), it'd otherwise nuke a
     // freshly-rotated token. CAS makes that a no-op.
+    //
+    // Clamp the delay to the int32 ceiling. Every browser engine (and
+    // Node) stores setTimeout's delay as a signed 32-bit integer; any
+    // value > 2^31-1 ms (~24.855 days) overflows and the callback fires
+    // immediately. Without this clamp, a long-lived access token (e.g.
+    // an Auth0 API with a 30-day Access Token Lifetime) would have the
+    // watchdog wipe credentials on the next macrotask, the derive effect
+    // would re-create the same credentials, and the wipe would re-fire
+    // — looping the LoginScreen with no error surfaced. When the real
+    // exp is further out than the clamp, the timer fires at the clamp,
+    // finds the token still in play, and credentialsRef-CAS skips the
+    // wipe; the next render schedules a fresh, shorter delay against
+    // the still-valid token, repeating until exp falls inside the int32
+    // window.
     const scheduledToken = credentials.token;
-    const timer = setTimeout(() => {
-      if (credentialsRef.current?.token === scheduledToken) {
-        setCredentials(null);
-      }
-    }, msUntilExpiry);
+    const timer = setTimeout(
+      () => {
+        if (credentialsRef.current?.token === scheduledToken) {
+          setCredentials(null);
+        }
+      },
+      Math.min(msUntilExpiry, TIMER_MAX_MS),
+    );
     return () => clearTimeout(timer);
   }, [credentials, setCredentials]);
 
