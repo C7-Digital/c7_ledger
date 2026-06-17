@@ -180,6 +180,8 @@ describe("Ledger method contract", () => {
     "submitWithDisclosures",
     "streamQuery",
     "streamQueryInterface",
+    "streamHistoryUpdates",
+    "probeOffset",
     "createMultiStream",
     "createMultiInterfaceStream",
     "getUserInfo",
