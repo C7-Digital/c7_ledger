@@ -34,6 +34,7 @@ import {
   ActiveContractsStreamRequest,
   ActiveContractsResponse,
   UpdatesResponse,
+  UpdatesStreamRequest,
   isTransaction,
 } from "./websocket";
 import { MultiStreamAdapter, InterfaceMultiStreamImpl } from "./multistream";
@@ -165,6 +166,184 @@ function archiveEvent_<T extends object>(cantonEvent: ArchivedEvent): ArchiveEve
     witnessParties: (cantonEvent.witnessParties || []) as Party[],
     offset: cantonEvent.offset,
     nodeId: cantonEvent.nodeId,
+  };
+}
+
+/**
+ * Discriminated event emitted by {@link Ledger.streamHistoryUpdates}.
+ * Each event carries the participant `offset` it landed at and the
+ * sequencer `recordTime` (ISO-8601 UTC) — sufficient for offset-based
+ * checkpointing and for time-windowed aggregates on the consumer side.
+ */
+export type HistoryEvent<T extends object, K = unknown> =
+  | {
+      kind: "create";
+      offset: number;
+      recordTime: string;
+      event: CreateEvent<T, K>;
+    }
+  | {
+      kind: "archive";
+      offset: number;
+      recordTime: string;
+      event: ArchiveEvent<T>;
+    };
+
+/**
+ * Build an AsyncIterable that pulls events off a `wsClient.streamUpdates`
+ * subscription. Decouples the WebSocket's push-based callback API from
+ * the consumer's pull-based `for await` loop via an internal queue +
+ * pending-resolver list.
+ *
+ *   - On `next()` with events buffered → resolves immediately with the
+ *     next event.
+ *   - On `next()` with the queue empty → parks the resolver until the
+ *     WS pushes a new event (or closes).
+ *   - On WS close → all parked resolvers resolve `{done: true}` and any
+ *     subsequent `next()` returns the same.
+ *   - On WS error → the next pending or future `next()` rejects with
+ *     the error; the iterable is considered done.
+ *   - On consumer `return()` (e.g. breaking out of a `for await` loop) →
+ *     closes the WS and marks the iterable done.
+ *
+ * The WS request can be bounded (`endInclusive` set → server closes at
+ * that offset) or open-ended. For the open-ended case the consumer is
+ * responsible for ending iteration explicitly.
+ */
+function makeHistoryIterable<T extends object, K = unknown>(
+  wsClient: WebSocketClient,
+  request: UpdatesStreamRequest,
+  versionedRegistry?: VersionedRegistry,
+): AsyncIterable<HistoryEvent<T, K>> {
+  return {
+    [Symbol.asyncIterator]() {
+      const queue: HistoryEvent<T, K>[] = [];
+      const resolvers: Array<{
+        resolve: (v: IteratorResult<HistoryEvent<T, K>>) => void;
+        reject: (e: unknown) => void;
+      }> = [];
+      let done = false;
+      let pendingError: Error | null = null;
+      let stop: (() => void) | undefined;
+
+      const push = (event: HistoryEvent<T, K>): void => {
+        if (done) return;
+        // FIFO match — each parked next() is a separate request for ONE
+        // event. Resolving all of them with this event would either
+        // duplicate it across callers or starve subsequent events.
+        const r = resolvers.shift();
+        if (r) r.resolve({ value: event, done: false });
+        else queue.push(event);
+      };
+
+      const finish = (): void => {
+        if (done) return;
+        done = true;
+        const pending = resolvers.splice(0);
+        for (const r of pending) {
+          r.resolve({ value: undefined, done: true });
+        }
+      };
+
+      const fail = (e: Error): void => {
+        pendingError = e;
+        const pending = resolvers.splice(0);
+        for (const r of pending) r.reject(e);
+        done = true;
+      };
+
+      stop = wsClient.streamUpdates(
+        request,
+        (response: UpdatesResponse) => {
+          if (response.status === "error") {
+            fail(
+              new Error(
+                `Canton error in history stream: ${JSON.stringify(response.error)}`,
+              ),
+            );
+            return;
+          }
+          const update = response.data.update;
+          if (!isTransaction(update)) return;
+          const jsTransaction = update.Transaction.value;
+          const recordTime = jsTransaction.recordTime;
+          if (!recordTime) {
+            // recordTime is required by Canton's transaction protocol;
+            // a missing value is a defect, not a normal case. Drop the
+            // whole transaction rather than ship NaN-poisoned events
+            // downstream — every event in this transaction would carry
+            // the same bad timestamp anyway.
+            logger.warn(
+              `streamHistoryUpdates: dropping transaction with no recordTime (updateId=${
+                jsTransaction.updateId ?? "?"
+              })`,
+            );
+            return;
+          }
+          for (const event of jsTransaction.events || []) {
+            if ("CreatedEvent" in event) {
+              try {
+                push({
+                  kind: "create",
+                  offset: event.CreatedEvent.offset,
+                  recordTime,
+                  event: createEvent_<T, K>(
+                    event.CreatedEvent,
+                    versionedRegistry,
+                    jsTransaction.synchronizerId,
+                  ),
+                });
+              } catch (e) {
+                // Skip undecodable creates (template not in registry, etc.)
+                // rather than failing the whole stream — bootstrap replays
+                // can span heterogeneous template sets.
+                logger.warn(
+                  `streamHistoryUpdates: skipping CreatedEvent that failed to decode: ${
+                    e instanceof Error ? e.message : String(e)
+                  }`,
+                );
+              }
+            } else if ("ArchivedEvent" in event) {
+              push({
+                kind: "archive",
+                offset: event.ArchivedEvent.offset,
+                recordTime,
+                event: archiveEvent_<T>(event.ArchivedEvent),
+              });
+            }
+          }
+        },
+        (err) => fail(err),
+        (_code, _reason) => finish(),
+      );
+
+      return {
+        next(): Promise<IteratorResult<HistoryEvent<T, K>>> {
+          if (pendingError) {
+            const e = pendingError;
+            pendingError = null;
+            return Promise.reject(e);
+          }
+          if (queue.length > 0) {
+            return Promise.resolve({ value: queue.shift()!, done: false });
+          }
+          if (done) {
+            return Promise.resolve({
+              value: undefined as unknown as HistoryEvent<T, K>,
+              done: true,
+            });
+          }
+          return new Promise((resolve, reject) => {
+            resolvers.push({ resolve, reject });
+          });
+        },
+        async return(): Promise<IteratorResult<HistoryEvent<T, K>>> {
+          stop?.();
+          finish();
+          return { value: undefined as unknown as HistoryEvent<T, K>, done: true };
+        },
+      };
+    },
   };
 }
 
@@ -1526,6 +1705,146 @@ export class Ledger {
       includeCreatedEventBlob,
       this.options.autoReconnect ?? true,
     );
+  }
+
+  /**
+   * Stream historical update events for a template over a bounded or
+   * open-ended offset range.
+   *
+   * Differs from {@link streamQuery} in two ways:
+   *
+   * 1. **No ACS replay.** `streamQuery` first replays the active-contracts
+   *    snapshot at the requested offset, then transitions to a live update
+   *    feed. This method skips the ACS entirely and pulls pure update
+   *    events (CREATE + ARCHIVE) from `/v2/updates`, so consumers see the
+   *    create events of contracts that have since been archived — the
+   *    exact data needed for "what happened over this window" replays.
+   *
+   * 2. **AsyncIterable, not event-emitter.** Iteration is consumer-driven
+   *    via `for await (const evt of iter) { ... }`. The underlying WS is
+   *    closed when the loop returns/throws/breaks, so cleanup is automatic.
+   *
+   * Use cases:
+   *  - Bootstrap-time replay of archived contracts to seed an off-ledger
+   *    aggregate (e.g. a rolling time-window average over a field of a
+   *    template whose instances are short-lived).
+   *  - Auditable history queries over a known offset window.
+   *  - Backfilling a new analytics index from a saved offset checkpoint.
+   *
+   * Caveat: offsets are participant-local and not time-keyed. To slice
+   * by wall-clock time the consumer must filter on each event's
+   * `recordTime`, and the participant's pruning policy bounds how far
+   * back the replay can reach.
+   *
+   * @param template Daml template companion used for both the filter and
+   *                 payload decoding of CreatedEvents.
+   * @param options.beginExclusive Offset to start AFTER (defaults to
+   *                 `"start"` → 0 = ledger genesis).
+   * @param options.endInclusive   Offset to stop AT (defaults to undefined
+   *                 → open-ended; the iterable runs until the consumer
+   *                 returns / breaks).
+   * @param options.readAsParties  Party set the request filters for
+   *                 (defaults to the token's actAs parties).
+   * @param options.includeCreatedEventBlob Whether CreatedEvents carry
+   *                 their canonical blob (defaults to false).
+   */
+  async streamHistoryUpdates<T extends object, K = unknown>(
+    template: Template<T, K>,
+    options: {
+      beginExclusive?: LedgerOffset;
+      endInclusive?: LedgerOffset;
+      readAsParties?: Party[];
+      includeCreatedEventBlob?: boolean;
+    } = {},
+  ): Promise<AsyncIterable<HistoryEvent<T, K>>> {
+    const beginExclusive = await this.resolveOffset(
+      options.beginExclusive ?? "start",
+    );
+    const endInclusive =
+      options.endInclusive !== undefined
+        ? await this.resolveOffset(options.endInclusive)
+        : undefined;
+    const parties = options.readAsParties ?? (await this.getTokenActAsParties());
+    const includeCreatedEventBlob = options.includeCreatedEventBlob ?? false;
+
+    const filtersByParty = parties.reduce(
+      (acc, party) => {
+        acc[party] = {
+          cumulative: [
+            {
+              identifierFilter: templateFilter(
+                template.templateId as IdentifierString,
+                includeCreatedEventBlob,
+              ),
+            },
+          ],
+        };
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
+
+    const request: UpdatesStreamRequest = {
+      beginExclusive,
+      verbose: false,
+      updateFormat: {
+        includeTransactions: {
+          eventFormat: { filtersByParty, verbose: true },
+          transactionShape: "TRANSACTION_SHAPE_ACS_DELTA" as const,
+        },
+      },
+      ...(endInclusive !== undefined ? { endInclusive } : {}),
+    };
+
+    return makeHistoryIterable<T, K>(
+      this.initClient(),
+      request,
+      this.options.versionedRegistry,
+    );
+  }
+
+  /**
+   * Read the first matching event AT OR AFTER `offset`, scanning up to
+   * `scanLimit` offsets forward. Returns `null` if no event lands in
+   * the window.
+   *
+   * Cheap primitive for offset-to-time mappings — e.g. when an
+   * off-ledger consumer needs to find the participant offset that
+   * roughly corresponds to a wall-clock target without replaying from
+   * genesis. Open the same template filter the consumer will stream,
+   * collect a handful of `(offset, recordTime)` anchors, extrapolate
+   * a target offset, then refine.
+   *
+   * The window is clamped against the participant's current ledger end,
+   * so passing `"end"` or a near-end offset returns promptly with `null`
+   * (or a single trailing event, if one happens to live in the last
+   * slot) rather than parking on a stream waiting for future events.
+   *
+   * @param template  Daml template companion — same filter / decoder
+   *                  as a subsequent {@link streamHistoryUpdates} call.
+   * @param offset    Where to start scanning; `"start"`, `"end"`, or a
+   *                  number.
+   * @param scanLimit Max offsets to look forward (default 1,000,000).
+   */
+  async probeOffset<T extends object, K = unknown>(
+    template: Template<T, K>,
+    offset: LedgerOffset,
+    scanLimit: number = 1_000_000,
+  ): Promise<{ offset: number; recordTime: string } | null> {
+    const begin = await this.resolveOffset(offset);
+    const ledgerEnd = await this.getLedgerEnd();
+    const beginExclusive = Math.max(0, begin - 1);
+    const endInclusive = Math.min(begin + scanLimit, ledgerEnd);
+    if (endInclusive <= beginExclusive) return null;
+    const iterable = await this.streamHistoryUpdates(template, {
+      beginExclusive,
+      endInclusive,
+      includeCreatedEventBlob: false,
+    });
+    for await (const event of iterable) {
+      return { offset: event.offset, recordTime: event.recordTime };
+    }
+    return null;
   }
 
   /**
