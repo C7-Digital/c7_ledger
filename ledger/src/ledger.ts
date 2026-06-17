@@ -210,6 +210,14 @@ export type HistoryEvent<T extends object, K = unknown> =
  * that offset) or open-ended. For the open-ended case the consumer is
  * responsible for ending iteration explicitly.
  */
+// Backstop on the consumer-slower-than-producer case: when the internal
+// queue grows past this many events without a corresponding next()
+// drain, the iterator fails with a clear overflow error and the WS is
+// closed. Sized so 10–100 seconds of typical Canton transaction throughput
+// will fit comfortably, but a runaway producer + dormant consumer can't
+// drive the process to OOM in a long-running stream.
+const HISTORY_ITERABLE_MAX_QUEUE = 10_000;
+
 function makeHistoryIterable<T extends object, K = unknown>(
   wsClient: WebSocketClient,
   request: UpdatesStreamRequest,
@@ -223,6 +231,9 @@ function makeHistoryIterable<T extends object, K = unknown>(
         reject: (e: unknown) => void;
       }> = [];
       let done = false;
+      // Sticky — once set, every next() call rejects with this error. We
+      // never clear it: contract is "the stream has failed permanently",
+      // not "next() may resume normal operation after the first rejection".
       let pendingError: Error | null = null;
       let stop: (() => void) | undefined;
 
@@ -232,8 +243,22 @@ function makeHistoryIterable<T extends object, K = unknown>(
         // event. Resolving all of them with this event would either
         // duplicate it across callers or starve subsequent events.
         const r = resolvers.shift();
-        if (r) r.resolve({ value: event, done: false });
-        else queue.push(event);
+        if (r) {
+          r.resolve({ value: event, done: false });
+          return;
+        }
+        if (queue.length >= HISTORY_ITERABLE_MAX_QUEUE) {
+          // Consumer is too slow; back off by failing the stream with a
+          // diagnostic instead of letting the queue grow without bound.
+          fail(
+            new Error(
+              `streamHistoryUpdates: consumer too slow — internal queue exceeded ` +
+                `${HISTORY_ITERABLE_MAX_QUEUE} buffered events. Closing the WebSocket.`,
+            ),
+          );
+          return;
+        }
+        queue.push(event);
       };
 
       const finish = (): void => {
@@ -246,10 +271,23 @@ function makeHistoryIterable<T extends object, K = unknown>(
       };
 
       const fail = (e: Error): void => {
+        if (done) return; // idempotent — a WS error followed by an
+                          // onClose shouldn't re-fail or re-close.
         pendingError = e;
+        done = true;
         const pending = resolvers.splice(0);
         for (const r of pending) r.reject(e);
-        done = true;
+        // Close the WS — `wsClient.streamUpdates`'s onError callback does
+        // NOT auto-close (see websocket.ts:173), so leaving this out
+        // would leak a live connection plus any in-flight messages it
+        // continues to receive.
+        try {
+          stop?.();
+        } catch {
+          // best-effort close; the WS might already be in CLOSING
+          // state, or `stop` may not have been assigned yet if fail() is
+          // invoked synchronously from inside streamUpdates's setup.
+        }
       };
 
       stop = wsClient.streamUpdates(
@@ -319,11 +357,12 @@ function makeHistoryIterable<T extends object, K = unknown>(
 
       return {
         next(): Promise<IteratorResult<HistoryEvent<T, K>>> {
-          if (pendingError) {
-            const e = pendingError;
-            pendingError = null;
-            return Promise.reject(e);
-          }
+          // Sticky error — every call after a fail() rejects with the same
+          // error. This matches the doc comment's contract ("future
+          // next() rejects with the error") and prevents callers from
+          // silently observing `{done: true}` after a failure, which
+          // would mask the underlying problem.
+          if (pendingError) return Promise.reject(pendingError);
           if (queue.length > 0) {
             return Promise.resolve({ value: queue.shift()!, done: false });
           }
