@@ -371,7 +371,7 @@ export class ScanClient {
     // ingresses); those pile up and eventually overflow nginx's
     // `large_client_header_buffers`. Scan only consumes JWT, so
     // omitting cookies is unambiguously correct. See the matching
-    // change in `c7_ledger/ledger/src/client.ts`.
+    // change in `ledger/src/client.ts`.
     const requestInit: RequestInit = { method, credentials: "omit", headers };
     if (options?.body) {
       requestInit.body = JSON.stringify(options.body);
