@@ -144,6 +144,18 @@ export class TypedHttpClient {
     const url = `${this.baseUrl}${path}`;
     const requestInit: RequestInit = {
       method,
+      // Bearer-token API — explicitly tell the browser NOT to attach
+      // cookies for the destination origin. Default `credentials` is
+      // `"same-origin"`, which silently stamps every cookie the page
+      // origin holds onto the request. Some deployments terminate the
+      // JSON Ledger API behind a gateway that shares an origin with
+      // the UI and sets session-affinity / sticky cookies (envoy,
+      // istio, helm ingresses); those cookies pile up and eventually
+      // overflow nginx's `large_client_header_buffers`, producing a
+      // 400 "Request Header Or Cookie Too Large". No JSON Ledger API
+      // consumer authenticates via cookies — JWT only — so `"omit"`
+      // is unambiguously correct here.
+      credentials: "omit",
       headers: {
         Authorization: `Bearer ${this.token}`,
         "Content-Type": "application/json",
