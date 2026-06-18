@@ -362,7 +362,17 @@ export class ScanClient {
       headers["Authorization"] = `Bearer ${this.token}`;
     }
 
-    const requestInit: RequestInit = { method, headers };
+    // `credentials: "omit"` — Bearer-token API; explicitly tell the
+    // browser NOT to attach cookies for the destination origin. Default
+    // `credentials` is `"same-origin"`, which silently stamps every
+    // cookie the page origin holds onto the request. Some deployments
+    // sit Scan behind a gateway sharing an origin with the UI that
+    // sets session-affinity / sticky cookies (envoy, istio, helm
+    // ingresses); those pile up and eventually overflow nginx's
+    // `large_client_header_buffers`. Scan only consumes JWT, so
+    // omitting cookies is unambiguously correct. See the matching
+    // change in `ledger/src/client.ts`.
+    const requestInit: RequestInit = { method, credentials: "omit", headers };
     if (options?.body) {
       requestInit.body = JSON.stringify(options.body);
     }
