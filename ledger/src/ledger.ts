@@ -174,11 +174,11 @@ function createEvent_<T extends object, K = unknown>(
  *
  * Filters and logs in one pass:
  *   - Non-active-contract entries (`JsEmpty` / `JsIncompleteAssigned` /
- *     `JsIncompleteUnassigned`) are dropped silently at debug level.
+ *     `JsIncompleteUnassigned`) are dropped with a `debug`-level log.
  *   - If `expectedTemplateId` is provided, rows whose
  *     `createdEvent.templateId` doesn't match it under
- *     {@link matchesPartiallyQualified} are dropped at warn level —
- *     mirrors {@link Ledger.query}'s diagnostic so the same triage
+ *     {@link matchesPartiallyQualified} are dropped with a `warn`-level
+ *     log — mirrors {@link Ledger.query}'s diagnostic so the same triage
  *     signal is preserved when callers go off-Ledger.
  *
  * Use this when consuming ACS responses obtained from a transport that
