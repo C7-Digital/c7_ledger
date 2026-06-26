@@ -41,6 +41,7 @@ describe("Public API surface", () => {
   it.each([
     "createCmd",
     "createAndExerciseCmd",
+    "createEventsFromWire",
     "exerciseCmd",
     "setLogger",
     "toDisclosedContract",

@@ -86,6 +86,15 @@ type CreatedEvent = Schemas["CreatedEvent"];
 type ArchivedEvent = Schemas["ArchivedEvent"];
 type JsInterfaceView = Schemas["JsInterfaceView"];
 
+/**
+ * One entry of the array returned by `POST /v2/state/active-contracts`.
+ * Aliases the OpenAPI-generated `JsGetActiveContractsResponse` schema as
+ * a public, stable name so callers consuming raw ACS rows from a
+ * non-`Ledger` transport (e.g. dapp-sdk's `canton_ledgerApi` proxy)
+ * don't have to reach into the codegen namespace.
+ */
+export type ActiveContractsRow = Schemas["JsGetActiveContractsResponse"];
+
 // Type guard to check if an event is a CreatedEvent
 function isCreateEvent(
   event: Schemas["Event"]
@@ -156,6 +165,57 @@ function createEvent_<T extends object, K = unknown>(
     packageVersion,
     nodeId: cantonEvent.nodeId,
   };
+}
+
+/**
+ * Convert an array of {@link ActiveContractsRow}s (the response body of
+ * `POST /v2/state/active-contracts`) into typed, value.proto-branded
+ * {@link CreateEvent}s.
+ *
+ * Filters and logs in one pass:
+ *   - Non-active-contract entries (`JsEmpty` / `JsIncompleteAssigned` /
+ *     `JsIncompleteUnassigned`) are dropped with a `debug`-level log.
+ *   - If `expectedTemplateId` is provided, rows whose
+ *     `createdEvent.templateId` doesn't match it under
+ *     {@link matchesPartiallyQualified} are dropped with a `warn`-level
+ *     log — mirrors {@link Ledger.query}'s diagnostic so the same triage
+ *     signal is preserved when callers go off-Ledger.
+ *
+ * Use this when consuming ACS responses obtained from a transport that
+ * gave you raw rows but bypassed {@link Ledger.query} — e.g. dapp-sdk's
+ * CIP-0103 `canton_ledgerApi` proxy in wallet/proxied mode. You get the
+ * same decoded `CreateEvent<T>` shape (decoder-applied payload,
+ * synchronizerId carried through) without reimplementing the inner
+ * conversion.
+ */
+export function createEventsFromWire<T extends object, K = unknown>(
+  rows: ActiveContractsRow[],
+  versionedRegistry?: VersionedRegistry,
+  expectedTemplateId?: string,
+): CreateEvent<T, K>[] {
+  const out: CreateEvent<T, K>[] = [];
+  for (const row of rows) {
+    if (!row.contractEntry || !("JsActiveContract" in row.contractEntry)) {
+      logger.debug(`Skipping non-active contract entry: ${JSON.stringify(row.contractEntry)}`);
+      continue;
+    }
+    const active = row.contractEntry.JsActiveContract;
+    const created = active.createdEvent;
+    if (
+      expectedTemplateId !== undefined &&
+      !matchesPartiallyQualified(
+        created.templateId as IdentifierString,
+        expectedTemplateId
+      )
+    ) {
+      logger.warn(
+        `Template ID mismatch: expected ${expectedTemplateId}, got ${created.templateId}`
+      );
+      continue;
+    }
+    out.push(createEvent_<T, K>(created, versionedRegistry, active.synchronizerId));
+  }
+  return out;
 }
 
 function archiveEvent_<T extends object>(cantonEvent: ArchivedEvent): ArchiveEvent<T> {
@@ -1178,33 +1238,13 @@ export class Ledger {
 
     const response = await this.client.queryActiveContracts(queryRequest);
 
-    // Convert the response to our CreateEvent format
-    return response.reduce(
-      (acc: CreateEvent<T, K>[], item: Schemas["JsGetActiveContractsResponse"]) => {
-        // Skip non-active contract entries
-        if (!item.contractEntry || !("JsActiveContract" in item.contractEntry)) {
-          logger.debug(`Skipping non-active contract entry: ${JSON.stringify(item.contractEntry)}`);
-          return acc;
-        }
-
-        const contractEntry = item.contractEntry as {
-          JsActiveContract: Schemas["JsActiveContract"];
-        };
-        const createEvent = contractEntry.JsActiveContract.createdEvent;
-        const synchronizerId = contractEntry.JsActiveContract.synchronizerId;
-
-        // Verify we got the correct template
-        if (!matchesPartiallyQualified(createEvent.templateId, template.templateId)) {
-          logger.warn(
-            `Template ID mismatch: expected ${template.templateId}, got ${createEvent.templateId}`
-          );
-          return acc; // Skip contracts with mismatched template IDs
-        }
-
-        acc.push(createEvent_(createEvent, this.options.versionedRegistry, synchronizerId));
-        return acc;
-      },
-      []
+    // Wire→domain mapping lives in `createEventsFromWire` so consumers
+    // of the wallet proxy (dapp-sdk's `canton_ledgerApi`) apply the same
+    // decoder path without re-entering this `Ledger` instance.
+    return createEventsFromWire<T, K>(
+      response,
+      this.options.versionedRegistry,
+      template.templateId,
     );
   }
 
