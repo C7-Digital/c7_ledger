@@ -8,7 +8,7 @@
   "files": [
     "lib",
     "lib-lite",
-    "spec",
+    "specs",
     "scripts",
     "BUILD.md"
   ],
