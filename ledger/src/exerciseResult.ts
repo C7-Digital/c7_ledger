@@ -14,7 +14,7 @@
 // `@c7-private/dapp-stack`'s `ExternalPartySession.exerciseResult`.
 
 import type { Choice, ContractId } from "@daml/types";
-import { components } from "./generated/api";
+import type { components } from "./generated/api";
 
 /**
  * Locate the root `ExercisedEvent` matching `(choice, contractId)` in
