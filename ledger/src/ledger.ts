@@ -27,6 +27,7 @@ import {
 import { EventEmitter } from "eventemitter3";
 import { logger } from "./logger";
 import { logTokenExpiration } from "./token";
+import { decodeExerciseResult } from "./exerciseResult";
 import { components } from "./generated/api";
 import { TypedHttpClient } from "./client";
 import {
@@ -1543,36 +1544,10 @@ export class Ledger {
     };
     const request = { commands, transactionFormat };
     const response = await this.client.submitAndWaitForTransaction(request);
-    const events = response.transaction.events || [];
-
-    for (const event of events) {
-      if ("ExercisedEvent" in event) {
-        const ee = event.ExercisedEvent;
-        // Root exercise = the one we submitted. Match by (choice,
-        // contractId) so a future change that surfaces child
-        // exercises (Daml choices that internally exercise other
-        // choices) doesn't pick up the wrong result.
-        if (
-          ee.choice === choice.choiceName &&
-          ee.contractId === contractId.toString()
-        ) {
-          if (ee.exerciseResult === undefined) {
-            throw new Error(
-              `exerciseResult: LEDGER_EFFECTS response for ` +
-                `${choice.template().templateId}::${choice.choiceName} ` +
-                `has no exerciseResult — the server returned an unexpected shape.`
-            );
-          }
-          return choice.resultDecoder.runWithException(ee.exerciseResult);
-        }
-      }
-    }
-
-    throw new Error(
-      `exerciseResult: no matching ExercisedEvent for ` +
-        `${choice.template().templateId}::${choice.choiceName} ` +
-        `on contract ${contractId}. The submission may have used a ` +
-        `transaction shape that does not include exercise nodes.`
+    return decodeExerciseResult(
+      response.transaction.events || [],
+      choice,
+      contractId
     );
   }
 
