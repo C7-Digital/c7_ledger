@@ -26,5 +26,15 @@ export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./log
 export * from "./types";
 export * from "./events";
 export * from "./valueTypes";
+export { decodeExerciseResult } from "./exerciseResult";
+
+// Re-export the JSON Ledger API OpenAPI schemas so consumers can name
+// wire-response shapes (`apiComponents["schemas"]["Event"]`,
+// `["JsGetUpdateResponse"]`, etc.) without redeclaring slivers. Used by
+// `@c7-private/dapp-stack`'s `ExternalPartySession` to type the wallet-
+// proxied `sdk.ledgerApi(...)` response before handing it to
+// {@link decodeExerciseResult}. `apiComponents` mirrors the local alias
+// used in `types.ts`.
+export type { components as apiComponents } from "./generated/api";
 
 export { SDK_VERSION } from "./generated/sdk-version";
