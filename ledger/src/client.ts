@@ -139,9 +139,22 @@ export class TypedHttpClient {
     method: "GET" | "POST" | "PUT" | "DELETE",
     body?: unknown,
     responseSchemaName?: string,
-    isArrayResponse?: boolean
+    isArrayResponse?: boolean,
+    queryParams?: Record<string, string | number | boolean | undefined>
   ): Promise<TResponse> {
-    const url = `${this.baseUrl}${path}`;
+    // Some Canton JSON API endpoints (notably `POST /v2/state/active-contracts`
+    // and the paged updates) take control knobs as URL query parameters —
+    // `limit`, `stream_idle_timeout_ms` — rather than in the body. The upstream
+    // OpenAPI export omits those from the path spec (see api.ts `query?: never`
+    // on the ACS path), so consumers pass them through this optional map.
+    const url =
+      queryParams && Object.keys(queryParams).length > 0
+        ? `${this.baseUrl}${path}?${new URLSearchParams(
+            Object.entries(queryParams).flatMap(([k, v]) =>
+              v === undefined ? [] : [[k, String(v)] as [string, string]]
+            )
+          ).toString()}`
+        : `${this.baseUrl}${path}`;
     const requestInit: RequestInit = {
       method,
       // Bearer-token API — explicitly tell the browser NOT to attach
@@ -251,16 +264,30 @@ export class TypedHttpClient {
     );
   }
 
-  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
+  /**
+   * Query the active contract set at a given offset.
+   *
+   * `options.limit` caps the number of returned rows (URL query param the
+   * OpenAPI export doesn't surface). Canton enforces `min(limit, http-list-
+   * max-elements-limit + 1)` — pass a limit at or below the participant's
+   * `http-list-max-elements-limit` (default 200) and the call succeeds even
+   * when the ACS slice is much larger; the response is silently truncated to
+   * that limit with no page token, so use this only when a bounded prefix is
+   * acceptable (e.g. an aggregate summed over the truncated slice).
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
   async queryActiveContracts(
-    queryRequest: QueryActiveContractsRequest
+    queryRequest: QueryActiveContractsRequest,
+    options?: { limit?: number }
   ): Promise<QueryActiveContractsResponse> {
     return this.request<QueryActiveContractsResponse>(
       "/v2/state/active-contracts",
       "POST",
       queryRequest,
       "#/components/schemas/JsGetActiveContractsResponse",
-      true
+      true,
+      options?.limit !== undefined ? { limit: options.limit } : undefined
     );
   }
 
