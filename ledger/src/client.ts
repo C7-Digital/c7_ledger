@@ -139,9 +139,34 @@ export class TypedHttpClient {
     method: "GET" | "POST" | "PUT" | "DELETE",
     body?: unknown,
     responseSchemaName?: string,
-    isArrayResponse?: boolean
+    isArrayResponse?: boolean,
+    queryParams?: Record<string, string | number | boolean | undefined>
   ): Promise<TResponse> {
-    const url = `${this.baseUrl}${path}`;
+    // Some Canton JSON API endpoints (notably `POST /v2/state/active-contracts`
+    // and the paged updates) take control knobs as URL query parameters —
+    // `limit`, `stream_idle_timeout_ms` — rather than in the body. The upstream
+    // OpenAPI export omits those from the path spec (see api.ts `query?: never`
+    // on the ACS path), so consumers pass them through this optional map.
+    //
+    // Filter to defined entries first — a bag like `{ limit: undefined }` has
+    // length 1 by `Object.keys` but nothing to encode; without the filter we
+    // used to emit a trailing bare `?`. Also pick the join char based on
+    // whether the templated path already carries a query string (typed
+    // `paths` today never does, but that's an OpenAPI-shape accident, not a
+    // guarantee — future endpoints could bring one).
+    const url = ((): string => {
+      const base = `${this.baseUrl}${path}`;
+      if (!queryParams) return base;
+      const defined = Object.entries(queryParams).filter(
+        ([, v]) => v !== undefined
+      ) as Array<[string, string | number | boolean]>;
+      if (defined.length === 0) return base;
+      const qs = new URLSearchParams(
+        defined.map(([k, v]) => [k, String(v)] as [string, string])
+      ).toString();
+      const join = String(path).includes("?") ? "&" : "?";
+      return `${base}${join}${qs}`;
+    })();
     const requestInit: RequestInit = {
       method,
       // Bearer-token API — explicitly tell the browser NOT to attach
@@ -251,16 +276,41 @@ export class TypedHttpClient {
     );
   }
 
-  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
+  /**
+   * Query the active contract set at a given offset.
+   *
+   * `options.limit` caps the number of returned rows (URL query param the
+   * OpenAPI export doesn't surface). Canton enforces `min(limit, http-list-
+   * max-elements-limit + 1)` — pass a limit at or below the participant's
+   * `http-list-max-elements-limit` (default 200) and the call succeeds even
+   * when the ACS slice is much larger; the response is silently truncated to
+   * that limit with no page token, so use this only when a bounded prefix is
+   * acceptable (e.g. an aggregate summed over the truncated slice). Must be
+   * a non-negative safe integer — floats, `NaN`, `-1` and the like throw
+   * before any HTTP is issued.
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   * @throws {RangeError} if `options.limit` is not a non-negative safe integer
+   */
   async queryActiveContracts(
-    queryRequest: QueryActiveContractsRequest
+    queryRequest: QueryActiveContractsRequest,
+    options?: { limit?: number }
   ): Promise<QueryActiveContractsResponse> {
+    if (options?.limit !== undefined) {
+      const { limit } = options;
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError(
+          `queryActiveContracts: options.limit must be a non-negative safe integer, got ${limit}`
+        );
+      }
+    }
     return this.request<QueryActiveContractsResponse>(
       "/v2/state/active-contracts",
       "POST",
       queryRequest,
       "#/components/schemas/JsGetActiveContractsResponse",
-      true
+      true,
+      options?.limit !== undefined ? { limit: options.limit } : undefined
     );
   }
 

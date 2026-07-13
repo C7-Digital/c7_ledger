@@ -1200,6 +1200,13 @@ export class Ledger {
    * @param includeCreatedEventBlob
    * @param verbose
    * @param readAsParties
+   * @param options.limit Caps the returned row count as a URL query param
+   *  the JSON API accepts (`?limit=N`). Use when a bounded prefix is
+   *  acceptable — e.g. for an aggregate over a large ACS slice where the
+   *  participant's `http-list-max-elements-limit` (default 200) would
+   *  otherwise reject the call with `JSON_API_MAXIMUM_LIST_ELEMENTS_NUMBER_REACHED`.
+   *  Response is silently truncated to `limit` rows with no continuation
+   *  token; callers must surface that to the user.
    * @returns
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
@@ -1208,7 +1215,8 @@ export class Ledger {
     atOffset: LedgerOffset = "end",
     includeCreatedEventBlob: boolean = false,
     verbose: boolean = false,
-    readAsParties?: Party[]
+    readAsParties?: Party[],
+    options?: { limit?: number }
   ): Promise<CreateEvent<T, K>[]> {
     const activeAtOffset = await this.resolveOffset(atOffset);
 
@@ -1237,7 +1245,7 @@ export class Ledger {
       },
     };
 
-    const response = await this.client.queryActiveContracts(queryRequest);
+    const response = await this.client.queryActiveContracts(queryRequest, options);
 
     // Wire→domain mapping lives in `createEventsFromWire` so consumers
     // of the wallet proxy (dapp-sdk's `canton_ledgerApi`) apply the same
