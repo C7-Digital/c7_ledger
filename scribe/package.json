@@ -16,12 +16,14 @@
   ],
   "exports": {
     ".": {
+      "types": "./lib/src/index.d.ts",
       "import": "./lib/src/index.js",
-      "types": "./lib/src/index.d.ts"
+      "default": "./lib/src/index.js"
     },
     "./vite": {
+      "types": "./lib/src/vite-plugin.d.ts",
       "import": "./lib/src/vite-plugin.js",
-      "types": "./lib/src/vite-plugin.d.ts"
+      "default": "./lib/src/vite-plugin.js"
     }
   },
   "bin": {

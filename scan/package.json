@@ -18,8 +18,9 @@
   },
   "exports": {
     ".": {
+      "types": "./lib/src/index.d.ts",
       "import": "./lib/src/index.js",
-      "types": "./lib/src/index.d.ts"
+      "default": "./lib/src/index.js"
     }
   },
   "scripts": {

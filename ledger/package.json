@@ -20,16 +20,19 @@
   },
   "exports": {
     ".": {
+      "types": "./lib/src/index.d.ts",
       "import": "./lib/src/index.js",
-      "types": "./lib/src/index.d.ts"
+      "default": "./lib/src/index.js"
     },
     "./lite": {
+      "types": "./lib-lite/src/index.d.ts",
       "import": "./lib-lite/src/index.js",
-      "types": "./lib-lite/src/index.d.ts"
+      "default": "./lib-lite/src/index.js"
     },
     "./sets": {
+      "types": "./lib/src/sets.d.ts",
       "import": "./lib/src/sets.js",
-      "types": "./lib/src/sets.d.ts"
+      "default": "./lib/src/sets.js"
     }
   },
   "bin": {
