@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@c7-digital/scribe",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "description": "Transform DAML codegen output into unified TypeScript packages for use with @c7-digital/ledger",
   "repository": {
@@ -16,12 +16,14 @@
   ],
   "exports": {
     ".": {
+      "types": "./lib/src/index.d.ts",
       "import": "./lib/src/index.js",
-      "types": "./lib/src/index.d.ts"
+      "default": "./lib/src/index.js"
     },
     "./vite": {
+      "types": "./lib/src/vite-plugin.d.ts",
       "import": "./lib/src/vite-plugin.js",
-      "types": "./lib/src/vite-plugin.d.ts"
+      "default": "./lib/src/vite-plugin.js"
     }
   },
   "bin": {
