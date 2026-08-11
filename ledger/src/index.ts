@@ -21,6 +21,14 @@ export {
   type UpdatesStreamRequest,
   type UpdatesStreamMessage,
 } from "./websocket";
+export {
+  type CantonErrorCategory,
+  type CantonResourceKind,
+  categoryOf,
+  isRetryable,
+  resourcesOf,
+  cantonErrorOf,
+} from "./cantonError";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";
