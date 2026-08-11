@@ -198,15 +198,29 @@ export class TypedHttpClient {
     }
 
     if (!response.ok) {
+      // Read the body ONCE, as text, then try to parse it.
+      //
+      // The obvious `json()`-then-`text()`-on-failure ordering does not work:
+      // `json()` consumes the body stream even when it throws, so the fallback
+      // `text()` raises "Body is unusable" and the body is lost entirely. That
+      // silently discarded exactly the responses the fallback existed for — a
+      // proxy's HTML "403 Forbidden" page in front of the ledger reached
+      // callers as a bare `HTTP 403: Forbidden` with `responseBody` undefined,
+      // stripping the one clue that the request never got past the network.
       let body: unknown;
       try {
-        body = await response.json();
-      } catch {
+        const raw = await response.text();
         try {
-          body = await response.text();
+          body = JSON.parse(raw);
         } catch {
-          // Response body unreadable — leave undefined
+          // Not JSON — an HTML error page, a plain-text proxy message, or an
+          // empty body. Keep the text: `LedgerApiError` surfaces a string body
+          // in its message, and a caller can classify markup as a transport
+          // failure rather than an application one.
+          body = raw === "" ? undefined : raw;
         }
+      } catch {
+        // Response body unreadable — leave undefined
       }
       throw new LedgerApiError(response.status, response.statusText, body);
     }

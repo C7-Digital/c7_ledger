@@ -40,14 +40,29 @@ export type JsCantonError = components["schemas"]["JsCantonError"];
  */
 export type DisclosedContract = apiComponents["schemas"]["DisclosedContract"];
 
-// Type guard to check if a response is a JsCantonError
+/**
+ * Type guard for a Canton error payload.
+ *
+ * Checks the *types* of the schema's four required fields, not merely that the
+ * keys are present. Key-presence alone accepts values that then behave badly
+ * downstream: `LedgerApiError` interpolates `${code}: ${cause}` into its
+ * message, so an object whose `cause` is a nested `{errors: [...]}` structure —
+ * a real shape produced elsewhere in the JSON API — would render as
+ * `"[object Object]"` in the one field meant to explain the failure.
+ *
+ * The type checks are also what let a caller trust the narrowing: a guard that
+ * promises `JsCantonError` while `code` might be a number is a guard that moves
+ * the failure to a later line rather than preventing it.
+ */
 export function isCantonError(response: unknown): response is JsCantonError {
+  if (typeof response !== "object" || response === null) return false;
+  const r = response as Partial<Record<keyof JsCantonError, unknown>>;
   return (
-    typeof response === "object" &&
-    response !== null &&
-    "code" in response &&
-    "cause" in response &&
-    "context" in response
+    typeof r.code === "string" &&
+    typeof r.cause === "string" &&
+    typeof r.errorCategory === "number" &&
+    typeof r.context === "object" &&
+    r.context !== null
   );
 }
 

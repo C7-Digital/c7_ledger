@@ -47,6 +47,12 @@ describe("Public API surface", () => {
     "toDisclosedContract",
     "disclosedContractFromWire",
     "createContractId",
+    // Canton error vocabulary — accessors over the JsCantonError payload that
+    // both the direct JSON-API path and a wallet-gateway decoder produce.
+    "categoryOf",
+    "isRetryable",
+    "resourcesOf",
+    "cantonErrorOf",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });
