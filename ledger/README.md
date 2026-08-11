@@ -67,6 +67,64 @@ const result = await ledger.create(MyTemplate, payload, [actAsParty]);
 const choiceResult = await ledger.exercise(MyChoice, contractId, argument, [actAsParty]);
 ```
 
+## Errors
+
+A non-OK HTTP response throws a `LedgerApiError` carrying the status and the
+response body, tagged with how that body was read:
+
+```typescript
+export type LedgerErrorBody =
+  | { kind: "canton"; error: JsCantonError }  // a rejection Canton can explain
+  | { kind: "json"; value: unknown }          // some other structured error
+  | { kind: "text"; text: string }            // a proxy's HTML page, a plain message
+  | { kind: "empty" };                        // no body, or unreadable
+```
+
+The tag records a decision made once, when the body is read, so a caller does
+not re-derive it from `typeof` — which cannot tell a JSON string literal from
+an HTML error page.
+
+`cantonError` and `responseBody` are derived from `body`, so they cannot
+disagree with it. Use `cantonErrorOf` to reach the Canton payload; it also
+resolves a bare payload and a wallet-gateway wrapper, so one call covers every
+path a rejection can arrive by.
+
+```typescript
+try {
+  await ledger.exercise(MyChoice, cid, arg, [party]);
+} catch (e) {
+  const canton = cantonErrorOf(e);
+  if (canton && isRetryable(canton)) return retry();
+  if (e instanceof LedgerApiError && e.body.kind === "text") {
+    // Markup here means a proxy answered, not the ledger.
+  }
+}
+```
+
+`message` carries a summary of the body bounded to 120 characters, so logging
+it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.34
+
+The `LedgerApiError` constructor takes a tagged `LedgerErrorBody` instead of an
+untagged `unknown`. Reading an error is unchanged — `status`, `statusText`,
+`cantonError`, and `responseBody` all behave as before. Only code that
+*constructs* one, which in practice means tests and mocks, needs updating:
+
+```typescript
+new LedgerApiError(404, "Not Found", cantonPayload)      // before
+new LedgerApiError(404, "Not Found", { kind: "canton", error: cantonPayload })
+
+new LedgerApiError(403, "Forbidden", "<html>…</html>")   // before
+new LedgerApiError(403, "Forbidden", { kind: "text", text: "<html>…</html>" })
+```
+
+The two-argument form still means "no body" and needs no change.
+
+`ScanApiError` in `@c7-digital/scan` has the same `status`, `statusText`,
+`body`, and `responseBody`, so a `catch` that can receive either reads one set
+of fields. It has no `canton` case.
+
 ## Migration from @daml/ledger
 
 Key differences:
