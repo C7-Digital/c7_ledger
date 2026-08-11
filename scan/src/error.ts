@@ -8,16 +8,30 @@
  * of branching per client.
  */
 
+/**
+ * What a non-OK response carried, as read.
+ *
+ * Whether the body parsed as JSON is decided once, when it is read, and the
+ * three outcomes are genuinely different things: an application error object,
+ * text a server or proxy wrote for a human, or nothing at all. Naming them
+ * keeps that knowledge instead of leaving a caller to re-derive it from
+ * `typeof`, which cannot tell a JSON string literal from an HTML page.
+ */
+export type ScanErrorBody =
+  | { readonly kind: "json"; readonly value: unknown }
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "empty" };
+
 /** How much of a response body belongs in a log line. */
 const MESSAGE_BODY_CHARS = 120;
 
-function summarize(body: unknown): string | undefined {
+function summarize(body: ScanErrorBody): string | undefined {
   const text =
-    typeof body === "string"
-      ? body
-      : body === undefined
-        ? ""
-        : safeJson(body);
+    body.kind === "text"
+      ? body.text
+      : body.kind === "json"
+        ? safeJson(body.value)
+        : "";
   const flat = text.replace(/\s+/g, " ").trim();
   if (!flat) return undefined;
   return flat.length <= MESSAGE_BODY_CHARS
@@ -37,17 +51,16 @@ export class ScanApiError extends Error {
   public readonly status: number;
   public readonly statusText: string;
   /**
-   * The response body: the parsed JSON when it was JSON, the raw text when it
-   * was not, `undefined` when it was empty or unreadable.
+   * The response body, tagged with how it was read.
    *
    * A blocked or misrouted request answers with an HTML page here. That is the
    * caller's signal to report a connectivity problem rather than show the
    * body, so it must survive intact — which is why the full value lives on
    * this field and only a bounded summary reaches {@link message}.
    */
-  public readonly responseBody?: unknown;
+  public readonly body: ScanErrorBody;
 
-  constructor(status: number, statusText: string, body?: unknown) {
+  constructor(status: number, statusText: string, body: ScanErrorBody) {
     const detail = summarize(body);
     super(
       detail
@@ -57,14 +70,28 @@ export class ScanApiError extends Error {
     this.name = "ScanApiError";
     this.status = status;
     this.statusText = statusText;
-    if (body !== undefined && body !== "") {
-      this.responseBody = body;
+    this.body = body;
+  }
+
+  /**
+   * The untagged body, matching `LedgerApiError.responseBody` so a consumer
+   * that handles either client reads one field. Derived from {@link body},
+   * which is the source of truth.
+   */
+  public get responseBody(): unknown {
+    switch (this.body.kind) {
+      case "json":
+        return this.body.value;
+      case "text":
+        return this.body.text;
+      case "empty":
+        return undefined;
     }
   }
 }
 
 /**
- * Read a non-OK response into the body value {@link ScanApiError} carries.
+ * Read a non-OK response into the body {@link ScanApiError} carries.
  *
  * Text first, then parse. Reading with `json()` and falling back to `text()`
  * does not work: `json()` consumes the stream even when it throws, so the
@@ -72,17 +99,19 @@ export class ScanApiError extends Error {
  * what silently discarded every HTML error page in `@c7-digital/ledger` before
  * 0.0.33.
  */
-export async function readErrorBody(response: Response): Promise<unknown> {
+export async function readErrorBody(
+  response: Response,
+): Promise<ScanErrorBody> {
   let raw: string;
   try {
     raw = await response.text();
   } catch {
-    return undefined;
+    return { kind: "empty" };
   }
-  if (raw === "") return undefined;
+  if (raw === "") return { kind: "empty" };
   try {
-    return JSON.parse(raw);
+    return { kind: "json", value: JSON.parse(raw) };
   } catch {
-    return raw;
+    return { kind: "text", text: raw };
   }
 }
