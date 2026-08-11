@@ -8,6 +8,7 @@ import { Party } from "@daml/types";
 import { operations, components } from "./generated/api.js";
 import type * as Typed from "./types.js";
 import { logger } from "./logger.js";
+import { ScanApiError, readErrorBody } from "./error.js";
 
 // ─── Party-refined types ──────────────────────────────────────────────
 // The OpenAPI spec uses plain `string` for party identifiers. We refine
@@ -388,11 +389,11 @@ export class ScanClient {
     const response = await fetch(url, requestInit);
 
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const body = await readErrorBody(response);
       if (this.debug) {
-        logger.error(`[scan-debug] ← ${response.status} ${response.statusText}`, text);
+        logger.error(`[scan-debug] ← ${response.status} ${response.statusText}`, body);
       }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}${text ? ` - ${text}` : ""}`);
+      throw new ScanApiError(response.status, response.statusText, body);
     }
 
     // Some health endpoints return empty bodies
