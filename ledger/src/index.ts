@@ -10,7 +10,8 @@ export {
   exerciseCmd,
   convertCommand,
 } from "./ledger";
-export { TypedHttpClient, type TypedHttpClientConfig, LedgerApiError } from "./client";
+export { TypedHttpClient, type TypedHttpClientConfig } from "./client";
+export { LedgerApiError, type LedgerErrorBody } from "./error";
 export {
   WebSocketClient,
   type StreamConfig,

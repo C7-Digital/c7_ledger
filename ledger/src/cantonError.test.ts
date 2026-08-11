@@ -6,7 +6,7 @@ import {
   type CantonErrorCategory,
 } from "./cantonError";
 import { isCantonError, type JsCantonError } from "./types";
-import { LedgerApiError } from "./client";
+import { LedgerApiError } from "./error";
 
 /** A payload with the required fields filled in, overridable per test. */
 function payload(over: Partial<JsCantonError> = {}): JsCantonError {
@@ -179,7 +179,10 @@ describe("cantonErrorOf", () => {
   });
 
   it("reads the payload off a LedgerApiError from this package", () => {
-    const err = new LedgerApiError(404, "Not Found", CONTRACT_NOT_FOUND);
+    const err = new LedgerApiError(404, "Not Found", {
+      kind: "canton",
+      error: CONTRACT_NOT_FOUND,
+    });
     expect(cantonErrorOf(err)).toEqual(CONTRACT_NOT_FOUND);
     // And the round trip is the point: category without touching the string.
     expect(categoryOf(cantonErrorOf(err)!)).toBe("resourceMissing");
@@ -203,7 +206,10 @@ describe("cantonErrorOf", () => {
   it("declines a LedgerApiError whose body was not a Canton payload", () => {
     // A proxy's HTML page carries no application meaning; saying so lets the
     // caller classify it as a transport failure instead.
-    const err = new LedgerApiError(403, "Forbidden", "<html>403 Forbidden</html>");
+    const err = new LedgerApiError(403, "Forbidden", {
+      kind: "text",
+      text: "<html>403 Forbidden</html>",
+    });
     expect(cantonErrorOf(err)).toBeNull();
   });
 

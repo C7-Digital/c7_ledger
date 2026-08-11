@@ -9,7 +9,8 @@
  * reached callers as a bare status with no body, stripping the one clue that
  * the request never got past the network.
  */
-import { TypedHttpClient, LedgerApiError } from "./client";
+import { TypedHttpClient } from "./client";
+import { LedgerApiError } from "./error";
 import type { JsCantonError } from "./types";
 
 const TEST_TOKEN =
@@ -69,9 +70,21 @@ describe("non-OK responses", () => {
     expect(err.status).toBe(403);
     // The whole point: the markup survives, so a caller can recognise an infra
     // page and say "the connection was blocked" instead of dumping a status.
+    expect(err.body).toEqual({ kind: "text", text: html });
     expect(err.responseBody).toBe(html);
     expect(err.message).toContain("403 Forbidden");
     expect(err.cantonError).toBeUndefined();
+  });
+
+  it("bounds how much of a body reaches the message", async () => {
+    // `.message` is what ends up in a log line; the page still has to survive
+    // intact on the body, because that is how a caller tells an infra page
+    // from an application message.
+    const page = `<html>${"x".repeat(4000)}</html>`;
+    const err = await captureError(clientReturning(oneShotResponse(403, "Forbidden", page)));
+
+    expect(err.message.length).toBeLessThan(200);
+    expect(err.responseBody).toBe(page);
   });
 
   it("still parses a Canton error body into cantonError", async () => {
@@ -86,6 +99,7 @@ describe("non-OK responses", () => {
       clientReturning(oneShotResponse(404, "Not Found", JSON.stringify(canton)))
     );
 
+    expect(err.body).toEqual({ kind: "canton", error: canton });
     expect(err.cantonError).toEqual(canton);
     expect(err.message).toBe(
       "HTTP 404: Not Found — CONTRACT_NOT_FOUND: Contract could not be found with id 001b68f5"
@@ -96,6 +110,7 @@ describe("non-OK responses", () => {
     const err = await captureError(
       clientReturning(oneShotResponse(502, "Bad Gateway", "upstream connect error"))
     );
+    expect(err.body).toEqual({ kind: "text", text: "upstream connect error" });
     expect(err.responseBody).toBe("upstream connect error");
     expect(err.message).toContain("upstream connect error");
   });
@@ -103,6 +118,7 @@ describe("non-OK responses", () => {
   it("leaves the body undefined when the response is empty", async () => {
     // Nothing to report is different from something we failed to read.
     const err = await captureError(clientReturning(oneShotResponse(500, "Internal Server Error", "")));
+    expect(err.body).toEqual({ kind: "empty" });
     expect(err.responseBody).toBeUndefined();
     expect(err.message).toBe("HTTP 500: Internal Server Error");
   });
@@ -111,7 +127,47 @@ describe("non-OK responses", () => {
     const err = await captureError(
       clientReturning(oneShotResponse(400, "Bad Request", JSON.stringify({ detail: "nope" })))
     );
+    expect(err.body).toEqual({ kind: "json", value: { detail: "nope" } });
     expect(err.cantonError).toBeUndefined();
     expect(err.responseBody).toEqual({ detail: "nope" });
+  });
+
+  it("tells a JSON string literal apart from a text body", async () => {
+    // Both yield a JS string; only the tag says which one the server sent, and
+    // a caller inspecting markup must not be handed a quoted JSON value.
+    const asJson = await captureError(
+      clientReturning(oneShotResponse(403, "Forbidden", '"blocked"'))
+    );
+    expect(asJson.body).toEqual({ kind: "json", value: "blocked" });
+
+    const asText = await captureError(
+      clientReturning(oneShotResponse(403, "Forbidden", "blocked"))
+    );
+    expect(asText.body).toEqual({ kind: "text", text: "blocked" });
+  });
+});
+
+describe("LedgerApiError accessors", () => {
+  it("derives cantonError and responseBody from one tagged body", () => {
+    // Two fields that could disagree are now two views of one value, so
+    // `{ cantonError: set, responseBody: something else }` cannot be built.
+    const canton: JsCantonError = {
+      code: "CONTRACT_NOT_FOUND",
+      cause: "gone",
+      context: {},
+      errorCategory: 11,
+    };
+    const err = new LedgerApiError(404, "Not Found", { kind: "canton", error: canton });
+    expect(err.cantonError).toBe(canton);
+    expect(err.responseBody).toBe(canton);
+
+    const text = new LedgerApiError(403, "Forbidden", { kind: "text", text: "<html/>" });
+    expect(text.cantonError).toBeUndefined();
+    expect(text.responseBody).toBe("<html/>");
+
+    const empty = new LedgerApiError(503, "Service Unavailable");
+    expect(empty.body).toEqual({ kind: "empty" });
+    expect(empty.responseBody).toBeUndefined();
+    expect(empty.message).toBe("HTTP 503: Service Unavailable");
   });
 });
