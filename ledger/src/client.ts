@@ -12,40 +12,7 @@ import { Party } from "@daml/types";
 
 import { paths, operations } from "./generated/api";
 import { SchemaValidator, ValidationMode } from "./validation";
-import { isCantonError, type JsCantonError } from "./types";
-
-/**
- * Error thrown when the Canton ledger API returns a non-OK HTTP response.
- * Captures the HTTP status, status text, and — when the response body
- * is a JsCantonError — the structured error details from Canton.
- */
-export class LedgerApiError extends Error {
-  public readonly status: number;
-  public readonly statusText: string;
-  public readonly cantonError?: JsCantonError;
-  public readonly responseBody?: unknown;
-
-  constructor(
-    status: number,
-    statusText: string,
-    body?: unknown,
-  ) {
-    const cantonErr = isCantonError(body) ? body : undefined;
-    const detail = cantonErr
-      ? `${cantonErr.code}: ${cantonErr.cause}`
-      : (typeof body === "string" ? body : undefined);
-    const message = detail
-      ? `HTTP ${status}: ${statusText} — ${detail}`
-      : `HTTP ${status}: ${statusText}`;
-
-    super(message);
-    this.name = "LedgerApiError";
-    this.status = status;
-    this.statusText = statusText;
-    this.cantonError = cantonErr;
-    this.responseBody = body;
-  }
-}
+import { LedgerApiError, readErrorBody } from "./error";
 
 // Extract request/response types for specific operations
 type SubmitAndWaitOperation = operations["postV2CommandsSubmit-and-wait"];
@@ -198,31 +165,11 @@ export class TypedHttpClient {
     }
 
     if (!response.ok) {
-      // Read the body ONCE, as text, then try to parse it.
-      //
-      // The obvious `json()`-then-`text()`-on-failure ordering does not work:
-      // `json()` consumes the body stream even when it throws, so the fallback
-      // `text()` raises "Body is unusable" and the body is lost entirely. That
-      // silently discarded exactly the responses the fallback existed for — a
-      // proxy's HTML "403 Forbidden" page in front of the ledger reached
-      // callers as a bare `HTTP 403: Forbidden` with `responseBody` undefined,
-      // stripping the one clue that the request never got past the network.
-      let body: unknown;
-      try {
-        const raw = await response.text();
-        try {
-          body = JSON.parse(raw);
-        } catch {
-          // Not JSON — an HTML error page, a plain-text proxy message, or an
-          // empty body. Keep the text: `LedgerApiError` surfaces a string body
-          // in its message, and a caller can classify markup as a transport
-          // failure rather than an application one.
-          body = raw === "" ? undefined : raw;
-        }
-      } catch {
-        // Response body unreadable — leave undefined
-      }
-      throw new LedgerApiError(response.status, response.statusText, body);
+      throw new LedgerApiError(
+        response.status,
+        response.statusText,
+        await readErrorBody(response),
+      );
     }
 
     const parsed = await response.json();
