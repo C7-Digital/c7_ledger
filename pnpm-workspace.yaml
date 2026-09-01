@@ -3,6 +3,7 @@ packages:
   - 'react'
   - 'scribe'
   - 'scan'
+  - 'pqs'
   - 'splice-codegen'
   - 'admin'
 

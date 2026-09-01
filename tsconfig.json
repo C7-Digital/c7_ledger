@@ -17,6 +17,7 @@
     { "path": "./react" },
     { "path": "./scribe" },
     { "path": "./scan" },
+    { "path": "./pqs" },
     { "path": "./admin" }
   ]
 }
