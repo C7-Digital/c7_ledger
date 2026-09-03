@@ -61,15 +61,40 @@ function parsePackageSelection(): Set<PackageName> {
   return new Set(names as PackageName[]);
 }
 
+// Compares two `major.minor.patch` strings. Returns <0, 0 or >0.
+function compareVersion(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+// True if `version` falls inside the peer range. Accepts the two forms the repo
+// uses: an exact caret pin (`^0.0.35`) and a widened lower-bounded range
+// (`>=0.0.33 <0.1.0`, set deliberately so react need not re-bump per ledger
+// patch). Any other shape, or a range that does not admit `version`, is false.
+function peerRangeAdmits(peerDep: string | undefined, version: string): boolean {
+  if (!peerDep) return false;
+  if (peerDep === `^${version}`) return true;
+
+  const range = peerDep.match(/^>=(\d+\.\d+\.\d+)\s+<(\d+\.\d+\.\d+)$/);
+  if (!range) return false;
+  const [, lower, upper] = range;
+  return compareVersion(version, lower) >= 0 && compareVersion(version, upper) < 0;
+}
+
 function validatePeerDependency(reactPkg: any, ledgerVersion: string): void {
   const peerDep = reactPkg.peerDependencies?.['@c7-digital/ledger'];
-  const expectedPeerDep = `^${ledgerVersion}`;
 
-  if (peerDep !== expectedPeerDep) {
+  if (!peerRangeAdmits(peerDep, ledgerVersion)) {
     console.error('\n✗ Validation failed: React peer dependency mismatch');
-    console.error(`  Expected: "@c7/ledger": "${expectedPeerDep}"`);
-    console.error(`  Found:    "@c7-digital/ledger": "${peerDep || '(not set)'}"`);
-    console.error('\nPlease update the peer dependency in react/package.json to match the ledger version.');
+    console.error(`  Ledger version:        ${ledgerVersion}`);
+    console.error(`  React peer dependency: "@c7-digital/ledger": "${peerDep || '(not set)'}"`);
+    console.error(`\nThe react peer range must admit ${ledgerVersion} — either "^${ledgerVersion}"`);
+    console.error('or a widened range such as ">=0.0.33 <0.1.0". Update react/package.json.');
     process.exit(1);
   }
 }
