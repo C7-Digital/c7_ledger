@@ -32,6 +32,7 @@ import { components } from "./generated/api";
 import { TypedHttpClient } from "./client";
 import {
   WebSocketClient,
+  StreamConfig,
   ActiveContractsStreamRequest,
   ActiveContractsResponse,
   UpdatesResponse,
@@ -667,11 +668,83 @@ export interface LedgerOptions {
    * Defaults to 0 (no delay).
    */
   responseDelay?: number;
+  /**
+   * Factory for the WebSocket client that backs every stream. Defaults to
+   * `new WebSocketClient(config)`. Exposed as a test seam so a fake transport
+   * can drive the stream state machine (e.g. the missing-package drop-and-retry
+   * path); production code never sets it.
+   */
+  webSocketClientFactory?: (config: StreamConfig) => WebSocketClient;
+  /**
+   * Re-widen backoff bounds (ms) for the missing-package retry: while a package
+   * is dropped, the stream retries the full filter set on a doubling backoff
+   * from min to max. Defaults to 30s..15m ({@link REWIDEN_MIN_MS}/`_MAX_MS`).
+   */
+  rewidenBackoffMinMs?: number;
+  rewidenBackoffMaxMs?: number;
 }
 
 type FilterSpec 
   = { type: "template", templateId: IdentifierString } 
   | { type: "interface", interfaceId: IdentifierString };
+
+// Re-widen backoff bounds. While a package is dropped, the stream retries the
+// full filter set on this schedule (min, doubling, capped at max) until the
+// participant knows the package — so a DAR uploaded after the stream started is
+// picked up without a restart.
+const REWIDEN_MIN_MS = 30_000;
+const REWIDEN_MAX_MS = 900_000; // 15 min
+
+/**
+ * Extract the package names from a `PACKAGE_NAMES_NOT_FOUND` cause.
+ *
+ * The participant builds the cause as (Canton `RequestValidationErrors`,
+ * `PackageNamesNotFound.Reject`):
+ *
+ *   s"The following package names do not match upgradable packages uploaded on
+ *     this participant: [${unknownPackageNames.mkString(", ")}]."
+ *
+ * i.e. a `Set[PackageName]` joined with `", "`, wrapped in `[...]`. The names
+ * live only in this prose — the error's structured `resources`/`context` do not
+ * carry them — so a string parse is the only option. Package names are LF
+ * identifiers (`[a-zA-Z0-9._-]`), so they never contain `,` or `]`.
+ *
+ * Checked against Canton v3.5.14 (this repo's `canton` submodule, 2026-08); the
+ * `PACKAGE_NAMES_NOT_FOUND` error id has existed since Canton 2.9.1. The stable
+ * contract the caller relies on is the error CODE, not this prose: if a future
+ * Canton changes the wording, this returns `[]`, the caller drops nothing and
+ * surfaces the error as before — degrading to fail-loud, never to a wrong drop.
+ *
+ * TODO: if Canton ever carries the unknown package names in the error's
+ * structured fields (`resources`/`context`) rather than only the cause prose,
+ * read them from there and delete this regex. Tracked in the repo README.
+ *
+ * Returns `[]` when the cause has no bracketed list.
+ */
+export function parseMissingPackageNames(cause: string | undefined): string[] {
+  if (!cause) return [];
+  const match = cause.match(/\[([^\]]+)\]/);
+  const list = match?.[1];
+  if (!list) return [];
+  return list
+    .split(",")
+    .map(name => name.trim())
+    .filter(name => name.length > 0);
+}
+
+/**
+ * True when a filter's package matches one of the given package names. A
+ * template/interface id is `#<package-name>:Module:Entity` (name form) or
+ * `<package-id-hash>:Module:Entity` (id form). Only the name form can be
+ * matched against the names the participant reports, so an id-form filter never
+ * matches — the caller then surfaces the error rather than dropping blindly.
+ */
+export function filterMatchesPackageName(filter: FilterSpec, names: readonly string[]): boolean {
+  const id = filter.type === "template" ? filter.templateId : filter.interfaceId;
+  const pkg = id.split(":")[0];
+  if (!pkg || !pkg.startsWith("#")) return false;
+  return names.includes(pkg.slice(1));
+}
 
 /**
  * Internal stream implementation for active contracts
@@ -688,6 +761,20 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   protected versionedRegistry?: VersionedRegistry;
   private autoReconnect: boolean;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
+  // The complete filter set the caller asked for. `activeFilters` is the subset
+  // currently sent to the participant: a package the participant does not yet
+  // know (a DAR not uploaded/vetted) is dropped from it so the rest of the
+  // stream survives, and restored from `originalFilters` when re-widening.
+  private readonly originalFilters: FilterSpec[];
+  private activeFilters: FilterSpec[];
+  private readonly includeCreatedEventBlob: boolean;
+  // Package names dropped because the participant rejected them. Non-empty means
+  // a re-widen is scheduled to try adding them back once their DAR appears.
+  private droppedPackageNames = new Set<string>();
+  private rewidenTimer?: ReturnType<typeof setTimeout>;
+  private readonly rewidenMinMs: number;
+  private readonly rewidenMaxMs: number;
+  private rewidenBackoffMs: number;
 
   /**
    * Creates a new stream for active contracts
@@ -706,6 +793,8 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     includeCreatedEventBlob: boolean = true,
     versionedRegistry?: VersionedRegistry,
     autoReconnect: boolean = false,
+    rewidenMinMs: number = REWIDEN_MIN_MS,
+    rewidenMaxMs: number = REWIDEN_MAX_MS,
   ) {
     this.parties = parties;
     this.wsClient = wsClient;
@@ -713,20 +802,122 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     this.skipAcs = skipAcs;
     this.versionedRegistry = versionedRegistry;
     this.autoReconnect = autoReconnect;
-    let cumulative = filters.map(filter => {
-      return {
-        identifierFilter: filter.type === "template" 
-          ? templateFilter(filter.templateId, includeCreatedEventBlob) 
-          : interfaceFilter(filter.interfaceId, includeCreatedEventBlob),
-      };
-    });
-    this.filtersByParty = this.parties.reduce(
+    this.includeCreatedEventBlob = includeCreatedEventBlob;
+    this.rewidenMinMs = rewidenMinMs;
+    this.rewidenMaxMs = rewidenMaxMs;
+    this.rewidenBackoffMs = rewidenMinMs;
+    this.originalFilters = [...filters];
+    this.activeFilters = [...filters];
+    this.filtersByParty = this.buildFiltersByParty(this.activeFilters);
+  }
+
+  /**
+   * Build the per-party `cumulative` filter payload from a filter set. Called
+   * once in the constructor and again whenever `activeFilters` changes (a
+   * package dropped, or the set re-widened back to `originalFilters`).
+   */
+  private buildFiltersByParty(filters: FilterSpec[]): Record<string, any> {
+    const cumulative = filters.map(filter => ({
+      identifierFilter: filter.type === "template"
+        ? templateFilter(filter.templateId, this.includeCreatedEventBlob)
+        : interfaceFilter(filter.interfaceId, this.includeCreatedEventBlob),
+    }));
+    return this.parties.reduce(
       (acc, party) => {
         acc[party] = { cumulative };
         return acc;
       },
       {} as Record<string, any>
     );
+  }
+
+  /**
+   * A participant rejects the whole subscription with `PACKAGE_NAMES_NOT_FOUND`
+   * when it does not yet know one of the requested package names (a DAR not
+   * uploaded/vetted yet). Rather than fail every template, drop the named
+   * package(s) from the active filter set and restart the current phase with the
+   * rest, so the ACS still populates for every known template. A re-widen is
+   * then scheduled to add the package(s) back once their DAR appears.
+   *
+   * Returns true when it handled the error (dropped and restarted); false when
+   * the error is unrelated, or names nothing that matches a current filter — the
+   * caller then emits it as before, so this never loops on an unmatched name.
+   */
+  private handleMissingPackages(error: CantonError, phase: "acs" | "updates"): boolean {
+    if (error.code !== "PACKAGE_NAMES_NOT_FOUND") return false;
+    if (this.state_ === "stop") return false;
+
+    const names = parseMissingPackageNames(error.cause);
+    if (names.length === 0) return false;
+
+    const before = this.activeFilters.length;
+    this.activeFilters = this.activeFilters.filter(
+      filter => !filterMatchesPackageName(filter, names)
+    );
+    if (this.activeFilters.length === before) return false; // nothing matched
+
+    names.forEach(name => this.droppedPackageNames.add(name));
+    this.filtersByParty = this.buildFiltersByParty(this.activeFilters);
+    logger.warn(
+      `Participant is missing package name(s) [${names.join(", ")}]; dropped from ` +
+        `the stream and retrying with ${this.activeFilters.length} of ` +
+        `${this.originalFilters.length} filters. Dropped so far: ` +
+        `[${[...this.droppedPackageNames].join(", ")}]. Will re-widen once uploaded.`
+    );
+
+    // Restart the failed phase with the reduced set.
+    this.stopClient?.();
+    this.stopClient = undefined;
+    if (phase === "acs") {
+      this.startActiveContractsStream();
+    } else {
+      this.startUpdatesStream();
+    }
+
+    this.scheduleRewiden();
+    return true;
+  }
+
+  /**
+   * While any package is dropped, periodically retry the full filter set with a
+   * capped, doubling backoff. A re-widen restarts from the ACS phase (not just
+   * updates) so a re-added template's already-active contracts are loaded, not
+   * only its future ones; re-seeing a tracked contract is idempotent. When the
+   * participant accepts the full set (see {@link handleActiveContractsClose}),
+   * the dropped set clears and the timer stops.
+   */
+  private scheduleRewiden(): void {
+    if (this.rewidenTimer) return; // one timer at a time
+    if (this.droppedPackageNames.size === 0) return;
+
+    this.rewidenTimer = setTimeout(() => {
+      this.rewidenTimer = undefined;
+      if (this.state_ === "stop" || this.droppedPackageNames.size === 0) return;
+
+      logger.log(
+        `Re-widening stream to retry dropped package(s) ` +
+          `[${[...this.droppedPackageNames].join(", ")}] after ${this.rewidenBackoffMs}ms`
+      );
+      this.rewidenBackoffMs = Math.min(this.rewidenBackoffMs * 2, this.rewidenMaxMs);
+      this.restartFromAcs(this.originalFilters);
+      // If the package is still missing, handleMissingPackages fires again and
+      // re-arms this timer (now at the increased backoff).
+      this.scheduleRewiden();
+    }, this.rewidenBackoffMs);
+  }
+
+  /**
+   * Tear down the current client and restart from the ACS phase with `filters`,
+   * at the current offset. Used to re-widen after a package reappears.
+   */
+  private restartFromAcs(filters: FilterSpec[]): void {
+    this.activeFilters = [...filters];
+    this.filtersByParty = this.buildFiltersByParty(this.activeFilters);
+    this.stopClient?.();
+    this.stopClient = undefined;
+    this.state_ = "init";
+    this.eventEmitter.emit("state", "init");
+    this.startActiveContractsStream();
   }
 
   /**
@@ -767,6 +958,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
    */
   private handleActiveContractsResponse(response: ActiveContractsResponse): void {
     if (response.status === "error") {
+      if (this.handleMissingPackages(response.error, "acs")) return;
       this.eventEmitter.emit("error", response.error);
       return;
     }
@@ -800,6 +992,21 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     this.stopClient = undefined;
 
     if (this.state_ === "init") {
+      // The ACS phase completed without a PACKAGE_NAMES_NOT_FOUND rejection. If
+      // we reached it on the full set, any previously-dropped package has
+      // rejoined — clear the dropped state and stop re-widening.
+      if (this.droppedPackageNames.size > 0 && this.activeFilters.length === this.originalFilters.length) {
+        logger.log(
+          `Re-widen succeeded: package(s) [${[...this.droppedPackageNames].join(", ")}] ` +
+            `are now known to the participant.`
+        );
+        this.droppedPackageNames.clear();
+        this.rewidenBackoffMs = this.rewidenMinMs;
+        if (this.rewidenTimer) {
+          clearTimeout(this.rewidenTimer);
+          this.rewidenTimer = undefined;
+        }
+      }
       this.state_ = "live";
       this.eventEmitter.emit("state", "live");
       this.startUpdatesStream();
@@ -844,6 +1051,7 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
    */
   private handleUpdatesResponse(response: UpdatesResponse): void {
     if (response.status === "error") {
+      if (this.handleMissingPackages(response.error, "updates")) return;
       this.eventEmitter.emit("error", response.error);
       return;
     }
@@ -888,7 +1096,14 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
           logger.log(`Attempting to reconnect stream...`);
           // Log token expiration info before reconnection attempt
           logTokenExpiration(this.wsClient.getToken(), "WebSocket reconnection attempt");
-          this.startUpdatesStream();
+          // A reconnect is a free chance to re-widen: if a package was dropped,
+          // rebuild from the full set. Restart from the ACS phase so a re-added
+          // template's existing contracts load, not only its future ones.
+          if (this.droppedPackageNames.size > 0) {
+            this.restartFromAcs(this.originalFilters);
+          } else {
+            this.startUpdatesStream();
+          }
         }
       }, 3000);
     } else if (code === 1006 && this.state_ === "live" && !this.autoReconnect) {
@@ -965,6 +1180,11 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
+    }
+
+    if (this.rewidenTimer) {
+      clearTimeout(this.rewidenTimer);
+      this.rewidenTimer = undefined;
     }
 
     if (this.stopClient) {
@@ -1703,12 +1923,15 @@ export class Ledger {
     const wsBaseUrl =
       this.options.wsBaseUrl ||
       this.httpBaseUrl.replace(/^https?:/, this.httpBaseUrl.startsWith("https:") ? "wss:" : "ws:");
-    return new WebSocketClient({
+    const config: StreamConfig = {
       token: this.options.token,
       wsBaseUrl: wsBaseUrl,
       validation: this.options.validation,
       asyncApiSchemaPath: this.options.asyncApiSchemaPath,
-    });
+    };
+    return this.options.webSocketClientFactory
+      ? this.options.webSocketClientFactory(config)
+      : new WebSocketClient(config);
   }
 
   /**
@@ -1970,6 +2193,8 @@ export class Ledger {
       includeCreatedEventBlob,
       this.options.versionedRegistry,
       this.options.autoReconnect ?? true,
+      this.options.rewidenBackoffMinMs ?? REWIDEN_MIN_MS,
+      this.options.rewidenBackoffMaxMs ?? REWIDEN_MAX_MS,
     );
 
     return new MultiStreamAdapter<TM>(stream);
