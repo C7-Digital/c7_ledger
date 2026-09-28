@@ -30,13 +30,6 @@ export {
   resourcesOf,
   cantonErrorOf,
 } from "./cantonError";
-export {
-  isArchiveAlreadyDoneError,
-  isIndeterminateArchiveTimeout,
-  isIndeterminateSubmitError,
-  isLockedContractsError,
-  isTransientArchiveError,
-} from "./submitError";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";

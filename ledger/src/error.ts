@@ -7,6 +7,7 @@
  * one `await`. Matching shapes let it read `.status` once instead of branching
  * per client.
  */
+import { categoryOf } from "./cantonError";
 import { isCantonError, type JsCantonError } from "./types";
 
 /**
@@ -93,6 +94,47 @@ export class LedgerApiError extends Error {
    */
   public get cantonError(): JsCantonError | undefined {
     return this.body.kind === "canton" ? this.body.error : undefined;
+  }
+
+  /**
+   * Retriable at the transport layer: the HTTP response itself says try again.
+   *
+   * Covers 408 (request timeout), 429 (too many requests), and any 5xx. This is
+   * transport only — a structured Canton rejection's retriability is
+   * `isRetryable` over {@link cantonError}, keyed off Canton's own
+   * `errorCategory`. A caller retrying a submit composes the two:
+   * `err.isTransient() || (canton && isRetryable(canton))`.
+   *
+   * Check {@link isIndeterminate} first. A 503 is transient *and* indeterminate,
+   * so it must be retried with the same `commandId`, not a fresh one.
+   */
+  public isTransient(): boolean {
+    return (
+      this.status === 408 ||
+      this.status === 429 ||
+      (this.status >= 500 && this.status < 600)
+    );
+  }
+
+  /**
+   * The submit outcome is unknown — retry only with the *same* `commandId`,
+   * after a wait, so command deduplication guards against a double apply.
+   *
+   * True for HTTP 503 (the JSON API request timed out with the submission
+   * possibly still in flight) or a Canton `deadline` rejection (`errorCategory`
+   * 3, whose own definition is "the request may or may not have been applied").
+   * A plain transient — 429, a refused connection — never reached processing and
+   * is safe to retry with a fresh `commandId`; an indeterminate one is not.
+   *
+   * This is the one submit signal Canton's payload vocabulary cannot carry
+   * alone, because a 503 is a transport outcome with no {@link JsCantonError}.
+   * For a non-HTTP transport (a wallet gateway), read `deadline` with `categoryOf`
+   * over `cantonErrorOf` directly.
+   */
+  public isIndeterminate(): boolean {
+    if (this.status === 503) return true;
+    const canton = this.cantonError;
+    return canton !== undefined && categoryOf(canton) === "deadline";
   }
 
   /**

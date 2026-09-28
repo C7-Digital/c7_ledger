@@ -101,14 +101,33 @@ try {
 }
 ```
 
-For submit retry / idempotency, use the helpers in `submitError.ts`. They build
-on `cantonError.ts` without changing it — additive transport + dedup policy:
+For submit retry / idempotency, read Canton's own classification rather than
+matching error strings:
 
-- `isArchiveAlreadyDoneError` — `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, inactive (message match only; not broad `resourceMissing`)
-- `isIndeterminateArchiveTimeout` — HTTP 503 / timely-response timeout
-- `isIndeterminateSubmitError` — 503 **or** Canton `deadline` (category 3); wait and reuse `commandId`
-- `isLockedContractsError` — activeness lock contention
-- `isTransientArchiveError` — retriable; check `isIndeterminateSubmitError` first for dedup vs backoff
+- **Should I retry at all?** `isRetryable(canton)` for a structured rejection
+  (keyed off `errorCategory`, so `contention`, `transient`, and `deadline` are
+  covered as Canton defines them), or `err.isTransient()` on a `LedgerApiError`
+  for a pure transport failure (408 / 429 / 5xx) with no Canton payload. Compose
+  the two: `err.isTransient() || (canton && isRetryable(canton))`.
+- **Must I keep the same `commandId`?** `err.isIndeterminate()` — true for HTTP
+  503 or a Canton `deadline` (category 3). The submit may already have committed,
+  so retry with the **same** `commandId` after a wait and let command
+  deduplication protect you. A plain transient (429) is safe to retry fresh.
+
+Whether a missing or inactive contract counts as success is the *caller's*
+policy (it is only success when archiving), so it stays in the app, not here.
+
+```typescript
+try {
+  await ledger.exercise(MyChoice, cid, arg, [party]);
+} catch (e) {
+  if (e instanceof LedgerApiError && e.isIndeterminate()) return retrySameCommandId();
+  const canton = cantonErrorOf(e);
+  if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) {
+    return retry();
+  }
+}
+```
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.

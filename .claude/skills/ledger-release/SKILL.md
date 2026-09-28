@@ -88,7 +88,7 @@ Prefer npm publish + pin for CI and teammates.
 
 - Typecheck the consumer app's workspace
 - Unit tests touching ledger error paths
-- No remaining duplicate regex classifiers that ledger now owns (see `submit-error-classification` skill)
+- No remaining duplicate regex classifiers that ledger now owns (`cantonError` categories + `LedgerApiError.isTransient`/`isIndeterminate`)
 
 ## Anti-patterns
 

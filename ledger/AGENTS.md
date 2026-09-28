@@ -11,7 +11,6 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
-  submitError.ts     # Submit failure classification (retry + command dedup)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
   api-surface.test.ts  # Public export contract — update when adding exports
@@ -38,9 +37,8 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 | Module | Responsibility |
 |--------|----------------|
-| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body (`canton` / `json` / `text` / `empty`) |
+| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; transport retry signals `isTransient` (408/429/5xx) and `isIndeterminate` (503 or Canton deadline ⇒ same `commandId`) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitError.ts` | Submit retry/dedup helpers (consumer-app parity + `isIndeterminateSubmitError`) |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 
@@ -48,8 +46,8 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 ```bash
 pnpm test                                    # all ledger tests
-pnpm test -- --testPathPattern=cantonError  # error vocabulary
-pnpm test -- --testPathPattern=submitError  # submit classification
+pnpm test -- --testPathPattern=cantonError  # Canton error vocabulary
+pnpm test -- --testPathPattern=error         # transport retry signals
 pnpm test -- --testPathPattern=api-surface  # export contract
 ```
 

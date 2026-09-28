@@ -48,14 +48,12 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 
 ## Error handling boundary
 
-Generic JSON Ledger API submit-result classification belongs **here**, not in consumer apps:
+Generic JSON Ledger API result classification belongs **here**, not in consumer apps. There are exactly two sources of truth:
 
-- Canton payload vocabulary: `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`)
-- Submit failure helpers in `ledger/src/submitError.ts` — additive on `cantonError.ts`; consolidated from consumer-app retry logic plus `isIndeterminateSubmitError` for command dedup (503 + Canton deadline)
+- **Canton payload vocabulary** — `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`). Read Canton's own `errorCategory` integer; never re-derive a taxonomy from `code` strings or regex the rendered message.
+- **Transport outcome** — `LedgerApiError.isTransient()` (408/429/5xx) and `LedgerApiError.isIndeterminate()` (503 or Canton `deadline` ⇒ retry with the *same* `commandId`), on `ledger/src/error.ts`. This is the only submit signal Canton's payload cannot carry alone, because a 503 has no `JsCantonError`.
 
-Consumers should import these helpers and keep only domain-specific retry policy (retry budgets, stable command ids, ACS liveness checks, the app's retry wrapper). Do not duplicate the classification logic in apps.
-
-See skill: `.claude/skills/submit-error-classification/SKILL.md`.
+A consumer composes these — `err.isTransient() || (canton && isRetryable(canton))`, plus `err.isIndeterminate()` for dedup — and keeps only its own domain policy (retry budgets, stable command ids, ACS liveness checks, and whether a missing/inactive contract counts as success, which is operation-specific). Do not add a second error taxonomy in this repo.
 
 ## Development mode
 
@@ -70,7 +68,7 @@ See skill: `.claude/skills/submit-error-classification/SKILL.md`.
 - Use **pnpm** only (workspace-aware).
 - Hand-edit **source** under `ledger/src/`, never committed `lib/`, `lib-lite/`, or `src/generated/`.
 - Extend `api-surface.test.ts` when adding public exports from `@c7-digital/ledger`.
-- Put transport-agnostic Canton interpretation in `cantonError.ts` / `submitError.ts`; envelope unwrapping stays in the transport owner.
+- Put transport-agnostic Canton interpretation in `cantonError.ts` and transport (HTTP) classification on `LedgerApiError` (`error.ts`); envelope unwrapping stays in the transport owner.
 
 **Ask first**
 
@@ -90,7 +88,6 @@ Canonical skills: **`.claude/skills/`**. Cursor: `.cursor/skills/` (symlink). Se
 
 | Skill | Use when |
 |-------|----------|
-| `submit-error-classification` | Adding or moving JSON API submit failure handling between ledger and apps |
 | `ledger-release` | Version bump, publish to npm, consumer pin update |
 
 ## Copilot / review hygiene
