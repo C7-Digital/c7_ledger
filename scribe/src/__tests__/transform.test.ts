@@ -305,7 +305,7 @@ describe("resolveSelfReferences", () => {
   });
 
   it("resolves vendor package subpaths", () => {
-    const result = resolveId(fixturesDir, "@domain-verify/codegen/splice-amulet-0.1.9");
+    const result = resolveId(fixturesDir, "@my-org/codegen/splice-amulet-0.1.9");
     expect(result).toContain("splice-amulet-0.1.9/lib/index.js");
   });
 });

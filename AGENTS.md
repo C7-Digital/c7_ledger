@@ -14,7 +14,7 @@ TypeScript clients for Canton Network services, published to npm under `@c7-digi
 | `@c7-digital/scribe` | `scribe/` | Scribe integration |
 | `@c7-digital/admin` | `admin/` | Admin API helpers |
 
-**Consumers** are C7's private Canton applications. They depend on published npm versions — not git submodules. After a ledger release, bump `"@c7-digital/ledger"` in the consumer's `package.json` files and run `pnpm install`.
+**Consumers** depend on published npm versions — not git submodules. After a ledger release, bump `"@c7-digital/ledger"` in each consumer's `package.json` files and run `pnpm install`.
 
 Package-specific notes: [ledger/AGENTS.md](ledger/AGENTS.md).
 
