@@ -11,7 +11,6 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
-  submitError.ts     # Submit failure classification (directoryArchiveRetry parity)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
   api-surface.test.ts  # Public export contract — update when adding exports
@@ -38,9 +37,8 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 | Module | Responsibility |
 |--------|----------------|
-| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body (`canton` / `json` / `text` / `empty`) |
+| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; transport retry signals `isTransient` (408/429/5xx) and `isIndeterminate` (503 or Canton deadline ⇒ same `commandId`) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitError.ts` | Submit retry/dedup helpers (DV parity + `isIndeterminateSubmitError`) |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 
@@ -48,8 +46,8 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 ```bash
 pnpm test                                    # all ledger tests
-pnpm test -- --testPathPattern=cantonError  # error vocabulary
-pnpm test -- --testPathPattern=submitError  # submit classification
+pnpm test -- --testPathPattern=cantonError  # Canton error vocabulary
+pnpm test -- --testPathPattern=error         # transport retry signals
 pnpm test -- --testPathPattern=api-surface  # export contract
 ```
 
@@ -60,6 +58,6 @@ When adding a public export, update **both** `src/index.ts` and the `it.each([..
 1. Bump `version` in `ledger/package.json`.
 2. If react peer range no longer admits the version, widen `react/package.json` `peerDependencies["@c7-digital/ledger"]`.
 3. From repo root: `pnpm release -- --package ledger`.
-4. In consumers (domain-verification, etc.): bump `"@c7-digital/ledger"` in each `package.json`, `pnpm install`, rebuild.
+4. In each consumer app: bump `"@c7-digital/ledger"` in every `package.json` that lists it, `pnpm install`, rebuild.
 
 Skill: [../.claude/skills/ledger-release/SKILL.md](../.claude/skills/ledger-release/SKILL.md).

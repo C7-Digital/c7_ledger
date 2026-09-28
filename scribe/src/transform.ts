@@ -122,7 +122,7 @@ function resolveSelfReferences(srcDir: string) {
       // Scoped: @scope/name/subpath -> skip first two segments
       // Unscoped: name/subpath -> skip first segment
       // Note: @rollup/plugin-commonjs may strip the '@' from scoped names
-      // (e.g. @domain-verify/codegen/foo -> domain-verify/codegen/foo),
+      // (e.g. @my-org/codegen/foo -> my-org/codegen/foo),
       // so we progressively try stripping more segments until a match is found.
       const parts = source.split("/");
       const startIdx = source.startsWith("@") ? 2 : 1;

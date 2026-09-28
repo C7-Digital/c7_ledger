@@ -14,7 +14,7 @@ This package provides a TypeScript client for interacting with Canton's JSON Led
 
 ## Versioning
 
-This package follows the Canton SDK versioning scheme. The package version matches the Canton OpenAPI specification version used to generate the types.
+The npm package has its own `0.0.x` version line, independent of the Canton spec it targets. Pre-1.0, every release is a patch bump; a breaking change also gets a `Migrating to 0.0.N` note below. The Canton runtime and JSON API spec this client is built against are versioned separately and surfaced as `SDK_VERSION` (see below), not as the package version.
 
 This package ships against two cooperating but independently-versioned things:
 
@@ -101,17 +101,57 @@ try {
 }
 ```
 
-For submit retry / idempotency, use the helpers in `submitError.ts`. They build
-on `cantonError.ts` without changing it — additive transport + dedup policy:
+For submit retry / idempotency, read Canton's own classification rather than
+matching error strings:
 
-- `isArchiveAlreadyDoneError` — `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, inactive (message match only; not broad `resourceMissing`)
-- `isIndeterminateArchiveTimeout` — HTTP 503 / timely-response timeout
-- `isIndeterminateSubmitError` — 503 **or** Canton `deadline` (category 3); wait and reuse `commandId`
-- `isLockedContractsError` — activeness lock contention
-- `isTransientArchiveError` — retriable; check `isIndeterminateSubmitError` first for dedup vs backoff
+- **Should I retry at all?** `isRetryable(canton)` for a structured rejection
+  (keyed off `errorCategory`, so `contention`, `transient`, and `deadline` are
+  covered as Canton defines them), or `err.isTransient()` on a `LedgerApiError`
+  for a pure transport failure (408 / 429 / 5xx) with no Canton payload. Compose
+  the two: `err.isTransient() || (canton && isRetryable(canton))`.
+- **Must I keep the same `commandId`?** `err.isIndeterminate()` — true for HTTP
+  503 or a Canton `deadline` (category 3). The submit may already have committed,
+  so retry with the **same** `commandId` after a wait and let command
+  deduplication protect you. A plain transient (429) is safe to retry fresh.
+
+Whether a missing or inactive contract counts as success is the *caller's*
+policy (it is only success when archiving), so it stays in the app, not here.
+
+```typescript
+try {
+  await ledger.exercise(MyChoice, cid, arg, [party]);
+} catch (e) {
+  if (e instanceof LedgerApiError && e.isIndeterminate()) return retrySameCommandId();
+  const canton = cantonErrorOf(e);
+  if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) {
+    return retry();
+  }
+}
+```
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.37
+
+The `submitError` helpers (`isArchiveAlreadyDoneError`,
+`isIndeterminateArchiveTimeout`, `isIndeterminateSubmitError`,
+`isLockedContractsError`, `isTransientArchiveError`) are removed. They duplicated
+`cantonError` — read Canton's classification instead:
+
+```typescript
+// before
+if (isTransientArchiveError(e)) retry();
+if (isIndeterminateSubmitError(e)) retrySameCommandId();
+
+// after
+const canton = cantonErrorOf(e);
+if (e instanceof LedgerApiError && e.isIndeterminate()) retrySameCommandId();
+else if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) retry();
+```
+
+Whether a missing or inactive contract counts as success is caller policy now —
+keep it in the app (it is only success when archiving).
 
 ### Migrating to 0.0.34
 
