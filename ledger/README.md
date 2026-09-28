@@ -101,32 +101,13 @@ try {
 }
 ```
 
-For *submit* retry / idempotency decisions, prefer `classifySubmitError` over
-re-matching `error.message`. It folds Canton payload, HTTP status, and message
-heuristics into one closed sum:
+For submit retry / idempotency, use the helpers in `submitError.ts` (same logic
+as domain-verification `directoryArchiveRetry.ts`):
 
-| Kind | Meaning |
-|---|---|
-| `alreadyApplied` | `DUPLICATE_COMMAND` — same `commandId` already accepted |
-| `alreadyGone` | Contract inactive / not found — success for idempotent archive-style ops |
-| `indeterminate` | JSON API timed out (typically HTTP 503) while the command may still be in flight; wait and reuse `commandId` |
-| `transient` | Safe to retry (Canton retryable, locked contracts, 408/429/5xx) |
-| `hard` | Definitive failure — do not retry |
-
-```typescript
-switch (classifySubmitError(e)) {
-  case "alreadyApplied":
-  case "alreadyGone":
-    return; // idempotent success
-  case "indeterminate":
-    await sleep(participantRequestTimeout);
-    return retrySameCommandId();
-  case "transient":
-    return backoffRetry();
-  case "hard":
-    throw e;
-}
-```
+- `isArchiveAlreadyDoneError` — `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, inactive
+- `isIndeterminateArchiveTimeout` — HTTP 503 / timely-response timeout (command may still be in flight)
+- `isLockedContractsError` — activeness lock contention
+- `isTransientArchiveError` — combines Canton `isRetryable`, the above, and 408/429/5xx
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.

@@ -53,13 +53,11 @@ describe("Public API surface", () => {
     "isRetryable",
     "resourcesOf",
     "cantonErrorOf",
-    // JSON API submit-result classification (HTTP + Canton + message heuristics).
-    "classifySubmitError",
-    "isIndeterminateSubmitTimeout",
-    "isSubmitAlreadyApplied",
-    "isSubmitAlreadyGone",
+    // JSON API submit failure classification (lifted from domain-verification).
+    "isArchiveAlreadyDoneError",
+    "isIndeterminateArchiveTimeout",
     "isLockedContractsError",
-    "isTransientSubmitError",
+    "isTransientArchiveError",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });

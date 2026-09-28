@@ -11,7 +11,7 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
-  submitError.ts     # Submit failure classification (classifySubmitError, …)
+  submitError.ts     # Submit failure classification (directoryArchiveRetry parity)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
   api-surface.test.ts  # Public export contract — update when adding exports
@@ -40,7 +40,7 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 |--------|----------------|
 | `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body (`canton` / `json` / `text` / `empty`) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitError.ts` | Classify failed **submits** for retry/idempotency (503 indeterminate, DUPLICATE, LOCKED, …) |
+| `submitError.ts` | `isArchiveAlreadyDoneError`, `isIndeterminateArchiveTimeout`, `isLockedContractsError`, `isTransientArchiveError` |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 

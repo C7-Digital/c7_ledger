@@ -51,15 +51,15 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 Generic JSON Ledger API submit-result classification belongs **here**, not in consumer apps:
 
 - Canton payload vocabulary: `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`)
-- Submit retry / idempotency sum: `classifySubmitError`, `isTransientSubmitError`, … (`ledger/src/submitError.ts`)
+- Submit failure helpers: `isArchiveAlreadyDoneError`, `isIndeterminateArchiveTimeout`, `isLockedContractsError`, `isTransientArchiveError` (`ledger/src/submitError.ts`) — direct lift from domain-verification `directoryArchiveRetry.ts`
 
-Consumers should `switch (classifySubmitError(e))` and keep only domain-specific retry policy (budgets, stable command ids, ACS checks). Do not copy regex tables for `503`, `DUPLICATE_COMMAND`, `LOCKED_CONTRACTS`, etc. into apps.
+Consumers should import these helpers and keep only domain-specific retry policy (budgets, stable command ids, ACS checks, `withArchiveRetry`). Do not duplicate the classification logic in apps.
 
 See skill: `.claude/skills/submit-error-classification/SKILL.md`.
 
 ## Development mode
 
-- **Type-driven** — Prefer closed sums (`SubmitErrorKind`, tagged `LedgerErrorBody`) over optional flags. Export new public API from `ledger/src/index.ts` and add names to `api-surface.test.ts`.
+- **Type-driven** — Prefer tagged sums (`LedgerErrorBody`) over optional flags. Export new public API from `ledger/src/index.ts` and add names to `api-surface.test.ts`.
 - **Behavior-driven** — Green `tsc` is not done. Add unit tests beside the module (`*.test.ts`); for ledger, extend `api-surface.test.ts` when adding exports.
 - **Structural over instanceof** — Error helpers use shape probes so duplicated package copies in pnpm trees still work.
 

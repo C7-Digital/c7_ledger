@@ -31,13 +31,10 @@ export {
   cantonErrorOf,
 } from "./cantonError";
 export {
-  type SubmitErrorKind,
-  classifySubmitError,
-  isIndeterminateSubmitTimeout,
-  isSubmitAlreadyApplied,
-  isSubmitAlreadyGone,
+  isArchiveAlreadyDoneError,
+  isIndeterminateArchiveTimeout,
   isLockedContractsError,
-  isTransientSubmitError,
+  isTransientArchiveError,
 } from "./submitError";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
