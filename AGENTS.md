@@ -48,12 +48,13 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 
 ## Error handling boundary
 
-Generic JSON Ledger API result classification belongs **here**, not in consumer apps. There are exactly two sources of truth:
+Generic JSON Ledger API result classification belongs **here**, not in consumer apps. Read Canton's *structured* answer — never regex the rendered message. Three layers:
 
-- **Canton payload vocabulary** — `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`). Read Canton's own `errorCategory` integer; never re-derive a taxonomy from `code` strings or regex the rendered message.
-- **Transport outcome** — `LedgerApiError.isTransient()` (408/429/5xx) and `LedgerApiError.isIndeterminate()` (503 or Canton `deadline` ⇒ retry with the *same* `commandId`), on `ledger/src/error.ts`. This is the only submit signal Canton's payload cannot carry alone, because a 503 has no `JsCantonError`.
+- **Canton payload vocabulary** — `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`). Keyed off the `errorCategory` integer.
+- **Transport outcome** — `LedgerApiError.isTransient()` (408/429/5xx) and `LedgerApiError.isIndeterminate()` (503 or Canton `deadline`), on `ledger/src/error.ts`. The only submit signal Canton's payload cannot carry alone, because a 503 has no `JsCantonError`.
+- **Submit classifiers** — `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyArchived` (`ledger/src/submitClassify.ts`). Free functions over `unknown` that compose the two layers above so a consumer imports one call, not a hand-rolled combination. `isAlreadyArchived` matches on `code` (the "already gone" set has no clean category); the others use `errorCategory`.
 
-A consumer composes these — `err.isTransient() || (canton && isRetryable(canton))`, plus `err.isIndeterminate()` for dedup — and keeps only its own domain policy (retry budgets, stable command ids, ACS liveness checks, and whether a missing/inactive contract counts as success, which is operation-specific). Do not add a second error taxonomy in this repo.
+A consumer imports these and keeps only its own domain **policy**: retry budgets, stable command ids, ACS liveness checks, and *what to do* with the answer (stop as success, wait, back off). The lib states the fact; the app applies the judgement. Do not add a second error taxonomy — or any message-regex classifier — in a consumer.
 
 ## Development mode
 

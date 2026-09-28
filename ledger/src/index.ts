@@ -30,6 +30,11 @@ export {
   resourcesOf,
   cantonErrorOf,
 } from "./cantonError";
+export {
+  isAlreadyArchived,
+  isRetriableSubmit,
+  isIndeterminateSubmit,
+} from "./submitClassify";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";

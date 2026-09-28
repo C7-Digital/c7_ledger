@@ -101,36 +101,46 @@ try {
 }
 ```
 
-For submit retry / idempotency, read Canton's own classification rather than
-matching error strings:
+For submit retry / idempotency, read Canton's *structured* classification (the
+`errorCategory` integer and the exact `code`), never the rendered message. Three
+helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
+(`cantonError`) signals so callers don't re-derive them:
 
-- **Should I retry at all?** `isRetryable(canton)` for a structured rejection
-  (keyed off `errorCategory`, so `contention`, `transient`, and `deadline` are
-  covered as Canton defines them), or `err.isTransient()` on a `LedgerApiError`
-  for a pure transport failure (408 / 429 / 5xx) with no Canton payload. Compose
-  the two: `err.isTransient() || (canton && isRetryable(canton))`.
-- **Must I keep the same `commandId`?** `err.isIndeterminate()` — true for HTTP
-  503 or a Canton `deadline` (category 3). The submit may already have committed,
-  so retry with the **same** `commandId` after a wait and let command
-  deduplication protect you. A plain transient (429) is safe to retry fresh.
+- **Should I retry at all?** `isRetriableSubmit(e)` — a transport transient
+  (408 / 429 / 5xx) or a Canton-retryable rejection (`errorCategory` ∈
+  contention / transient / deadline / seek-after-end).
+- **Must I keep the same `commandId`?** `isIndeterminateSubmit(e)` — HTTP 503 or a
+  Canton `deadline` (category 3). The submit may already have committed, so retry
+  with the **same** `commandId` after a wait. A plain transient (429) is safe to
+  retry fresh. Check this **before** `isRetriableSubmit`.
+- **Is my archive already a no-op?** `isAlreadyArchived(e)` — the target contract
+  is gone or the archive command already committed (`DUPLICATE_COMMAND`,
+  `CONTRACT_NOT_FOUND`, `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app
+  that archives; the *policy* of treating it as success stays with the caller.
 
-Whether a missing or inactive contract counts as success is the *caller's*
-policy (it is only success when archiving), so it stays in the app, not here.
+The transport primitives are also on `LedgerApiError` directly: `isTransient()`
+and `isIndeterminate()`.
 
 ```typescript
 try {
-  await ledger.exercise(MyChoice, cid, arg, [party]);
+  await ledger.exercise(Archive, cid, arg, [party]);
 } catch (e) {
-  if (e instanceof LedgerApiError && e.isIndeterminate()) return retrySameCommandId();
-  const canton = cantonErrorOf(e);
-  if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) {
-    return retry();
-  }
+  if (isAlreadyArchived(e)) return; // idempotent: already gone
+  if (isIndeterminateSubmit(e)) return retrySameCommandId();
+  if (isRetriableSubmit(e)) return retry();
+  throw e;
 }
 ```
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.38
+
+Adds structured, reusable submit classifiers so consumers stop hand-rolling them:
+`isRetriableSubmit`, `isIndeterminateSubmit`, and `isAlreadyArchived` (see above).
+All read `cantonError`'s `code` / `errorCategory` and `LedgerApiError`'s status —
+no message-string matching. Additive; nothing removed.
 
 ### Migrating to 0.0.37
 

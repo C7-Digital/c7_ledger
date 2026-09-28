@@ -1,0 +1,75 @@
+import { LedgerApiError, type LedgerErrorBody } from "./error";
+import {
+  isAlreadyArchived,
+  isRetriableSubmit,
+  isIndeterminateSubmit,
+} from "./submitClassify";
+import type { JsCantonError } from "./types";
+
+// Build a LedgerApiError carrying a structured Canton rejection — the shape a
+// real submit reject arrives as, so the tests exercise the structured path
+// (never a hand-crafted message string).
+function canton(code: string, errorCategory: number): JsCantonError {
+  // `context` is required by isCantonError (Canton always populates it).
+  return { code, cause: "test", errorCategory, context: {} } as JsCantonError;
+}
+function rejectedWith(
+  status: number,
+  code: string,
+  errorCategory: number
+): LedgerApiError {
+  const body: LedgerErrorBody = { kind: "canton", error: canton(code, errorCategory) };
+  return new LedgerApiError(status, "Conflict", body);
+}
+
+describe("isAlreadyArchived", () => {
+  it.each([
+    ["DUPLICATE_COMMAND", 10],
+    ["CONTRACT_NOT_FOUND", 11],
+    ["LOCAL_VERDICT_INACTIVE_CONTRACTS", 11],
+  ])("is true for %s (structured code)", (code, category) => {
+    expect(isAlreadyArchived(rejectedWith(409, code, category as number))).toBe(true);
+  });
+
+  it("is false for UNSUPPORTED_CONTRACT_ID — same category 11, but a hard failure", () => {
+    expect(isAlreadyArchived(rejectedWith(409, "UNSUPPORTED_CONTRACT_ID", 11))).toBe(false);
+  });
+
+  it("is false for a transport error with no Canton payload", () => {
+    expect(isAlreadyArchived(new LedgerApiError(503, "Service Unavailable"))).toBe(false);
+  });
+});
+
+describe("isRetriableSubmit", () => {
+  it("is true for a transport transient (503)", () => {
+    expect(isRetriableSubmit(new LedgerApiError(503, "Service Unavailable"))).toBe(true);
+  });
+
+  it("is true for Canton contention (LOCKED_CONTRACTS, category 2)", () => {
+    expect(
+      isRetriableSubmit(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
+    ).toBe(true);
+  });
+
+  it("is false for a hard 400 and for an already-archived reject", () => {
+    expect(isRetriableSubmit(new LedgerApiError(400, "Bad Request"))).toBe(false);
+    // resourceMissing (11) is not retryable — the archive caller treats it as done.
+    expect(isRetriableSubmit(rejectedWith(409, "CONTRACT_NOT_FOUND", 11))).toBe(false);
+  });
+});
+
+describe("isIndeterminateSubmit", () => {
+  it("is true for HTTP 503", () => {
+    expect(isIndeterminateSubmit(new LedgerApiError(503, "Service Unavailable"))).toBe(true);
+  });
+
+  it("is true for a Canton deadline (category 3) at any status", () => {
+    expect(isIndeterminateSubmit(rejectedWith(409, "REQUEST_TIME_OUT", 3))).toBe(true);
+  });
+
+  it("is false for contention (category 2) — that transaction did not commit", () => {
+    expect(
+      isIndeterminateSubmit(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
+    ).toBe(false);
+  });
+});

@@ -53,6 +53,10 @@ describe("Public API surface", () => {
     "isRetryable",
     "resourcesOf",
     "cantonErrorOf",
+    // Submit-outcome classification (structured; transport + Canton payload).
+    "isAlreadyArchived",
+    "isRetriableSubmit",
+    "isIndeterminateSubmit",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });
