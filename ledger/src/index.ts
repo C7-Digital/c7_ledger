@@ -11,7 +11,7 @@ export {
   convertCommand,
 } from "./ledger";
 export { TypedHttpClient, type TypedHttpClientConfig } from "./client";
-export { LedgerApiError, type LedgerErrorBody } from "./error";
+export { LedgerApiError, httpStatusOf, type LedgerErrorBody } from "./error";
 export {
   WebSocketClient,
   type StreamConfig,

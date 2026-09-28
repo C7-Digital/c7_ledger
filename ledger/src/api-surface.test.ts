@@ -54,6 +54,7 @@ describe("Public API surface", () => {
     "resourcesOf",
     "cantonErrorOf",
     // Submit-outcome classification (structured; transport + Canton payload).
+    "httpStatusOf",
     "isAlreadyArchived",
     "isRetriableSubmit",
     "isIndeterminateSubmit",

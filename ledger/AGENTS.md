@@ -38,7 +38,7 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 | Module | Responsibility |
 |--------|----------------|
-| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; transport retry signals `isTransient` (408/429/5xx) and `isIndeterminate` (503 or Canton deadline ⇒ same `commandId`) |
+| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; `httpStatusOf(unknown)` reads the status structurally (survives duplicated package copies) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
 | `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyArchived` — compose transport + Canton, structured (no message regex) |
 

@@ -51,8 +51,8 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 Generic JSON Ledger API result classification belongs **here**, not in consumer apps. Read Canton's *structured* answer — never regex the rendered message. Three layers:
 
 - **Canton payload vocabulary** — `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`). Keyed off the `errorCategory` integer.
-- **Transport outcome** — `LedgerApiError.isTransient()` (408/429/5xx) and `LedgerApiError.isIndeterminate()` (503 or Canton `deadline`), on `ledger/src/error.ts`. The only submit signal Canton's payload cannot carry alone, because a 503 has no `JsCantonError`.
-- **Submit classifiers** — `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyArchived` (`ledger/src/submitClassify.ts`). Free functions over `unknown` that compose the two layers above so a consumer imports one call, not a hand-rolled combination. `isAlreadyArchived` matches on `code` (the "already gone" set has no clean category); the others use `errorCategory`.
+- **Transport status** — `httpStatusOf(unknown)` (`ledger/src/error.ts`): the HTTP status carried by a `LedgerApiError`-shaped value, read **structurally** (numeric `status` + string `statusText`), not via `instanceof` — so it survives duplicated package copies. A 503 is the only submit signal Canton's payload cannot carry alone.
+- **Submit classifiers** — `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyArchived` (`ledger/src/submitClassify.ts`). Free functions over `unknown` that compose the two layers above, so a consumer imports one call (no `instanceof`, no hand-rolled combination). `isAlreadyArchived` matches on `code` (the "already gone" set has no clean category); the retriable/indeterminate checks use `httpStatusOf` + `errorCategory`.
 
 A consumer imports these and keeps only its own domain **policy**: retry budgets, stable command ids, ACS liveness checks, and *what to do* with the answer (stop as success, wait, back off). The lib states the fact; the app applies the judgement. Do not add a second error taxonomy — or any message-regex classifier — in a consumer.
 

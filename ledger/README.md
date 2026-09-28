@@ -118,8 +118,9 @@ helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
   `CONTRACT_NOT_FOUND`, `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app
   that archives; the *policy* of treating it as success stays with the caller.
 
-The transport primitives are also on `LedgerApiError` directly: `isTransient()`
-and `isIndeterminate()`.
+Each takes `unknown` and reads the status structurally (`httpStatusOf`, also
+exported), so they work directly on a `catch` binding — no `instanceof` needed,
+and they survive duplicated package copies in a pnpm tree.
 
 ```typescript
 try {
@@ -138,9 +139,21 @@ it cannot emit a whole error page. The full value stays on `body`.
 ### Migrating to 0.0.38
 
 Adds structured, reusable submit classifiers so consumers stop hand-rolling them:
-`isRetriableSubmit`, `isIndeterminateSubmit`, and `isAlreadyArchived` (see above).
-All read `cantonError`'s `code` / `errorCategory` and `LedgerApiError`'s status —
-no message-string matching. Additive; nothing removed.
+`isRetriableSubmit`, `isIndeterminateSubmit`, and `isAlreadyArchived` (see above),
+plus `httpStatusOf` for reading a status structurally. All read `cantonError`'s
+`code` / `errorCategory` and the HTTP status — no message-string matching.
+
+The short-lived `LedgerApiError.isTransient()` / `.isIndeterminate()` methods
+(0.0.37) are **removed** in favour of these free functions: a method forces an
+`instanceof` check at the call site, which fails across duplicated package copies
+and is the exact anti-pattern the free functions avoid.
+
+```typescript
+// 0.0.37
+if (e instanceof LedgerApiError && e.isIndeterminate()) retrySameCommandId();
+// 0.0.38
+if (isIndeterminateSubmit(e)) retrySameCommandId();
+```
 
 ### Migrating to 0.0.37
 
@@ -154,14 +167,13 @@ The `submitError` helpers (`isArchiveAlreadyDoneError`,
 if (isTransientArchiveError(e)) retry();
 if (isIndeterminateSubmitError(e)) retrySameCommandId();
 
-// after
-const canton = cantonErrorOf(e);
-if (e instanceof LedgerApiError && e.isIndeterminate()) retrySameCommandId();
-else if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) retry();
+// after (0.0.38 free functions)
+if (isIndeterminateSubmit(e)) retrySameCommandId();
+else if (isRetriableSubmit(e)) retry();
 ```
 
-Whether a missing or inactive contract counts as success is caller policy now —
-keep it in the app (it is only success when archiving).
+Whether a missing or inactive contract counts as success is caller policy —
+`isAlreadyArchived(e)` reports the fact; the caller decides to stop as success.
 
 ### Migrating to 0.0.34
 

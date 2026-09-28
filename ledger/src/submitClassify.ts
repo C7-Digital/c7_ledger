@@ -12,7 +12,7 @@
 // caller.
 
 import { cantonErrorOf, categoryOf, isRetryable } from "./cantonError";
-import { httpStatusOf, isTransientStatus } from "./error";
+import { httpStatusOf } from "./error";
 
 // Canton codes that make an archive (or any idempotent delete) a no-op success:
 //   DUPLICATE_COMMAND                — the command already committed
@@ -49,8 +49,12 @@ export function isAlreadyArchived(error: unknown): boolean {
  * retriable, but only with the same `commandId`.
  */
 export function isRetriableSubmit(error: unknown): boolean {
+  // Transport transient: 408, 429, or any 5xx (503 included — see
+  // isIndeterminateSubmit for the same-commandId caveat).
   const status = httpStatusOf(error);
-  if (status !== undefined && isTransientStatus(status)) return true;
+  if (status === 408 || status === 429 || (status !== undefined && status >= 500)) {
+    return true;
+  }
   const canton = cantonErrorOf(error);
   return canton !== null && isRetryable(canton);
 }
