@@ -11,6 +11,7 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
+  submitClassify.ts  # Structured submit classifiers (isRetriableSubmit, isIndeterminateSubmit, isAlreadyArchived)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
   api-surface.test.ts  # Public export contract — update when adding exports
@@ -37,8 +38,9 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 | Module | Responsibility |
 |--------|----------------|
-| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; transport retry signals `isTransient` (408/429/5xx) and `isIndeterminate` (503 or Canton deadline ⇒ same `commandId`) |
+| `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; `httpStatusOf(unknown)` reads the status structurally (survives duplicated package copies) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
+| `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyArchived` — compose transport + Canton, structured (no message regex) |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 

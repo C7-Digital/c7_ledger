@@ -7,7 +7,6 @@
  * one `await`. Matching shapes let it read `.status` once instead of branching
  * per client.
  */
-import { categoryOf } from "./cantonError";
 import { isCantonError, type JsCantonError } from "./types";
 
 /**
@@ -97,47 +96,6 @@ export class LedgerApiError extends Error {
   }
 
   /**
-   * Retriable at the transport layer: the HTTP response itself says try again.
-   *
-   * Covers 408 (request timeout), 429 (too many requests), and any 5xx. This is
-   * transport only — a structured Canton rejection's retriability is
-   * `isRetryable` over {@link cantonError}, keyed off Canton's own
-   * `errorCategory`. A caller retrying a submit composes the two:
-   * `err.isTransient() || (canton && isRetryable(canton))`.
-   *
-   * Check {@link isIndeterminate} first. A 503 is transient *and* indeterminate,
-   * so it must be retried with the same `commandId`, not a fresh one.
-   */
-  public isTransient(): boolean {
-    return (
-      this.status === 408 ||
-      this.status === 429 ||
-      (this.status >= 500 && this.status < 600)
-    );
-  }
-
-  /**
-   * The submit outcome is unknown — retry only with the *same* `commandId`,
-   * after a wait, so command deduplication guards against a double apply.
-   *
-   * True for HTTP 503 (the JSON API request timed out with the submission
-   * possibly still in flight) or a Canton `deadline` rejection (`errorCategory`
-   * 3, whose own definition is "the request may or may not have been applied").
-   * A plain transient — 429, a refused connection — never reached processing and
-   * is safe to retry with a fresh `commandId`; an indeterminate one is not.
-   *
-   * This is the one submit signal Canton's payload vocabulary cannot carry
-   * alone, because a 503 is a transport outcome with no {@link JsCantonError}.
-   * For a non-HTTP transport (a wallet gateway), read `deadline` with `categoryOf`
-   * over `cantonErrorOf` directly.
-   */
-  public isIndeterminate(): boolean {
-    if (this.status === 503) return true;
-    const canton = this.cantonError;
-    return canton !== undefined && categoryOf(canton) === "deadline";
-  }
-
-  /**
    * The untagged body, matching `ScanApiError.responseBody` so a consumer that
    * handles either client reads one field. Derived from {@link body}.
    */
@@ -153,6 +111,28 @@ export class LedgerApiError extends Error {
         return undefined;
     }
   }
+}
+
+/**
+ * The HTTP status carried by a `LedgerApiError`-shaped value, or `undefined`.
+ *
+ * A **structural** probe (numeric `status` + string `statusText`), not
+ * `instanceof`: the same reasoning as {@link cantonErrorOf} — `instanceof` fails
+ * across duplicated copies of this package in a pnpm tree, so a
+ * `LedgerApiError(503)` from another copy must still be recognized. The
+ * `statusText` half keeps it from matching arbitrary objects that happen to
+ * carry a numeric `status`. Also matches `ScanApiError`, which mirrors the shape.
+ */
+export function httpStatusOf(error: unknown): number | undefined {
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    typeof (error as { status?: unknown }).status === "number" &&
+    typeof (error as { statusText?: unknown }).statusText === "string"
+  ) {
+    return (error as { status: number }).status;
+  }
+  return undefined;
 }
 
 /**

@@ -11,7 +11,7 @@ export {
   convertCommand,
 } from "./ledger";
 export { TypedHttpClient, type TypedHttpClientConfig } from "./client";
-export { LedgerApiError, type LedgerErrorBody } from "./error";
+export { LedgerApiError, httpStatusOf, type LedgerErrorBody } from "./error";
 export {
   WebSocketClient,
   type StreamConfig,
@@ -30,6 +30,11 @@ export {
   resourcesOf,
   cantonErrorOf,
 } from "./cantonError";
+export {
+  isAlreadyArchived,
+  isRetriableSubmit,
+  isIndeterminateSubmit,
+} from "./submitClassify";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";
