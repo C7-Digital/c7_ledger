@@ -58,6 +58,26 @@ describe("isRetriableSubmit", () => {
   });
 });
 
+describe("structural transport detection (survives duplicated package copies)", () => {
+  // A LedgerApiError from another copy of this package is not `instanceof` ours,
+  // but carries the same shape. The classifiers must still recognize it — this
+  // fails with an `instanceof` check and passes with the structural probe.
+  const foreign503 = {
+    name: "LedgerApiError",
+    status: 503,
+    statusText: "Service Unavailable",
+  };
+
+  it("recognizes a foreign-copy 503 as retriable and indeterminate", () => {
+    expect(isRetriableSubmit(foreign503)).toBe(true);
+    expect(isIndeterminateSubmit(foreign503)).toBe(true);
+  });
+
+  it("ignores a plain object with a numeric status but no statusText", () => {
+    expect(isRetriableSubmit({ status: 503 })).toBe(false);
+  });
+});
+
 describe("isIndeterminateSubmit", () => {
   it("is true for HTTP 503", () => {
     expect(isIndeterminateSubmit(new LedgerApiError(503, "Service Unavailable"))).toBe(true);

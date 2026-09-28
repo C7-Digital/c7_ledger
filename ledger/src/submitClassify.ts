@@ -12,7 +12,7 @@
 // caller.
 
 import { cantonErrorOf, categoryOf, isRetryable } from "./cantonError";
-import { LedgerApiError } from "./error";
+import { httpStatusOf, isTransientStatus } from "./error";
 
 // Canton codes that make an archive (or any idempotent delete) a no-op success:
 //   DUPLICATE_COMMAND                — the command already committed
@@ -49,7 +49,8 @@ export function isAlreadyArchived(error: unknown): boolean {
  * retriable, but only with the same `commandId`.
  */
 export function isRetriableSubmit(error: unknown): boolean {
-  if (error instanceof LedgerApiError && error.isTransient()) return true;
+  const status = httpStatusOf(error);
+  if (status !== undefined && isTransientStatus(status)) return true;
   const canton = cantonErrorOf(error);
   return canton !== null && isRetryable(canton);
 }
@@ -61,7 +62,7 @@ export function isRetriableSubmit(error: unknown): boolean {
  * (category 3, whose own definition is "may or may not have been applied").
  */
 export function isIndeterminateSubmit(error: unknown): boolean {
-  if (error instanceof LedgerApiError && error.isIndeterminate()) return true;
+  if (httpStatusOf(error) === 503) return true;
   const canton = cantonErrorOf(error);
   return canton !== null && categoryOf(canton) === "deadline";
 }

@@ -109,11 +109,7 @@ export class LedgerApiError extends Error {
    * so it must be retried with the same `commandId`, not a fresh one.
    */
   public isTransient(): boolean {
-    return (
-      this.status === 408 ||
-      this.status === 429 ||
-      (this.status >= 500 && this.status < 600)
-    );
+    return isTransientStatus(this.status);
   }
 
   /**
@@ -153,6 +149,33 @@ export class LedgerApiError extends Error {
         return undefined;
     }
   }
+}
+
+/** A transport status worth retrying: 408, 429, or any 5xx. */
+export function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 429 || (status >= 500 && status < 600);
+}
+
+/**
+ * The HTTP status carried by a `LedgerApiError`-shaped value, or `undefined`.
+ *
+ * A **structural** probe (numeric `status` + string `statusText`), not
+ * `instanceof`: the same reasoning as {@link cantonErrorOf} — `instanceof` fails
+ * across duplicated copies of this package in a pnpm tree, so a
+ * `LedgerApiError(503)` from another copy must still be recognized. The
+ * `statusText` half keeps it from matching arbitrary objects that happen to
+ * carry a numeric `status`. Also matches `ScanApiError`, which mirrors the shape.
+ */
+export function httpStatusOf(error: unknown): number | undefined {
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    typeof (error as { status?: unknown }).status === "number" &&
+    typeof (error as { statusText?: unknown }).statusText === "string"
+  ) {
+    return (error as { status: number }).status;
+  }
+  return undefined;
 }
 
 /**
