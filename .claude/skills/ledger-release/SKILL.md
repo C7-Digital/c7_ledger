@@ -32,7 +32,7 @@ Consumer apps pin exact versions, e.g. `"@c7-digital/ledger": "0.0.35"`, resolve
 
 ```
 - [ ] Changes merged to main (or release branch)
-- [ ] Bump version in ledger/package.json (patch for fixes, minor for additive API)
+- [ ] Bump version in ledger/package.json (pre-1.0: always a patch; add a README migration note if breaking — see "What to bump when")
 - [ ] If releasing ledger: react/package.json peer range still admits new version
       (release script checks — widen to ">=0.0.N <0.1.0" or "^X.Y.Z" if needed)
 - [ ] pnpm clean && pnpm build && pnpm test  (or pnpm release does this)
@@ -53,7 +53,7 @@ Ledger package publishes **`lib/`** and **`lib-lite/`** — consumers must not d
 
 ## Consumer update
 
-After `@c7-digital/ledger@0.0.36` is on npm:
+After the newly published `@c7-digital/ledger` version is on npm:
 
 1. Edit **each** `package.json` in the consumer app that lists the dep (a
    multi-package app usually pins it in several workspace packages).
@@ -77,12 +77,19 @@ Prefer npm publish + pin for CI and teammates.
 
 ## What to bump when
 
+**Pre-1.0 policy.** The package is `0.0.x` and has not cut a minor yet. Every
+change — additive **or breaking** — ships as a **patch** bump. A breaking change
+additionally gets a `Migrating to 0.0.N` section in `ledger/README.md` (see the
+`0.0.34` constructor change and the `0.0.37` `submitError` removal). Semantic
+minor/major versioning begins at `1.0`; do not cut a minor before then without
+agreement.
+
 | Change | Ledger bump | Consumer action |
 |--------|-------------|-----------------|
-| New export (`classifySubmitError`) | patch (0.0.36) | Bump pin, thin local duplicates |
-| `LedgerApiError` constructor break | minor + migration note | Coordinated bump, fix mocks |
-| OpenAPI spec / `--sdk-version` default | minor/major | Full consumer typecheck |
-| React-only hooks | `@c7-digital/react` only | Apps using react bump react pin |
+| New / additive export | patch | Bump pin |
+| Breaking change (removed export, constructor or shape change) | patch **+ `Migrating to 0.0.N` README note** | Coordinated bump; fix imports and mocks |
+| OpenAPI spec / `--sdk-version` default | patch (highest-risk — full consumer typecheck) | Full consumer typecheck |
+| React-only hooks | `@c7-digital/react` patch only | Apps using react bump the react pin |
 
 ## Verification after consumer bump
 

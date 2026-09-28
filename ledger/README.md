@@ -14,7 +14,7 @@ This package provides a TypeScript client for interacting with Canton's JSON Led
 
 ## Versioning
 
-This package follows the Canton SDK versioning scheme. The package version matches the Canton OpenAPI specification version used to generate the types.
+The npm package has its own `0.0.x` version line, independent of the Canton spec it targets. Pre-1.0, every release is a patch bump; a breaking change also gets a `Migrating to 0.0.N` note below. The Canton runtime and JSON API spec this client is built against are versioned separately and surfaced as `SDK_VERSION` (see below), not as the package version.
 
 This package ships against two cooperating but independently-versioned things:
 
