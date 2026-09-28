@@ -56,6 +56,7 @@ describe("Public API surface", () => {
     // JSON API submit failure classification (lifted from domain-verification).
     "isArchiveAlreadyDoneError",
     "isIndeterminateArchiveTimeout",
+    "isIndeterminateSubmitError",
     "isLockedContractsError",
     "isTransientArchiveError",
   ])("exports function %s", (name) => {

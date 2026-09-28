@@ -40,7 +40,7 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 |--------|----------------|
 | `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body (`canton` / `json` / `text` / `empty`) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitError.ts` | `isArchiveAlreadyDoneError`, `isIndeterminateArchiveTimeout`, `isLockedContractsError`, `isTransientArchiveError` |
+| `submitError.ts` | Submit retry/dedup helpers (DV parity + `isIndeterminateSubmitError`) |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 

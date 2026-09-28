@@ -101,13 +101,14 @@ try {
 }
 ```
 
-For submit retry / idempotency, use the helpers in `submitError.ts` (same logic
-as domain-verification `directoryArchiveRetry.ts`):
+For submit retry / idempotency, use the helpers in `submitError.ts`. They build
+on `cantonError.ts` without changing it — additive transport + dedup policy:
 
-- `isArchiveAlreadyDoneError` — `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, inactive
-- `isIndeterminateArchiveTimeout` — HTTP 503 / timely-response timeout (command may still be in flight)
+- `isArchiveAlreadyDoneError` — `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, inactive (message match only; not broad `resourceMissing`)
+- `isIndeterminateArchiveTimeout` — HTTP 503 / timely-response timeout
+- `isIndeterminateSubmitError` — 503 **or** Canton `deadline` (category 3); wait and reuse `commandId`
 - `isLockedContractsError` — activeness lock contention
-- `isTransientArchiveError` — combines Canton `isRetryable`, the above, and 408/429/5xx
+- `isTransientArchiveError` — retriable; check `isIndeterminateSubmitError` first for dedup vs backoff
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.

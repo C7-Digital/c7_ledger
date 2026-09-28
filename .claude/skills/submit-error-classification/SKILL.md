@@ -25,15 +25,16 @@ Direct lift from domain-verification `directoryArchiveRetry.ts` — **same four 
 |----------|---------|
 | `isArchiveAlreadyDoneError` | `DUPLICATE_COMMAND`, `CONTRACT_NOT_FOUND`, `INACTIVE_CONTRACTS` in message |
 | `isIndeterminateArchiveTimeout` | HTTP 503 / timely-response timeout |
+| `isIndeterminateSubmitError` | 503 **or** Canton `deadline` — wait + reuse `commandId` |
 | `isLockedContractsError` | `LOCKED_CONTRACTS` in message |
-| `isTransientArchiveError` | Canton `isRetryable`, locked, indeterminate, 408/429/5xx; not bare 409 |
+| `isTransientArchiveError` | Retriable; use `isIndeterminateSubmitError` first for dedup vs backoff |
 
 Supporting Canton vocabulary stays in `cantonError.ts` (`cantonErrorOf`, `categoryOf`, `isRetryable`).
 
 ## Checklist — belongs in c7_ledger
 
 ```
-- [ ] Matches the four functions above (no extra classifiers, no classifySubmitError sum)
+- [ ] Matches the helpers above (message-only already-done; not broad resourceMissing)
 - [ ] New export in ledger/src/index.ts AND api-surface.test.ts
 - [ ] Test copied/adapted from domain-verification directoryArchiveRetry.test.ts
 - [ ] domain-verification imports from @c7-digital/ledger instead of duplicating

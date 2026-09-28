@@ -33,6 +33,7 @@ export {
 export {
   isArchiveAlreadyDoneError,
   isIndeterminateArchiveTimeout,
+  isIndeterminateSubmitError,
   isLockedContractsError,
   isTransientArchiveError,
 } from "./submitError";

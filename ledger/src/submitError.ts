@@ -1,6 +1,13 @@
-// JSON Ledger API submit failure classification.
-// Lifted verbatim from domain-verification `directoryArchiveRetry.ts`
-// (isArchiveAlreadyDoneError through isTransientArchiveError).
+// JSON Ledger API submit failure classification for retry and command dedup.
+//
+// Builds on `cantonError.ts` (Canton payload vocabulary) with transport-level
+// HTTP/message heuristics. Does not replace or modify cantonError — consumers
+// still use cantonErrorOf / isRetryable for raw Canton interpretation.
+//
+// Core classification lifted from domain-verification `directoryArchiveRetry.ts`.
+// `isIndeterminateSubmitError` is additive: covers HTTP 503 timeouts and Canton
+// `deadline` (category 3), both of which may have committed under an abandoned
+// submit and therefore require wait + same commandId before retry.
 
 import { cantonErrorOf, categoryOf, isRetryable } from "./cantonError";
 import { LedgerApiError } from "./error";
@@ -28,6 +35,23 @@ export function isIndeterminateArchiveTimeout(error: unknown): boolean {
   return /\bHTTP 503\b/i.test(message) || /timely response/i.test(message);
 }
 
+/**
+ * Submit outcome unknown — retry only with the same `commandId` after a wait.
+ *
+ * Covers {@link isIndeterminateArchiveTimeout} (JSON API ~20s request timeout)
+ * and Canton `deadline` / `DeadlineExceededRequestStateUnknown` (category 3).
+ * {@link isRetryable} marks deadline retryable, but cantonError.ts documents
+ * that the write may already have been applied; callers must not treat it as a
+ * plain backoff transient.
+ */
+export function isIndeterminateSubmitError(error: unknown): boolean {
+  if (isIndeterminateArchiveTimeout(error)) {
+    return true;
+  }
+  const canton = cantonErrorOf(error);
+  return canton !== null && categoryOf(canton) === "deadline";
+}
+
 export function isLockedContractsError(error: unknown): boolean {
   return /LOCKED_CONTRACTS/i.test(errorMessage(error));
 }
@@ -41,6 +65,11 @@ export function isTransientArchiveError(error: unknown): boolean {
 
   const canton = cantonErrorOf(error);
   if (canton) {
+    // Indeterminate (503, deadline) — retriable, but callers must use
+    // isIndeterminateSubmitError for wait + commandId dedup, not plain backoff.
+    if (isIndeterminateSubmitError(error)) {
+      return true;
+    }
     if (isRetryable(canton)) {
       return true;
     }

@@ -51,7 +51,7 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 Generic JSON Ledger API submit-result classification belongs **here**, not in consumer apps:
 
 - Canton payload vocabulary: `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`)
-- Submit failure helpers: `isArchiveAlreadyDoneError`, `isIndeterminateArchiveTimeout`, `isLockedContractsError`, `isTransientArchiveError` (`ledger/src/submitError.ts`) — direct lift from domain-verification `directoryArchiveRetry.ts`
+- Submit failure helpers in `ledger/src/submitError.ts` — additive on `cantonError.ts`; lift from domain-verification plus `isIndeterminateSubmitError` for command dedup (503 + Canton deadline)
 
 Consumers should import these helpers and keep only domain-specific retry policy (budgets, stable command ids, ACS checks, `withArchiveRetry`). Do not duplicate the classification logic in apps.
 
