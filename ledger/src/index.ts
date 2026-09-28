@@ -31,6 +31,7 @@ export {
   cantonErrorOf,
 } from "./cantonError";
 export {
+  isAlreadyApplied,
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,

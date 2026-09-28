@@ -1,5 +1,6 @@
 import { LedgerApiError, type LedgerErrorBody } from "./error";
 import {
+  isAlreadyApplied,
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,
@@ -21,6 +22,21 @@ function rejectedWith(
   const body: LedgerErrorBody = { kind: "canton", error: canton(code, errorCategory) };
   return new LedgerApiError(status, "Conflict", body);
 }
+
+describe("isAlreadyApplied", () => {
+  it("is true only for DUPLICATE_COMMAND (the command already committed)", () => {
+    expect(isAlreadyApplied(rejectedWith(409, "DUPLICATE_COMMAND", 10))).toBe(true);
+  });
+
+  it("is false for a contract-gone reject (that is not 'already applied')", () => {
+    expect(isAlreadyApplied(rejectedWith(409, "CONTRACT_NOT_FOUND", 11))).toBe(false);
+    expect(isAlreadyApplied(rejectedWith(409, "LOCAL_VERDICT_INACTIVE_CONTRACTS", 11))).toBe(false);
+  });
+
+  it("is false for a transport error with no Canton payload", () => {
+    expect(isAlreadyApplied(new LedgerApiError(503, "Service Unavailable"))).toBe(false);
+  });
+});
 
 describe("isAlreadyArchived", () => {
   it.each([
