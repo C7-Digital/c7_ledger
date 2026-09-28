@@ -22,27 +22,41 @@ import { httpStatusOf } from "./error";
 // Matched by `code`, not `errorCategory`: category 11 (`resourceMissing`) also
 // covers `UNSUPPORTED_CONTRACT_ID`, which is a hard failure, not a no-op — so a
 // category check would be too broad here.
-const ALREADY_ARCHIVED_CODES: ReadonlySet<string> = new Set([
-  "DUPLICATE_COMMAND",
+//
+// The contract is already gone (as opposed to the command already having been
+// applied — see isAlreadyApplied):
+const CONTRACT_GONE_CODES: ReadonlySet<string> = new Set([
   "CONTRACT_NOT_FOUND",
   "LOCAL_VERDICT_INACTIVE_CONTRACTS",
 ]);
 
 /**
- * The contract this archive targets is already gone, or the archive command
- * already committed — so an archive (or idempotent delete) can treat the reject
- * as success. Whether "already gone = success" holds is the caller's operation:
- * true for an archive, false for an exercise that needs the contract live. This
- * reports the fact; the caller applies that judgement.
+ * The command already committed — a resubmit with the *same* `commandId` hit the
+ * participant's command deduplication (`DUPLICATE_COMMAND`). A caller retrying an
+ * indeterminate submit (see {@link isIndeterminateSubmit}) with a stable
+ * `commandId` treats this as success: the prior, seemingly-lost attempt applied.
+ * Reports the fact; the caller decides to stop as success.
  */
-export function isAlreadyArchived(error: unknown): boolean {
-  const canton = cantonErrorOf(error);
-  return canton !== null && ALREADY_ARCHIVED_CODES.has(canton.code);
+export function isAlreadyApplied(error: unknown): boolean {
+  return cantonErrorOf(error)?.code === "DUPLICATE_COMMAND";
 }
 
 /**
- * Worth retrying: a transport transient (`LedgerApiError.isTransient` — 408 /
- * 429 / 5xx) or a Canton-retryable rejection (`isRetryable`, keyed off
+ * The archive this targets is already the case — the command already committed
+ * ({@link isAlreadyApplied}) or the contract is already gone — so an archive (or
+ * idempotent delete) can treat the reject as success. Whether "already gone =
+ * success" holds is the caller's operation: true for an archive, false for an
+ * exercise that needs the contract live. Reports the fact; the caller applies it.
+ */
+export function isAlreadyArchived(error: unknown): boolean {
+  if (isAlreadyApplied(error)) return true;
+  const canton = cantonErrorOf(error);
+  return canton !== null && CONTRACT_GONE_CODES.has(canton.code);
+}
+
+/**
+ * Worth retrying: a transport transient (408 / 429 / 5xx, read via
+ * `httpStatusOf`) or a Canton-retryable rejection (`isRetryable`, keyed off
  * `errorCategory`: contention, transient, deadline, seek-after-end).
  *
  * Check {@link isIndeterminateSubmit} first: an indeterminate failure is also

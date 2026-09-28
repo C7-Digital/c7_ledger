@@ -113,10 +113,14 @@ helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
   Canton `deadline` (category 3). The submit may already have committed, so retry
   with the **same** `commandId` after a wait. A plain transient (429) is safe to
   retry fresh. Check this **before** `isRetriableSubmit`.
-- **Is my archive already a no-op?** `isAlreadyArchived(e)` — the target contract
-  is gone or the archive command already committed (`DUPLICATE_COMMAND`,
-  `CONTRACT_NOT_FOUND`, `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app
-  that archives; the *policy* of treating it as success stays with the caller.
+- **Did my resubmit hit dedup?** `isAlreadyApplied(e)` — `DUPLICATE_COMMAND`: a
+  retry with the *same* `commandId` found the participant already applied the
+  prior (seemingly-lost) attempt. A caller retrying an indeterminate submit with a
+  stable `commandId` treats this as success.
+- **Is my archive already a no-op?** `isAlreadyArchived(e)` — `isAlreadyApplied`
+  **or** the contract is already gone (`CONTRACT_NOT_FOUND`,
+  `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app that archives; the
+  *policy* of treating it as success stays with the caller.
 
 Each takes `unknown` and reads the status structurally (`httpStatusOf`, also
 exported), so they work directly on a `catch` binding — no `instanceof` needed,
@@ -135,6 +139,14 @@ try {
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.39
+
+Adds `isAlreadyApplied(e)` — `DUPLICATE_COMMAND` alone (the command already
+committed), for callers that retry an indeterminate submit with a stable
+`commandId` and must treat a dedup hit as success. `isAlreadyArchived` now
+composes it (`isAlreadyApplied` or contract-gone) — same behavior, no change for
+its callers. Additive; nothing removed.
 
 ### Migrating to 0.0.38
 
