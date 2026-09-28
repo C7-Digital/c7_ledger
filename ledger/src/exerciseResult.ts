@@ -10,8 +10,8 @@
 //
 // Both transports produce the same `components["schemas"]["Event"][]` shape
 // — an ArchivedEvent / CreatedEvent / ExercisedEvent variant — so the walk
-// factors cleanly out of `Ledger.exerciseResult` and is reused verbatim by
-// `@c7-private/dapp-stack`'s `ExternalPartySession.exerciseResult`.
+// factors cleanly out of `Ledger.exerciseResult` and can be reused verbatim by
+// an external-party signing session that shares the same event shape.
 
 import type { Choice, ContractId } from "@daml/types";
 import type { components } from "./generated/api";

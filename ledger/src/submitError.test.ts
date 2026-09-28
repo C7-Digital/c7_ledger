@@ -16,7 +16,7 @@ function payload(over: Partial<JsCantonError> = {}): JsCantonError {
   };
 }
 
-describe("submitError (directoryArchiveRetry parity)", () => {
+describe("submitError (submit-retry classifier parity)", () => {
   it("treats LOCKED and 503 as transient; bare 409 and already-done as not", () => {
     expect(
       isTransientArchiveError(

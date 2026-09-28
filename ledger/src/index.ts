@@ -46,9 +46,9 @@ export { decodeExerciseResult } from "./exerciseResult";
 
 // Re-export the JSON Ledger API OpenAPI schemas so consumers can name
 // wire-response shapes (`apiComponents["schemas"]["Event"]`,
-// `["JsGetUpdateResponse"]`, etc.) without redeclaring slivers. Used by
-// `@c7-private/dapp-stack`'s `ExternalPartySession` to type the wallet-
-// proxied `sdk.ledgerApi(...)` response before handing it to
+// `["JsGetUpdateResponse"]`, etc.) without redeclaring slivers. An external-
+// party signing session uses these to type the wallet-proxied
+// `sdk.ledgerApi(...)` response before handing it to
 // {@link decodeExerciseResult}. `apiComponents` mirrors the local alias
 // used in `types.ts`.
 export type { components as apiComponents } from "./generated/api";

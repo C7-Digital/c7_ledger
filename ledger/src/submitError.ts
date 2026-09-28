@@ -4,7 +4,7 @@
 // HTTP/message heuristics. Does not replace or modify cantonError — consumers
 // still use cantonErrorOf / isRetryable for raw Canton interpretation.
 //
-// Core classification lifted from domain-verification `directoryArchiveRetry.ts`.
+// Core classification consolidated from consumer-app submit-retry logic.
 // `isIndeterminateSubmitError` is additive: covers HTTP 503 timeouts and Canton
 // `deadline` (category 3), both of which may have committed under an abandoned
 // submit and therefore require wait + same commandId before retry.

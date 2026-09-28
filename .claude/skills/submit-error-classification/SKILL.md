@@ -3,23 +3,23 @@ name: submit-error-classification
 description: >-
   Decide whether JSON Ledger API submit failure handling belongs in
   @c7-digital/ledger (c7_ledger) or in a consumer app. Use when adding retry
-  logic, classifying 503/409/DUPLICATE/LOCKED errors, moving logic out of
-  domain-verification, or extending submitError.ts.
+  logic, classifying 503/409/DUPLICATE/LOCKED errors, moving classification
+  out of a consumer app, or extending submitError.ts.
 ---
 
 # Submit error classification
 
-Goal: **one copy** of submit failure classification in `@c7-digital/ledger`. Consumer apps keep domain policy only (budgets, stable command ids, ACS checks, `withArchiveRetry`).
+Goal: **one copy** of submit failure classification in `@c7-digital/ledger`. Consumer apps keep domain policy only (retry budgets, stable command ids, ACS liveness checks, the app's retry wrapper).
 
 ## When this applies
 
 - A consumer duplicates `isTransientArchiveError` / regex tables for 503, DUPLICATE, LOCKED
 - Adding retry/backoff around `ledger.submit` / `ledger.exercise`
-- Leo-style review: "generic JSON API result error handling belongs in c7-ledger"
+- Review note: "generic JSON API result error handling belongs in c7-ledger"
 
 ## Ledger exports (`ledger/src/submitError.ts`)
 
-Direct lift from domain-verification `directoryArchiveRetry.ts` — **same four functions, same logic**:
+The classifiers below were consolidated from consumer-app retry logic — **one canonical copy, same logic**:
 
 | Function | Purpose |
 |----------|---------|
@@ -36,27 +36,27 @@ Supporting Canton vocabulary stays in `cantonError.ts` (`cantonErrorOf`, `catego
 ```
 - [ ] Matches the helpers above (message-only already-done; not broad resourceMissing)
 - [ ] New export in ledger/src/index.ts AND api-surface.test.ts
-- [ ] Test copied/adapted from domain-verification directoryArchiveRetry.test.ts
-- [ ] domain-verification imports from @c7-digital/ledger instead of duplicating
+- [ ] Behavior test lives beside the helper in this repo
+- [ ] The consumer imports from @c7-digital/ledger instead of duplicating
 ```
 
 ## Checklist — stays in consumer app
 
 ```
-- [ ] withArchiveRetry, budgets, DEFAULT_INDETERMINATE_ARCHIVE_WAIT_MS
-- [ ] Stable command ids (archiveCommandIdForContract/Batch)
-- [ ] ACS isStillActive / beforeRetry
+- [ ] The app's retry wrapper, retry budgets, indeterminate-wait constant
+- [ ] Stable command ids (per-contract / per-batch)
+- [ ] ACS liveness check before retry
 - [ ] Logging, batch size, product sequencing
 ```
 
 ## Anti-patterns
 
 - Adding `classifySubmitError` / `SubmitErrorKind` when the four booleans suffice
-- `resourceMissing` category or structural `httpStatusOf` not in domain-verification original
+- `resourceMissing` category or structural `httpStatusOf` beyond the canonical classifiers
 - String-matching in apps when ledger exports the helper
 - Immediate retry after 503 with a new commandId
 
 ## References
 
-- domain-verification source: `apps/api/src/db/directoryArchiveRetry.ts` (classification block)
+- [ledger/src/submitError.ts](../../../ledger/src/submitError.ts) — the classifiers
 - [ledger/README.md — Errors](../../../ledger/README.md)

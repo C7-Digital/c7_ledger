@@ -14,7 +14,7 @@ TypeScript clients for Canton Network services, published to npm under `@c7-digi
 | `@c7-digital/scribe` | `scribe/` | Scribe integration |
 | `@c7-digital/admin` | `admin/` | Admin API helpers |
 
-**Consumers** (e.g. [domain-verification](https://github.com/C7-Digital/domain-verification)) depend on published npm versions — not git submodules. After a ledger release, bump `"@c7-digital/ledger"` in the consumer's `package.json` files and run `pnpm install`.
+**Consumers** are C7's private Canton applications. They depend on published npm versions — not git submodules. After a ledger release, bump `"@c7-digital/ledger"` in the consumer's `package.json` files and run `pnpm install`.
 
 Package-specific notes: [ledger/AGENTS.md](ledger/AGENTS.md).
 
@@ -51,9 +51,9 @@ Always run `pnpm build && pnpm test` at repo root before opening a PR.
 Generic JSON Ledger API submit-result classification belongs **here**, not in consumer apps:
 
 - Canton payload vocabulary: `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`)
-- Submit failure helpers in `ledger/src/submitError.ts` — additive on `cantonError.ts`; lift from domain-verification plus `isIndeterminateSubmitError` for command dedup (503 + Canton deadline)
+- Submit failure helpers in `ledger/src/submitError.ts` — additive on `cantonError.ts`; consolidated from consumer-app retry logic plus `isIndeterminateSubmitError` for command dedup (503 + Canton deadline)
 
-Consumers should import these helpers and keep only domain-specific retry policy (budgets, stable command ids, ACS checks, `withArchiveRetry`). Do not duplicate the classification logic in apps.
+Consumers should import these helpers and keep only domain-specific retry policy (retry budgets, stable command ids, ACS liveness checks, the app's retry wrapper). Do not duplicate the classification logic in apps.
 
 See skill: `.claude/skills/submit-error-classification/SKILL.md`.
 

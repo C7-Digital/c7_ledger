@@ -2,7 +2,7 @@
 name: ledger-release
 description: >-
   Bump, build, test, and publish @c7-digital/ledger (and sibling packages) from
-  c7_ledger to npm, then update consumer repos like domain-verification. Use
+  c7_ledger to npm, then update the consumer apps that pin it. Use
   when releasing a ledger patch, after merging API changes, or when the user
   asks how to version bump and install c7_ledger.
 ---
@@ -14,7 +14,7 @@ Goal: publish `@c7-digital/ledger@X.Y.Z` to npm and update downstream pins safel
 ## When this applies
 
 - Merged c7_ledger PR changes public API or bug fixes consumers need
-- User asks "do I version bump and install?" for domain-verification / other apps
+- User asks "do I version bump and install?" for a consumer app
 - React peer dependency validation fails during release
 
 ## Monorepo packages
@@ -26,7 +26,7 @@ Goal: publish `@c7-digital/ledger@X.Y.Z` to npm and update downstream pins safel
 | `@c7-digital/scan` | `scan/` | Peers on ledger |
 | `@c7-digital/scribe` | `scribe/` | Independent |
 
-Consumers (domain-verification) pin exact versions, e.g. `"@c7-digital/ledger": "0.0.35"`, resolved from **registry.npmjs.org** via `apps/pnpm-lock.yaml` — not a git dependency.
+Consumer apps pin exact versions, e.g. `"@c7-digital/ledger": "0.0.35"`, resolved from **registry.npmjs.org** via the app's lockfile — not a git dependency.
 
 ## Release checklist (maintainer)
 
@@ -51,19 +51,16 @@ Consumers (domain-verification) pin exact versions, e.g. `"@c7-digital/ledger": 
 
 Ledger package publishes **`lib/`** and **`lib-lite/`** — consumers must not depend on git source paths.
 
-## Consumer update (e.g. domain-verification)
+## Consumer update
 
 After `@c7-digital/ledger@0.0.36` is on npm:
 
-1. Edit **each** consumer `package.json` that lists the dep:
-   - `apps/api/package.json`
-   - `apps/client/package.json`
-   - `apps/admin/package.json`
-   - `apps/shared/package.json`
-2. From consumer `apps/` workspace:
+1. Edit **each** `package.json` in the consumer app that lists the dep (a
+   multi-package app usually pins it in several workspace packages).
+2. From the consumer's workspace root:
    ```bash
    pnpm install
-   pnpm --filter @domain-verify/api test   # or full apps::test
+   pnpm test   # or the app's own test recipe
    ```
 3. Commit lockfile + version pins together.
 
@@ -89,7 +86,7 @@ Prefer npm publish + pin for CI and teammates.
 
 ## Verification after consumer bump
 
-- `pnpm --filter @domain-verify/api typecheck` (or repo `just apps::typecheck`)
+- Typecheck the consumer app's workspace
 - Unit tests touching ledger error paths
 - No remaining duplicate regex classifiers that ledger now owns (see `submit-error-classification` skill)
 
@@ -104,4 +101,3 @@ Prefer npm publish + pin for CI and teammates.
 
 - [ledger/AGENTS.md](../../../ledger/AGENTS.md)
 - [scripts/release.ts](../../../scripts/release.ts)
-- Consumer: [domain-verification AGENTS.md](https://github.com/C7-Digital/domain-verification/blob/main/AGENTS.md)

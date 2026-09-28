@@ -53,7 +53,7 @@ describe("Public API surface", () => {
     "isRetryable",
     "resourcesOf",
     "cantonErrorOf",
-    // JSON API submit failure classification (lifted from domain-verification).
+    // JSON API submit failure classification.
     "isArchiveAlreadyDoneError",
     "isIndeterminateArchiveTimeout",
     "isIndeterminateSubmitError",
