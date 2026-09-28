@@ -132,6 +132,27 @@ try {
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
 
+### Migrating to 0.0.37
+
+The `submitError` helpers (`isArchiveAlreadyDoneError`,
+`isIndeterminateArchiveTimeout`, `isIndeterminateSubmitError`,
+`isLockedContractsError`, `isTransientArchiveError`) are removed. They duplicated
+`cantonError` — read Canton's classification instead:
+
+```typescript
+// before
+if (isTransientArchiveError(e)) retry();
+if (isIndeterminateSubmitError(e)) retrySameCommandId();
+
+// after
+const canton = cantonErrorOf(e);
+if (e instanceof LedgerApiError && e.isIndeterminate()) retrySameCommandId();
+else if ((e instanceof LedgerApiError && e.isTransient()) || (canton && isRetryable(canton))) retry();
+```
+
+Whether a missing or inactive contract counts as success is caller policy now —
+keep it in the app (it is only success when archiving).
+
 ### Migrating to 0.0.34
 
 The `LedgerApiError` constructor takes a tagged `LedgerErrorBody` instead of an
