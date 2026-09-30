@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
-  packageScope,
+  packageName,
   rewriteSelfReferences,
   stagePackages,
 } from "../generate/stage.js";
@@ -27,16 +27,14 @@ async function put(path: string, content: string): Promise<void> {
 }
 
 describe("rewriteSelfReferences", () => {
-  const known = new Set([TIME_PKG]);
-  const scopes = new Set([SCOPE]);
+  const packages = new Map([[`${SCOPE}/${TIME_PKG}`, TIME_PKG]]);
 
   it("points a cross-package import at the staged package", () => {
     const out = rewriteSelfReferences(
       `import * as t from '${SCOPE}/${TIME_PKG}';`,
       "/stage/my-project-0.1.0/lib/M",
       "/stage",
-      scopes,
-      known
+      packages
     );
     expect(out).toBe(
       `import * as t from '../../../${TIME_PKG}/lib/index.js';`
@@ -48,8 +46,7 @@ describe("rewriteSelfReferences", () => {
       `import * as t from "${SCOPE}/${TIME_PKG}";`,
       "/stage/x/lib",
       "/stage",
-      scopes,
-      known
+      packages
     );
     expect(out).toBe(`import * as t from "../../${TIME_PKG}/lib/index.js";`);
   });
@@ -61,8 +58,45 @@ describe("rewriteSelfReferences", () => {
       "import * as damlTypes from '@daml/types';",
     ].join("\n");
     expect(
-      rewriteSelfReferences(source, "/stage/x/lib", "/stage", scopes, known)
+      rewriteSelfReferences(source, "/stage/x/lib", "/stage", packages)
     ).toBe(source);
+  });
+
+  it("matches a package's whole name, never one scope's directory under another", () => {
+    const twoScopes = new Map([
+      ["@scope-a/codegen/pkg-a", "pkg-a"],
+      ["@scope-b/codegen/pkg-b", "pkg-b"],
+    ]);
+    const source = [
+      "import * as a from '@scope-a/codegen/pkg-a';",
+      "import * as wrong from '@scope-a/codegen/pkg-b';",
+    ].join("\n");
+    expect(
+      rewriteSelfReferences(source, "/stage/x/lib", "/stage", twoScopes)
+    ).toBe(
+      [
+        "import * as a from '../../pkg-a/lib/index.js';",
+        "import * as wrong from '@scope-a/codegen/pkg-b';",
+      ].join("\n")
+    );
+  });
+
+  it("rewrites export-from and import() specifiers too", () => {
+    const out = rewriteSelfReferences(
+      [
+        `export * from '${SCOPE}/${TIME_PKG}';`,
+        `type T = import('${SCOPE}/${TIME_PKG}').RelTime;`,
+      ].join("\n"),
+      "/stage/x/lib",
+      "/stage",
+      packages
+    );
+    expect(out).toBe(
+      [
+        `export * from '../../${TIME_PKG}/lib/index.js';`,
+        `type T = import('../../${TIME_PKG}/lib/index.js').RelTime;`,
+      ].join("\n")
+    );
   });
 });
 
@@ -96,9 +130,9 @@ describe("stagePackages", () => {
     await rm(tmp, { recursive: true, force: true });
   });
 
-  it("reads the scope from a package's name", async () => {
-    expect(await packageScope(join(input, MAIN_PKG), MAIN_PKG)).toBe(SCOPE);
-    expect(await packageScope(join(tmp, "missing"), "missing")).toBeUndefined();
+  it("reads a package's name from its package.json", async () => {
+    expect(await packageName(join(input, MAIN_PKG))).toBe(`${SCOPE}/${MAIN_PKG}`);
+    expect(await packageName(join(tmp, "missing"))).toBeUndefined();
   });
 
   it("rewrites the staged copy and leaves the input as it was", async () => {

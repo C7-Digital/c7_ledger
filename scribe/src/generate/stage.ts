@@ -12,7 +12,8 @@ import { glob } from "glob";
  * (`RelTime`, `NonEmpty`, `Set`, ...) silently becomes `any`. The bundle maps
  * the same imports back to local packages at build time
  * (`resolveSelfReferences`); this does the same for the `.d.ts` files, by
- * rewriting each cross-package import to a relative path within `srcDir`.
+ * rewriting each import of a staged package to a relative path within
+ * `srcDir`.
  *
  * Packages are copied rather than symlinked, so the rewrite never touches the
  * input and TypeScript never leaves `srcDir` through a link's real path.
@@ -32,17 +33,17 @@ export async function stagePackages(
     staged.push(entry.name);
   }
 
-  const scopes = new Set<string>();
-  for (const name of staged) {
-    const scope = await packageScope(join(srcDir, name), name);
-    if (scope) scopes.add(scope);
+  // Each staged package's own name, as its siblings import it.
+  const packages = new Map<string, string>();
+  for (const dir of staged) {
+    const name = await packageName(join(srcDir, dir));
+    if (name) packages.set(name, dir);
   }
-  if (scopes.size === 0) return staged;
+  if (packages.size === 0) return staged;
 
-  const known = new Set(staged);
-  for (const name of staged) {
+  for (const dir of staged) {
     const files = await glob("**/*.d.ts", {
-      cwd: join(srcDir, name),
+      cwd: join(srcDir, dir),
       absolute: true,
     });
     for (const file of files) {
@@ -51,8 +52,7 @@ export async function stagePackages(
         source,
         dirname(file),
         srcDir,
-        scopes,
-        known
+        packages
       );
       if (rewritten !== source) await writeFile(file, rewritten);
     }
@@ -60,51 +60,43 @@ export async function stagePackages(
   return staged;
 }
 
-/**
- * The name prefix codegen gave a package: `@my-org/codegen` for a package
- * named `@my-org/codegen/<dir>`. `undefined` when its `package.json` is
- * missing or its name does not end in its directory name.
- */
-export async function packageScope(
-  pkgDir: string,
-  dirName: string
-): Promise<string | undefined> {
-  let name: unknown;
+/** The `name` in a package's `package.json`; `undefined` when it has none. */
+export async function packageName(pkgDir: string): Promise<string | undefined> {
   try {
-    name = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf-8")).name;
+    const { name } = JSON.parse(
+      await readFile(join(pkgDir, "package.json"), "utf-8")
+    );
+    return typeof name === "string" ? name : undefined;
   } catch {
     return undefined;
   }
-  const suffix = `/${dirName}`;
-  return typeof name === "string" && name.endsWith(suffix)
-    ? name.slice(0, -suffix.length)
-    : undefined;
 }
 
+// A module specifier in an import or export: `from '<spec>'` or `import('<spec>')`.
+const SPECIFIER = /(\bfrom\s+|\bimport\s*\(\s*)(['"])([^'"]+)\2/g;
+
 /**
- * Rewrite imports of `<scope>/<pkg>` in a declaration file at `fromDir` to the
- * relative path of `<srcDir>/<pkg>/lib/index.js`. Only packages in `known` are
- * rewritten; any other import is left as it is.
+ * Rewrite each import in a declaration file at `fromDir` whose specifier is
+ * exactly the name of a staged package (`packages`: name → directory) to the
+ * relative path of `<srcDir>/<dir>/lib/index.js`. Every other import is left
+ * as it is.
  */
 export function rewriteSelfReferences(
   source: string,
   fromDir: string,
   srcDir: string,
-  scopes: ReadonlySet<string>,
-  known: ReadonlySet<string>
+  packages: ReadonlyMap<string, string>
 ): string {
-  let out = source;
-  for (const scope of scopes) {
-    const pattern = new RegExp(`(['"])${escapeRegExp(scope)}/([^'"/]+)\\1`, "g");
-    out = out.replace(pattern, (match, quote: string, pkg: string) => {
-      if (!known.has(pkg)) return match;
-      const target = relative(fromDir, resolve(srcDir, pkg, "lib", "index.js"))
+  return source.replace(
+    SPECIFIER,
+    (match, lead: string, quote: string, spec: string) => {
+      const dir = packages.get(spec);
+      if (dir === undefined) return match;
+      const target = relative(fromDir, resolve(srcDir, dir, "lib", "index.js"))
         .split(sep)
         .join("/");
-      return `${quote}${target.startsWith(".") ? target : `./${target}`}${quote}`;
-    });
-  }
-  return out;
+      const path = target.startsWith(".") ? target : `./${target}`;
+      return `${lead}${quote}${path}${quote}`;
+    }
+  );
 }
-
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
