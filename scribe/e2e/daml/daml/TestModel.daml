@@ -1,5 +1,7 @@
 module TestModel where
 
+import DA.Time (RelTime, seconds)
+
 -- | A simple asset template for e2e testing.
 template Asset
   with
@@ -36,7 +38,7 @@ interface Transferable where
       iNewOwner : Party
     controller getOwner this
     do
-      create (toInterface @Transferable (ManagedAsset (getOwner this) "" 0 iNewOwner))
+      create (toInterface @Transferable (ManagedAsset (getOwner this) "" 0 iNewOwner (seconds 0)))
 
 -- | A managed asset that implements the Transferable interface.
 template ManagedAsset
@@ -45,6 +47,8 @@ template ManagedAsset
     label : Text
     amount : Int
     delegate : Party
+    holdFor : RelTime
+      -- ^ A standard-library type, generated into a package of its own.
   where
     signatory manager
     observer delegate
