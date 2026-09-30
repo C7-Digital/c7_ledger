@@ -301,7 +301,9 @@ Scribe owns the **build** side (raw codegen -> clean ESM bundle). The `damlCodeg
 }
 ```
 
-Scribe creates a `.scribe/` staging directory (symlinked raw codegen packages + generated `.d.ts` files) and a `dist/` directory (bundled ESM). The `.scribe/` directory is tool-managed and should not be edited manually. The `types` field points at `.scribe/index.d.ts` so TypeScript resolves types through the original `.d.ts` chain, while `main`/`exports` point at the bundled `dist/` output for runtime.
+Scribe creates a `.scribe/` staging directory (a copy of the raw codegen packages + generated `.d.ts` files) and a `dist/` directory (bundled ESM). The `.scribe/` directory is tool-managed and should not be edited manually. The `types` field points at `.scribe/index.d.ts` so TypeScript resolves types through the original `.d.ts` chain, while `main`/`exports` point at the bundled `dist/` output for runtime.
+
+Daml codegen makes each generated package import the others by name (`@mypackage/codegen/daml-stdlib-DA-Time-Types-1.0.0`, or `@daml.js/...` without `-s`), and no `node_modules` serves those names. The bundle resolves them to the local packages; in `.scribe/`, scribe rewrites the same imports in the `.d.ts` files to relative paths. So cross-package types such as `RelTime` and `NonEmpty` type-check as themselves, with no `paths` mapping or `node_modules` link in the consumer — without the rewrite, TypeScript silently reads them as `any`.
 
 ## Development
 

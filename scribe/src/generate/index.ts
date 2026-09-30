@@ -1,11 +1,12 @@
-import { mkdir, writeFile, symlink, readdir, rm, copyFile, realpath } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, writeFile, rm, copyFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { AnalyzedPackage } from "../analyze.js";
 import type { ResolvedConfig } from "../config.js";
 import { generateImports, generateExportStatements } from "./exports.js";
 import { generateRegistry } from "./registry.js";
 import { generateTypeDefs, generateVersionTypeDef } from "./types.js";
 import { bundle } from "../transform.js";
+import { stagePackages } from "./stage.js";
 
 export { generateImports, generateExportStatements } from "./exports.js";
 export { generateRegistry } from "./registry.js";
@@ -46,17 +47,9 @@ export async function generate(
   await rm(srcDir, { recursive: true, force: true });
   await mkdir(srcDir, { recursive: true });
 
-  // Symlink all input packages into src/ using relative paths
-  const realSrcDir = await realpath(srcDir);
-  const inputEntries = await readdir(config.input, { withFileTypes: true });
-  for (const entry of inputEntries) {
-    if (entry.isDirectory() || entry.isSymbolicLink()) {
-      const absTarget = resolve(join(config.input, entry.name));
-      const target = relative(realSrcDir, absTarget);
-      const link = join(srcDir, entry.name);
-      await symlink(target, link);
-    }
-  }
+  // Copy the input packages in, with their type declarations' imports of
+  // each other made relative (see stagePackages).
+  await stagePackages(config.input, srcDir);
 
   // Generate version.js
   await writeFile(
