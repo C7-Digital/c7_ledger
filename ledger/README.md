@@ -144,6 +144,15 @@ try {
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
 
+### Migrating to 0.0.41
+
+A query at `"end"` now sees the same `Ledger` instance's own writes. A
+successful `create`, `exercise`, `exerciseResult`, `submit` or
+`submitWithDisclosures` moves the cached ledger end forward to the
+transaction's offset. Before, the one-second ledger-end cache could serve an
+offset from before the write, so the query could still return contracts that
+the write had archived. No API change.
+
 ### Migrating to 0.0.40
 
 Adds `isConfirmedPermanentReject(e)` — structured Canton non-retryable reject,

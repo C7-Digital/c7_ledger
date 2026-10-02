@@ -1381,13 +1381,38 @@ export class Ledger {
 
     try {
       const offset = await this.ledgerEndPromise;
-      // Cache the result
-      this.ledgerEndCache = { offset, timestamp: now };
-      return offset;
+      // A submit that completed while this request was in flight may have
+      // cached a later offset already; keep the later one.
+      this.cacheLedgerEnd(offset, now);
+      return this.ledgerEndCache!.offset;
     } finally {
       // Clear the promise so next request can make a new one if needed
       this.ledgerEndPromise = undefined;
     }
+  }
+
+  /**
+   * Cache `offset` as the ledger end unless a later offset is cached. The
+   * cache never moves back, so a read at "end" never misses a write that this
+   * instance has already seen.
+   */
+  private cacheLedgerEnd(offset: number, timestamp: number): void {
+    if (!this.ledgerEndCache || offset >= this.ledgerEndCache.offset) {
+      this.ledgerEndCache = { offset, timestamp };
+    }
+  }
+
+  /**
+   * Submit and wait, then advance the cached ledger end to the transaction's
+   * offset. Without this, a query at "end" within the cache window reads the
+   * ACS from before this instance's own write.
+   */
+  private async submitAndWaitForTransaction(
+    request: Parameters<TypedHttpClient["submitAndWaitForTransaction"]>[0]
+  ): ReturnType<TypedHttpClient["submitAndWaitForTransaction"]> {
+    const response = await this.client.submitAndWaitForTransaction(request);
+    this.cacheLedgerEnd(response.transaction.offset, Date.now());
+    return response;
   }
 
   getTokenUserId(): string {
@@ -1582,7 +1607,7 @@ export class Ledger {
     };
 
     const request = { commands };
-    const response = await this.client.submitAndWaitForTransaction(request);
+    const response = await this.submitAndWaitForTransaction(request);
     const transaction = response.transaction;
     logger.log(`Create Transaction: ${JSON.stringify(transaction)}`);
     const createdEvents = (transaction.events || []).reduce(
@@ -1664,7 +1689,7 @@ export class Ledger {
     };
 
     const request = { commands };
-    const response = await this.client.submitAndWaitForTransaction(request);
+    const response = await this.submitAndWaitForTransaction(request);
     const transaction = response.transaction;
     const events: Event<object>[] = [];
 
@@ -1771,7 +1796,7 @@ export class Ledger {
       },
     };
     const request = { commands, transactionFormat };
-    const response = await this.client.submitAndWaitForTransaction(request);
+    const response = await this.submitAndWaitForTransaction(request);
     return decodeExerciseResult(
       response.transaction.events || [],
       choice,
@@ -1851,7 +1876,7 @@ export class Ledger {
     };
 
     const request = { commands: requestCommands };
-    const response = await this.client.submitAndWaitForTransaction(request);
+    const response = await this.submitAndWaitForTransaction(request);
     const transaction = response.transaction;
     const events: Event<object>[] = [];
 
