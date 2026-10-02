@@ -4,6 +4,7 @@ import {
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,
+  isConfirmedPermanentReject,
 } from "./submitClassify";
 import type { JsCantonError } from "./types";
 
@@ -106,6 +107,32 @@ describe("isIndeterminateSubmit", () => {
   it("is false for contention (category 2) — that transaction did not commit", () => {
     expect(
       isIndeterminateSubmit(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
+    ).toBe(false);
+  });
+});
+
+describe("isConfirmedPermanentReject", () => {
+  it("is true for a structured non-retryable Canton reject (e.g. permission)", () => {
+    // errorCategory 7 = permissionDenied — not retryable.
+    expect(
+      isConfirmedPermanentReject(rejectedWith(403, "NO_VIEW_ON_CONTRACT", 7))
+    ).toBe(true);
+  });
+
+  it("is false for bare HTTP 4xx / plain Error — fail closed without Canton payload", () => {
+    expect(isConfirmedPermanentReject(new LedgerApiError(400, "Bad Request"))).toBe(false);
+    expect(isConfirmedPermanentReject(new Error("nope"))).toBe(false);
+  });
+
+  it("is false for retriable contention and for already-archived no-ops", () => {
+    expect(
+      isConfirmedPermanentReject(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
+    ).toBe(false);
+    expect(
+      isConfirmedPermanentReject(rejectedWith(409, "CONTRACT_NOT_FOUND", 11))
+    ).toBe(false);
+    expect(
+      isConfirmedPermanentReject(rejectedWith(409, "DUPLICATE_COMMAND", 10))
     ).toBe(false);
   });
 });

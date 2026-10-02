@@ -121,6 +121,9 @@ helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
   **or** the contract is already gone (`CONTRACT_NOT_FOUND`,
   `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app that archives; the
   *policy* of treating it as success stays with the caller.
+- **Confirmed permanent hard fail?** `isConfirmedPermanentReject(e)` — structured
+  Canton rejection that Canton marks non-retryable, and not already-archived.
+  Bare HTTP 4xx / plain Errors are **false** (fail closed for ignore-and-proceed).
 
 Each takes `unknown` and reads the status structurally (`httpStatusOf`, also
 exported), so they work directly on a `catch` binding — no `instanceof` needed,
@@ -133,12 +136,19 @@ try {
   if (isAlreadyArchived(e)) return; // idempotent: already gone
   if (isIndeterminateSubmit(e)) return retrySameCommandId();
   if (isRetriableSubmit(e)) return retry();
+  if (isConfirmedPermanentReject(e)) return markIgnored(); // domain policy
   throw e;
 }
 ```
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.40
+
+Adds `isConfirmedPermanentReject(e)` — structured Canton non-retryable reject,
+excluding already-archived no-ops. Bare transport 4xx / plain Errors stay
+`false` so ignore-and-proceed callers fail closed. Additive; nothing removed.
 
 ### Migrating to 0.0.39
 

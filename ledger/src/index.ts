@@ -35,6 +35,7 @@ export {
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,
+  isConfirmedPermanentReject,
 } from "./submitClassify";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
