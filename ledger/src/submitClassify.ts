@@ -84,3 +84,24 @@ export function isIndeterminateSubmit(error: unknown): boolean {
   const canton = cantonErrorOf(error);
   return canton !== null && categoryOf(canton) === "deadline";
 }
+
+/**
+ * Structured Canton rejection that Canton itself marks non-retryable
+ * (permission, invalid request/state, etc.) — a confirmed permanent hard fail.
+ *
+ * Requires a Canton payload (`cantonErrorOf`); bare HTTP 4xx and plain client
+ * Errors are **false** so ignore-and-proceed callers fail closed on unknowns.
+ * Excludes {@link isAlreadyArchived} (already-applied / contract gone): those
+ * are success for idempotent deletes, not permanent rejects.
+ *
+ * `!isRetriableSubmit` alone is not enough — that is also true for transport
+ * 4xx with no Canton payload. Compose this fact into domain policy (e.g. mark
+ * ignored and continue cutover); do not re-derive it in the consumer.
+ */
+export function isConfirmedPermanentReject(error: unknown): boolean {
+  if (isAlreadyArchived(error) || isRetriableSubmit(error)) {
+    return false;
+  }
+  const canton = cantonErrorOf(error);
+  return canton !== null && !isRetryable(canton);
+}
