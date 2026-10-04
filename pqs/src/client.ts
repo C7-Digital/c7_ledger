@@ -68,6 +68,18 @@ export class PqsClient {
       config.sql ?? postgres(config.connectionString ?? "", PQS_SQL_OPTIONS);
   }
 
+  // A NULL offset tells the PQS functions to use the session scope
+  // (`set_latest`/`set_oldest`). This client never sets one, so a NULL bound
+  // would read an empty scope. An omitted bound resolves to the head or the
+  // oldest ingested offset instead.
+  private atOrLatest(offset: Offset | undefined) {
+    return this.sql`COALESCE(${offset ?? null}::bigint, latest_offset())`;
+  }
+
+  private fromOrOldest(offset: Offset | undefined) {
+    return this.sql`COALESCE(${offset ?? null}::bigint, oldest_offset())`;
+  }
+
   /** Active contracts of a template (optionally as of a past offset). */
   async active<T extends object>(
     template: Template<T, any, string> | TemplateName<T>,
@@ -75,7 +87,7 @@ export class PqsClient {
   ): Promise<Contract<T>[]> {
     const name = resolveTemplate(template);
     const rows = await this.rows(
-      this.sql`SELECT * FROM active(${name}, ${opts?.atOffset ?? null})`,
+      this.sql`SELECT * FROM active(${name}, ${this.atOrLatest(opts?.atOffset)})`,
     );
     return rows.map((r) => toContract<T>(r));
   }
@@ -87,7 +99,7 @@ export class PqsClient {
   ): Promise<CreateEvent<T>[]> {
     const name = resolveTemplate(template);
     const rows = await this.rows(
-      this.sql`SELECT * FROM creates(${name}, ${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM creates(${name}, ${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map((r) => toCreate<T>(r));
   }
@@ -99,7 +111,7 @@ export class PqsClient {
   ): Promise<ArchiveEvent[]> {
     const name = resolveTemplate(template);
     const rows = await this.rows(
-      this.sql`SELECT * FROM archives(${name}, ${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM archives(${name}, ${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map((r) => toArchive(r));
   }
@@ -111,7 +123,7 @@ export class PqsClient {
   ): Promise<ExerciseEvent<C, R>[]> {
     const name = resolveChoice(choice);
     const rows = await this.rows(
-      this.sql`SELECT * FROM exercises(${name}, ${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM exercises(${name}, ${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map((r) => toExercise<C, R>(r));
   }
@@ -130,14 +142,14 @@ export class PqsClient {
 
   /** Active-contract count per template as of an offset. */
   async summaryActive(atOffset?: Offset): Promise<SummaryRow[]> {
-    const rows = await this.rows(this.sql`SELECT * FROM summary_active(${atOffset ?? null})`);
+    const rows = await this.rows(this.sql`SELECT * FROM summary_active(${this.atOrLatest(atOffset)})`);
     return rows.map(toSummaryRow);
   }
 
   /** Create count per template in an offset range. */
   async summaryCreates(opts?: OffsetRange): Promise<SummaryRow[]> {
     const rows = await this.rows(
-      this.sql`SELECT * FROM summary_creates(${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM summary_creates(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map(toSummaryRow);
   }
@@ -145,7 +157,7 @@ export class PqsClient {
   /** Archive count per template in an offset range. */
   async summaryArchives(opts?: OffsetRange): Promise<SummaryRow[]> {
     const rows = await this.rows(
-      this.sql`SELECT * FROM summary_archives(${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM summary_archives(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map(toSummaryRow);
   }
@@ -153,7 +165,7 @@ export class PqsClient {
   /** Exercise count per template in an offset range. */
   async summaryExercises(opts?: OffsetRange): Promise<SummaryRow[]> {
     const rows = await this.rows(
-      this.sql`SELECT * FROM summary_exercises(${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM summary_exercises(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map(toSummaryRow);
   }
@@ -161,7 +173,7 @@ export class PqsClient {
   /** Transient (create+archive in one tx) count per template in an offset range. */
   async summaryTransients(opts?: OffsetRange): Promise<SummaryRow[]> {
     const rows = await this.rows(
-      this.sql`SELECT * FROM summary_transients(${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM summary_transients(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map(toSummaryRow);
   }
@@ -169,7 +181,7 @@ export class PqsClient {
   /** Create + archive counts per template in an offset range. */
   async summaryUpdates(opts?: OffsetRange): Promise<SummaryRow[]> {
     const rows = await this.rows(
-      this.sql`SELECT * FROM summary_updates(${opts?.fromOffset ?? null}, ${opts?.toOffset ?? null})`,
+      this.sql`SELECT * FROM summary_updates(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
     return rows.map(toSummaryRow);
   }

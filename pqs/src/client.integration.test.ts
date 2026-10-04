@@ -19,11 +19,20 @@ describeLive("PqsClient (live PQS)", () => {
     await client.close();
   });
 
-  it("reads active Amulet contracts", async () => {
-    const amulets = await client.active(
-      templateName("splice-amulet:Splice.Amulet:Amulet"),
-    );
-    expect(Array.isArray(amulets)).toBe(true);
+  it("reads active contracts at the head when no offset is given", async () => {
+    const amulet = templateName("splice-amulet:Splice.Amulet:Amulet");
+    const latest = await client.latestOffset();
+    expect(latest).not.toBeNull();
+    const atHead = await client.active(amulet, { atOffset: latest! });
+    const byDefault = await client.active(amulet);
+    expect(atHead.length).toBeGreaterThan(0);
+    expect(byDefault.length).toBe(atHead.length);
+  });
+
+  it("reads the whole ingested range when no bounds are given", async () => {
+    const amulet = templateName("splice-amulet:Splice.Amulet:Amulet");
+    const creates = await client.creates(amulet);
+    expect(creates.length).toBeGreaterThan(0);
   });
 
   it("reads AmuletRules_Transfer exercises (proves TransactionTreeStream)", async () => {
@@ -38,7 +47,7 @@ describeLive("PqsClient (live PQS)", () => {
 
   it("returns per-template active counts", async () => {
     const summary = await client.summaryActive();
-    expect(Array.isArray(summary)).toBe(true);
+    expect(summary.length).toBeGreaterThan(0);
     for (const row of summary) {
       expect(typeof row.templateFqn).toBe("string");
     }
