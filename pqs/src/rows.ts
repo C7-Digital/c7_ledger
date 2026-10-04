@@ -4,7 +4,11 @@
  * database: the client passes plain row objects in.
  */
 
-import { createPartyIdString, type PartyIdString } from "@c7-digital/ledger";
+import {
+  createPartyIdString,
+  isValidLedgerString,
+  type PartyIdString,
+} from "@c7-digital/ledger";
 import type { ContractId } from "@daml/types";
 
 import {
@@ -33,6 +37,16 @@ function offset(value: unknown): Offset {
   return asOffset(typeof value === "bigint" ? value : BigInt(text(value)));
 }
 
+// Contract ids use the Ledger API's LedgerString format. A row that breaks it is
+// not a contract id, so it fails here instead of reaching a typed ContractId.
+function contractId<T>(value: unknown): ContractId<T> {
+  const id = text(value);
+  if (!isValidLedgerString(id)) {
+    throw new Error(`PQS returned an invalid contract id: "${id}"`);
+  }
+  return id as unknown as ContractId<T>;
+}
+
 function offsetOrNull(value: unknown): Offset | null {
   return value === null || value === undefined ? null : offset(value);
 }
@@ -59,7 +73,7 @@ function payloadType(value: unknown): PayloadType {
 
 export function toContract<T>(row: PqsRow): Contract<T> {
   return {
-    contractId: text(row.contract_id) as ContractId<T>,
+    contractId: contractId<T>(row.contract_id),
     payload: row.payload as T,
     payloadType: payloadType(row.payload_type),
     createdAtOffset: offset(row.created_at_offset),
@@ -77,7 +91,7 @@ export function toContract<T>(row: PqsRow): Contract<T> {
 
 export function toCreate<T>(row: PqsRow): CreateEvent<T> {
   return {
-    contractId: text(row.contract_id) as ContractId<T>,
+    contractId: contractId<T>(row.contract_id),
     payload: row.payload as T,
     payloadType: payloadType(row.payload_type),
     createdAtOffset: offset(row.created_at_offset),
@@ -94,7 +108,7 @@ export function toCreate<T>(row: PqsRow): CreateEvent<T> {
 
 export function toArchive(row: PqsRow): ArchiveEvent {
   return {
-    contractId: text(row.contract_id) as ContractId<unknown>,
+    contractId: contractId<unknown>(row.contract_id),
     templateFqn: text(row.template_fqn),
     archivedAtOffset: offset(row.archived_at_offset),
     archivedEffectiveAt: effectiveAt(row.archived_effective_at),
@@ -103,7 +117,7 @@ export function toArchive(row: PqsRow): ArchiveEvent {
 
 export function toExercise<C, R>(row: PqsRow): ExerciseEvent<C, R> {
   return {
-    contractId: text(row.contract_id) as ContractId<unknown>,
+    contractId: contractId<unknown>(row.contract_id),
     templateFqn: text(row.template_fqn),
     choice: text(row.choice),
     choiceFqn: text(row.choice_fqn),

@@ -10,7 +10,7 @@
  * is stateless — it never relies on the `set_latest`/`set_oldest` session scope.
  */
 
-import type { Choice, Template } from "@daml/types";
+import type { Choice, ContractId, Template } from "@daml/types";
 import postgres, { type Sql } from "postgres";
 
 import { choiceName, templateName } from "./identifiers.js";
@@ -129,13 +129,13 @@ export class PqsClient {
   }
 
   /** A contract and all its interface-view projections, by contract id. */
-  async lookupContract(contractId: string): Promise<Contract<unknown>[]> {
+  async lookupContract(contractId: ContractId<unknown>): Promise<Contract<unknown>[]> {
     const rows = await this.rows(this.sql`SELECT * FROM lookup_contract(${contractId})`);
     return rows.map((r) => toContract<unknown>(r));
   }
 
   /** All exercise events on a contract, by contract id. */
-  async lookupExercises(contractId: string): Promise<ExerciseEvent<unknown, unknown>[]> {
+  async lookupExercises(contractId: ContractId<unknown>): Promise<ExerciseEvent<unknown, unknown>[]> {
     const rows = await this.rows(this.sql`SELECT * FROM lookup_exercises(${contractId})`);
     return rows.map((r) => toExercise<unknown, unknown>(r));
   }

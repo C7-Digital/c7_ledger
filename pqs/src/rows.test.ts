@@ -1,6 +1,12 @@
 import { toContract, toExercise, toSummaryRow } from "./rows.js";
 
 describe("toContract", () => {
+  it("rejects a row whose contract id is not a LedgerString", () => {
+    expect(() =>
+      toContract({ contract_id: "not a contract id!", payload: {} }),
+    ).toThrow(/invalid contract id/);
+  });
+
   it("maps snake_case columns, the JSONB payload, and the enrichment fields", () => {
     const contract = toContract<{ owner: string; amount: string }>({
       contract_id: "00abc",
