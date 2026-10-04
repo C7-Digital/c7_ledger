@@ -5,6 +5,8 @@
  */
 
 import {
+  createIdentifierString,
+  createNameString,
   createPartyIdString,
   isValidLedgerString,
   type PartyIdString,
@@ -109,7 +111,7 @@ export function toCreate<T>(row: PqsRow): CreateEvent<T> {
 export function toArchive(row: PqsRow): ArchiveEvent {
   return {
     contractId: contractId<unknown>(row.contract_id),
-    templateFqn: text(row.template_fqn),
+    templateFqn: createIdentifierString(text(row.template_fqn)),
     archivedAtOffset: offset(row.archived_at_offset),
     archivedEffectiveAt: effectiveAt(row.archived_effective_at),
   };
@@ -118,8 +120,8 @@ export function toArchive(row: PqsRow): ArchiveEvent {
 export function toExercise<C, R>(row: PqsRow): ExerciseEvent<C, R> {
   return {
     contractId: contractId<unknown>(row.contract_id),
-    templateFqn: text(row.template_fqn),
-    choice: text(row.choice),
+    templateFqn: createIdentifierString(text(row.template_fqn)),
+    choice: createNameString(text(row.choice)),
     choiceFqn: text(row.choice_fqn),
     consuming: bool(row.consuming),
     argument: row.argument as C,
@@ -149,5 +151,5 @@ export function toSummaryRow(row: PqsRow): SummaryRow {
       counts[key] = Number(value);
     }
   }
-  return { templateFqn: text(row.template_fqn), counts };
+  return { templateFqn: createIdentifierString(text(row.template_fqn)), counts };
 }

@@ -7,7 +7,11 @@
  * re-modelling; the client only attaches it.
  */
 
-import type { PartyIdString } from "@c7-digital/ledger";
+import type {
+  IdentifierString,
+  NameString,
+  PartyIdString,
+} from "@c7-digital/ledger";
 import type { ContractId } from "@daml/types";
 
 declare const OFFSET: unique symbol;
@@ -87,7 +91,7 @@ export interface CreateEvent<Payload> {
 /** A contract-archive event. */
 export interface ArchiveEvent {
   contractId: ContractId<unknown>;
-  templateFqn: string;
+  templateFqn: IdentifierString;
   archivedAtOffset: Offset;
   archivedEffectiveAt: Date;
 }
@@ -95,8 +99,8 @@ export interface ArchiveEvent {
 /** A choice-exercise event with its typed argument and result. */
 export interface ExerciseEvent<Argument, Result> {
   contractId: ContractId<unknown>;
-  templateFqn: string;
-  choice: string;
+  templateFqn: IdentifierString;
+  choice: NameString;
   choiceFqn: string;
   consuming: boolean;
   argument: Argument;
@@ -123,6 +127,6 @@ export interface OffsetRange {
  * column is captured in `counts` keyed by its column name.
  */
 export interface SummaryRow {
-  templateFqn: string;
+  templateFqn: IdentifierString;
   counts: Record<string, number>;
 }

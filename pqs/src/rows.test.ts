@@ -38,6 +38,21 @@ describe("toContract", () => {
 });
 
 describe("toExercise", () => {
+  it("rejects a template FQN or choice name in the wrong format", () => {
+    const row = {
+      contract_id: "00rules",
+      template_fqn: "splice-amulet:Splice.AmuletRules:AmuletRules",
+      choice: "AmuletRules_Transfer",
+      exercised_at_offset: "1",
+    };
+    expect(() => toExercise({ ...row, template_fqn: "AmuletRules" })).toThrow(
+      /Invalid IdentifierString/,
+    );
+    expect(() => toExercise({ ...row, choice: "Amulet Rules" })).toThrow(
+      /Invalid NameString/,
+    );
+  });
+
   it("maps the argument/result JSONB, acting parties, and package fields", () => {
     const exercise = toExercise<{ amount: string }, { round: number }>({
       contract_id: "00rules",
@@ -69,6 +84,12 @@ describe("toExercise", () => {
 });
 
 describe("toSummaryRow", () => {
+  it("rejects a template FQN in the wrong format", () => {
+    expect(() => toSummaryRow({ template_fqn: "not-a-template", count: 1 })).toThrow(
+      /Invalid IdentifierString/,
+    );
+  });
+
   it("keeps template_fqn and collects numeric count columns (incl. int8 strings)", () => {
     const row = toSummaryRow({
       template_fqn: "example-model:Example:Loan",
