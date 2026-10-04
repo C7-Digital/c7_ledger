@@ -45,17 +45,22 @@ export type PqsSql = Sql<{ bigint: bigint }>;
 
 const PQS_SQL_OPTIONS = { types: { bigint: postgres.BigInt } } as const;
 
-export interface PqsClientConfig {
-  /** A PostgreSQL connection string, e.g. `postgresql://user:pass@host:5432/pqs`. */
-  connectionString?: string;
-  /**
-   * An existing postgres.js instance to use instead of opening one. Takes
-   * precedence over `connectionString`. Useful for pooling and for tests. Must
-   * be configured with `{ types: { bigint: postgres.BigInt } }`. The client will
-   * not close an instance it did not open (see {@link PqsClient.close}).
-   */
-  sql?: PqsSql;
-}
+/**
+ * Where the client's connection comes from, and so who closes it.
+ *
+ * - `connect`: the client opens its own pool from `connectionString` and owns
+ *   it; {@link PqsClient.close} ends it.
+ * - `shared`: the caller passes an existing postgres.js instance and keeps
+ *   ownership; {@link PqsClient.close} leaves it open. Useful for pooling and
+ *   for tests. It must be configured with `{ types: { bigint: postgres.BigInt } }`.
+ */
+export type PqsClientConfig =
+  | {
+      kind: "connect";
+      /** A PostgreSQL connection string, e.g. `postgresql://user:pass@host:5432/pqs`. */
+      connectionString: string;
+    }
+  | { kind: "shared"; sql: PqsSql };
 
 export class PqsClient {
   /** The underlying postgres.js instance, for raw queries and joins. */
@@ -63,9 +68,20 @@ export class PqsClient {
   private readonly ownsSql: boolean;
 
   constructor(config: PqsClientConfig) {
-    this.ownsSql = config.sql === undefined;
-    this.sql =
-      config.sql ?? postgres(config.connectionString ?? "", PQS_SQL_OPTIONS);
+    switch (config.kind) {
+      case "connect":
+        this.sql = postgres(config.connectionString, PQS_SQL_OPTIONS);
+        this.ownsSql = true;
+        break;
+      case "shared":
+        this.sql = config.sql;
+        this.ownsSql = false;
+        break;
+      default: {
+        const unreachable: never = config;
+        throw new Error(`Unknown PqsClientConfig: ${JSON.stringify(unreachable)}`);
+      }
+    }
   }
 
   // A NULL offset tells the PQS functions to use the session scope

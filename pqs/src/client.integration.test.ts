@@ -9,11 +9,11 @@
 import { PqsClient } from "./client.js";
 import { choiceName, templateName } from "./identifiers.js";
 
-const url = process.env.PQS_TEST_URL;
+const url = process.env.PQS_TEST_URL ?? "";
 const describeLive = url ? describe : describe.skip;
 
 describeLive("PqsClient (live PQS)", () => {
-  const client = new PqsClient({ connectionString: url });
+  const client = new PqsClient({ kind: "connect", connectionString: url });
 
   afterAll(async () => {
     await client.close();

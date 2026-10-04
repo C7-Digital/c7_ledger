@@ -24,6 +24,7 @@ import { PqsClient } from "@c7-digital/pqs";
 import { Amulet, AmuletRules } from "@c7-digital/splice-codegen"; // codegen objects
 
 const pqs = new PqsClient({
+  kind: "connect",
   connectionString: "postgresql://cnadmin:supersafe@localhost:5432/pqs",
 });
 
@@ -45,9 +46,13 @@ You can also pass raw `package:Module:Entity` / `:Choice` strings (via
 
 ## API
 
-`new PqsClient(config)` — `config` is `{ connectionString }` or `{ sql }`
-(inject an existing postgres.js instance; the client will not close a supplied
-instance).
+`new PqsClient(config)` — `config` is one of:
+
+- `{ kind: "connect", connectionString }`: the client opens its own pool and
+  `close()` ends it.
+- `{ kind: "shared", sql }`: an existing postgres.js instance, configured with
+  `{ types: { bigint: postgres.BigInt } }`. The caller keeps it; `close()`
+  leaves it open.
 
 **Reads (table functions)**
 - `active(template, { atOffset? })` → `Contract<T>[]`
