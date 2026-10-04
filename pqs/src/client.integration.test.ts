@@ -1,0 +1,62 @@
+/**
+ * End-to-end check against a live PQS. Gated on PQS_TEST_URL so unit CI skips
+ * it; run it against a LocalNet PQS, e.g.:
+ *
+ *   PQS_TEST_URL=postgresql://cnadmin:supersafe@localhost:5432/pqs \
+ *     pnpm --filter @c7-digital/pqs test
+ */
+
+import { PqsClient } from "./client.js";
+import { choiceName, templateName } from "./identifiers.js";
+
+const url = process.env.PQS_TEST_URL ?? "";
+const describeLive = url ? describe : describe.skip;
+
+describeLive("PqsClient (live PQS)", () => {
+  const client = new PqsClient({ kind: "connect", connectionString: url });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  it("reads active contracts at the head when no offset is given", async () => {
+    const amulet = templateName("splice-amulet:Splice.Amulet:Amulet");
+    const latest = await client.latestOffset();
+    expect(latest).not.toBeNull();
+    const atHead = await client.active(amulet, { atOffset: latest! });
+    const byDefault = await client.active(amulet);
+    expect(atHead.length).toBeGreaterThan(0);
+    expect(byDefault.length).toBe(atHead.length);
+  });
+
+  it("reads the whole ingested range when no bounds are given", async () => {
+    const amulet = templateName("splice-amulet:Splice.Amulet:Amulet");
+    const creates = await client.creates(amulet);
+    expect(creates.length).toBeGreaterThan(0);
+  });
+
+  it("reads AmuletRules_Transfer exercises (proves TransactionTreeStream)", async () => {
+    const transfers = await client.exercises(
+      choiceName("splice-amulet:Splice.AmuletRules:AmuletRules:AmuletRules_Transfer"),
+    );
+    expect(Array.isArray(transfers)).toBe(true);
+    for (const t of transfers) {
+      expect(t.choice).toBe("AmuletRules_Transfer");
+    }
+  });
+
+  it("returns per-template active counts", async () => {
+    const summary = await client.summaryActive();
+    expect(summary.length).toBeGreaterThan(0);
+    for (const row of summary) {
+      expect(typeof row.templateFqn).toBe("string");
+    }
+  });
+
+  it("reports the latest and pruned offsets", async () => {
+    const latest = await client.latestOffset();
+    const pruned = await client.prunedOffset();
+    expect(latest === null || typeof latest === "bigint").toBe(true);
+    expect(pruned === null || typeof pruned === "bigint").toBe(true);
+  });
+});

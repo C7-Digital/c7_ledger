@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@c7-digital/pqs",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "lib/src/index.js",
+  "types": "lib/src/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "description": "Typed TypeScript client for the Canton Participant Query Store (PQS)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/C7-Digital/c7_ledger.git",
+    "directory": "pqs"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "import": "./lib/src/index.js",
+      "default": "./lib/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf lib",
+    "prepare": "pnpm build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --passWithNoTests"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  },
+  "peerDependencies": {
+    "@c7-digital/ledger": ">=0.0.23 <0.1.0",
+    "@daml/types": ">=3.4.0 <4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@c7-digital/ledger": "file:../ledger",
+    "@daml/types": "3.4.11",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^18.15.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.8.3"
+  }
+}

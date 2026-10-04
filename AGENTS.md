@@ -13,6 +13,7 @@ TypeScript clients for Canton Network services, published to npm under `@c7-digi
 | `@c7-digital/scan` | `scan/` | Scan API client (mining rounds, etc.) |
 | `@c7-digital/scribe` | `scribe/` | Scribe integration |
 | `@c7-digital/admin` | `admin/` | Admin API helpers |
+| `@c7-digital/pqs` | `pqs/` | Typed, stateless client over the PQS SQL API (`active`/`creates`/`archives`/`exercises`) |
 
 **Consumers** depend on published npm versions — not git submodules. After a ledger release, bump `"@c7-digital/ledger"` in each consumer's `package.json` files and run `pnpm install`.
 

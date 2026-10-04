@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: 'Packages to publish: "all" or comma-separated subset (ledger,react,scribe,scan)'
+        description: 'Packages to publish: "all" or comma-separated subset (ledger,react,scribe,scan,pqs)'
         required: true
         default: 'all'
         type: string
@@ -73,7 +73,7 @@ jobs:
             exit 1
           fi
           if [ "$input" = "all" ]; then
-            list="ledger react scribe scan"
+            list="ledger react scribe scan pqs"
           else
             list=$(printf '%s' "$input" | tr ',' ' ' | xargs)
           fi
@@ -83,8 +83,8 @@ jobs:
           fi
           for p in $list; do
             case "$p" in
-              ledger|react|scribe|scan) ;;
-              *) echo "::error::Invalid package: $p (allowed: ledger, react, scribe, scan)"; exit 1 ;;
+              ledger|react|scribe|scan|pqs) ;;
+              *) echo "::error::Invalid package: $p (allowed: ledger, react, scribe, scan, pqs)"; exit 1 ;;
             esac
           done
           echo "list=$list" >> "$GITHUB_OUTPUT"

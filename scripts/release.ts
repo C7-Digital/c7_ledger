@@ -7,8 +7,9 @@ const LEDGER_PACKAGE_PATH = 'ledger/package.json';
 const REACT_PACKAGE_PATH = 'react/package.json';
 const SCRIBE_PACKAGE_PATH = 'scribe/package.json';
 const SCAN_PACKAGE_PATH = 'scan/package.json';
+const PQS_PACKAGE_PATH = 'pqs/package.json';
 
-const VALID_PACKAGES = ['ledger', 'react', 'scribe', 'scan'] as const;
+const VALID_PACKAGES = ['ledger', 'react', 'scribe', 'scan', 'pqs'] as const;
 type PackageName = (typeof VALID_PACKAGES)[number];
 
 function exec(command: string, options = {}) {
@@ -46,7 +47,7 @@ function parsePackageSelection(): Set<PackageName> {
 
   if (names.length === 0) {
     console.error('Missing --package value');
-    console.error('Valid options: ledger, react, scribe, scan (e.g. --package ledger react)');
+    console.error('Valid options: ledger, react, scribe, scan, pqs (e.g. --package ledger react)');
     process.exit(1);
   }
 
@@ -54,7 +55,7 @@ function parsePackageSelection(): Set<PackageName> {
 
   if (invalid.length > 0) {
     console.error(`Invalid --package value(s): ${invalid.join(', ')}`);
-    console.error('Valid options: ledger, react, scribe, scan (e.g. --package ledger react)');
+    console.error('Valid options: ledger, react, scribe, scan, pqs (e.g. --package ledger react)');
     process.exit(1);
   }
 
@@ -109,6 +110,7 @@ async function main() {
   const releasingReact = packageSelection.has('react');
   const releasingScribe = packageSelection.has('scribe');
   const releasingScan = packageSelection.has('scan');
+  const releasingPqs = packageSelection.has('pqs');
 
   // Display what will be released
   if (packageSelection.size === VALID_PACKAGES.length) {
@@ -123,10 +125,12 @@ async function main() {
   const reactPkg = readPackageJson(REACT_PACKAGE_PATH);
   const scribePkg = readPackageJson(SCRIBE_PACKAGE_PATH);
   const scanPkg = readPackageJson(SCAN_PACKAGE_PATH);
+  const pqsPkg = readPackageJson(PQS_PACKAGE_PATH);
   const ledgerVersion = ledgerPkg.version;
   const reactVersion = reactPkg.version;
   const scribeVersion = scribePkg.version;
   const scanVersion = scanPkg.version;
+  const pqsVersion = pqsPkg.version;
 
   
   // Confirm versions have been updated
@@ -189,6 +193,9 @@ async function main() {
   if (releasingScan) {
     console.log(`  - @c7-digital/scan@${scanVersion}`);
   }
+  if (releasingPqs) {
+    console.log(`  - @c7-digital/pqs@${pqsVersion}`);
+  }
   console.log('');
 
   // Confirm with user
@@ -246,12 +253,24 @@ async function main() {
     }
   }
 
+  if (releasingPqs) {
+    console.log(`Publishing @c7-digital/pqs@${pqsVersion}...`);
+    try {
+      exec(`npm publish --access public`, { cwd: resolve(process.cwd(), 'pqs') });
+      console.log(`✓ Published @c7-digital/pqs\n`);
+    } catch (error) {
+      console.error(`✗ Failed to publish @c7-digital/pqs`);
+      process.exit(1);
+    }
+  }
+
   // Final success message
   const publishedPackages: string[] = [];
   if (releasingLedger) publishedPackages.push(`@c7-digital/ledger@${ledgerVersion}`);
   if (releasingReact) publishedPackages.push(`@c7-digital/react@${reactVersion}`);
   if (releasingScribe) publishedPackages.push(`@c7-digital/scribe@${scribeVersion}`);
   if (releasingScan) publishedPackages.push(`@c7-digital/scan@${scanVersion}`);
+  if (releasingPqs) publishedPackages.push(`@c7-digital/pqs@${pqsVersion}`);
 
   console.log(`Done! Published ${publishedPackages.join(' and ')}`);
 }
