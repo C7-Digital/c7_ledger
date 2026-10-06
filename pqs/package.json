@@ -6,7 +6,9 @@
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
   "files": [
-    "lib"
+    "lib",
+    "!lib/**/*.test.*",
+    "!lib/tsconfig.tsbuildinfo"
   ],
   "description": "Typed TypeScript client for the Canton Participant Query Store (PQS)",
   "repository": {
