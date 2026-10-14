@@ -518,14 +518,45 @@ function interfaceEvent_<I extends object, K = unknown>(
 }
 
 type IdentifierFilter = components["schemas"]["IdentifierFilter"];
+
+/**
+ * Rewrite a template/interface id to its package-NAME form
+ * (`#<package-name>:Module:Entity`) for use in Ledger API filters.
+ *
+ * Canton 3.5+ rejects a filter identifier that carries an explicit package id
+ * (`<hash>:Module:Entity`) with `INVALID_FIELD … expected a package name`, so a
+ * subscription filtered by the codegen's package-id ids silently matches nothing
+ * and the stream/ACS comes back empty. (Canton 3.4 only logged a deprecation and
+ * auto-translated, which is why an older sandbox still worked.) Filtering by
+ * package name is also the upgrade-aware form — it spans every vetted version of
+ * the package.
+ *
+ * The package name comes from the versioned registry (the codegen registers each
+ * template under both its hash and its `#<package-name>` prefix). When no
+ * registry is supplied, the id is already name-form, or the registry does not
+ * know the id, the id is returned unchanged — so this never fails a lookup and a
+ * participant that still accepts package ids keeps working.
+ */
+export function toPackageNameId(
+  id: IdentifierString,
+  registry?: VersionedRegistry
+): IdentifierString {
+  if (!registry || id.startsWith("#")) return id;
+  const packageName = registry(id)?.packageName;
+  if (!packageName) return id;
+  const qualifiedName = id.slice(id.indexOf(":") + 1);
+  return `#${packageName}:${qualifiedName}` as IdentifierString;
+}
+
 function templateFilter(
   templateId: IdentifierString,
-  includeCreatedEventBlob: boolean
+  includeCreatedEventBlob: boolean,
+  registry?: VersionedRegistry
 ): IdentifierFilter {
   return {
     TemplateFilter: {
       value: {
-        templateId: templateId,
+        templateId: toPackageNameId(templateId, registry),
         includeCreatedEventBlob,
       },
     },
@@ -534,12 +565,13 @@ function templateFilter(
 
 function interfaceFilter(
   interfaceId: IdentifierString,
-  includeCreatedEventBlob: boolean
+  includeCreatedEventBlob: boolean,
+  registry?: VersionedRegistry
 ): IdentifierFilter {
   return {
     InterfaceFilter: {
       value: {
-        interfaceId: interfaceId,
+        interfaceId: toPackageNameId(interfaceId, registry),
         includeInterfaceView: true,
         includeCreatedEventBlob,
       },
@@ -820,8 +852,8 @@ class LedgerStream<T extends object, K = unknown> implements Stream<T, K> {
   private buildFiltersByParty(filters: FilterSpec[]): Record<string, any> {
     const cumulative = filters.map(filter => ({
       identifierFilter: filter.type === "template"
-        ? templateFilter(filter.templateId, this.includeCreatedEventBlob)
-        : interfaceFilter(filter.interfaceId, this.includeCreatedEventBlob),
+        ? templateFilter(filter.templateId, this.includeCreatedEventBlob, this.versionedRegistry)
+        : interfaceFilter(filter.interfaceId, this.includeCreatedEventBlob, this.versionedRegistry),
     }));
     return this.parties.reduce(
       (acc, party) => {
@@ -1481,7 +1513,7 @@ export class Ledger {
             identifierFilter:
               // `query` is generic over the template-id (like `create`) so codegen
               // companions pass without a cast; the brand is internalised here.
-              templateFilter(template.templateId as unknown as IdentifierString, includeCreatedEventBlob),
+              templateFilter(template.templateId as unknown as IdentifierString, includeCreatedEventBlob, this.options.versionedRegistry),
           },
         ],
       };
@@ -1539,7 +1571,7 @@ export class Ledger {
         cumulative: [
           {
             identifierFilter:
-              interfaceFilter(interface_.templateId as unknown as IdentifierString, includeCreatedEventBlob),
+              interfaceFilter(interface_.templateId as unknown as IdentifierString, includeCreatedEventBlob, versionedRegistry),
           },
         ],
       };
@@ -2187,6 +2219,7 @@ export class Ledger {
               identifierFilter: templateFilter(
                 template.templateId as IdentifierString,
                 includeCreatedEventBlob,
+                this.options.versionedRegistry,
               ),
             },
           ],

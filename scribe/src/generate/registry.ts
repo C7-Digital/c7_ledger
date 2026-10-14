@@ -24,6 +24,15 @@ export function generateRegistry(
   lines.push(
     "  const templateName = template.templateId.split(':').slice(1).join(':');"
   );
+  // The package name (the `#`-prefixed entry, minus the `#`) is what the Ledger
+  // API expects in template/interface filters on Canton 3.5+. Surface it on the
+  // registry value so @c7-digital/ledger can build package-name filters.
+  lines.push(
+    "  const _nameEntry = prefixVersionPairs.find(([prefix]) => prefix.startsWith('#'));"
+  );
+  lines.push(
+    "  const packageName = _nameEntry ? _nameEntry[0].slice(1) : undefined;"
+  );
   lines.push("  prefixVersionPairs.forEach(([prefix, version]) => {");
   lines.push("    const templateId = `${prefix}:${templateName}`;");
   lines.push("    if (_registry.has(templateId)) {");
@@ -32,7 +41,7 @@ export function generateRegistry(
   );
   lines.push("    } else {");
   lines.push(
-    "      _registry.set(templateId, { type: 'template', template, version });"
+    "      _registry.set(templateId, { type: 'template', template, version, packageName });"
   );
   lines.push("    }");
   lines.push("  });");
@@ -44,6 +53,12 @@ export function generateRegistry(
   lines.push(
     "  const interfaceName = interface_.templateId.split(':').slice(1).join(':');"
   );
+  lines.push(
+    "  const _nameEntry = prefixVersionPairs.find(([prefix]) => prefix.startsWith('#'));"
+  );
+  lines.push(
+    "  const packageName = _nameEntry ? _nameEntry[0].slice(1) : undefined;"
+  );
   lines.push("  prefixVersionPairs.forEach(([prefix, version]) => {");
   lines.push("    const interfaceId = `${prefix}:${interfaceName}`;");
   lines.push("    if (_registry.has(interfaceId)) {");
@@ -52,7 +67,7 @@ export function generateRegistry(
   );
   lines.push("    } else {");
   lines.push(
-    "      _registry.set(interfaceId, { type: 'interface', interface_, version });"
+    "      _registry.set(interfaceId, { type: 'interface', interface_, version, packageName });"
   );
   lines.push("    }");
   lines.push("  });");

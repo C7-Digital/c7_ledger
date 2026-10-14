@@ -279,8 +279,8 @@ export type Interface<I extends object> = {
 };
 
 export type VersionedLookupResult
-  = { type: "template", template: Template<object, unknown, string>, version: string }
-  | { type: "interface", interface_: InterfaceCompanion<object, unknown, string>, version: string };
+  = { type: "template", template: Template<object, unknown, string>, version: string, packageName?: string }
+  | { type: "interface", interface_: InterfaceCompanion<object, unknown, string>, version: string, packageName?: string };
 
 /**
  * By default the codegen models use @daml/types registerTemplate function to
