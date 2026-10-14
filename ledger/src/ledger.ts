@@ -29,7 +29,7 @@ import { logger } from "./logger";
 import { logTokenExpiration } from "./token";
 import { decodeExerciseResult } from "./exerciseResult";
 import { components } from "./generated/api";
-import { TypedHttpClient } from "./client";
+import { TypedHttpClient, type transaction_shape } from "./client";
 import {
   WebSocketClient,
   StreamConfig,
@@ -65,6 +65,7 @@ import {
   StreamCloseEvent,
   MultiStream,
   TemplateMapping,
+  TransactionPage,
   VersionedRegistry,
 } from "./types";
 import { matchesPartiallyQualified } from "./util";
@@ -1359,7 +1360,13 @@ export class Ledger {
     throw new Error(`Invalid offset: ${offset}`);
   }
 
-  private async getLedgerEnd(): Promise<number> {
+  /**
+   * The participant's current ledger end offset. Reads within one second share
+   * a cached answer, and the cached offset never moves back past an offset this
+   * instance has already seen.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getLedgerEnd(): Promise<number> {
     // If there's already a request in flight, return that promise
     if (this.ledgerEndPromise) {
       return this.ledgerEndPromise;
@@ -1924,6 +1931,88 @@ export class Ledger {
       synchronizerId: synchronizerId ?? "",
       verboseHashing: verboseHashing ?? false,
     });
+  }
+
+  /**
+   * The id of the participant this ledger client talks to, as the Ledger API
+   * names it (`PAR::<name>::<fingerprint>`).
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getParticipantId(): Promise<string> {
+    return (await this.client.getParticipantId()).participantId;
+  }
+
+  /**
+   * Read the transactions in `(beginExclusive, endInclusive]` that `parties`
+   * (default: the token's act-as parties) witness, one page at a time.
+   *
+   * Unlike {@link streamHistoryUpdates}, which yields decoded create/archive
+   * events per template, a page keeps whole transactions as the Ledger API
+   * sends them: the update id, offset, record time, command id (for the
+   * submitter) and every event, including exercised choices under
+   * `TRANSACTION_SHAPE_LEDGER_EFFECTS` (the default).
+   *
+   * The participant can cut a page short of `endInclusive` (see
+   * {@link TypedHttpClient.getUpdates}), so loop on `reachedOffset`.
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   * @throws {RangeError} if `options.limit` is not a non-negative safe integer
+   */
+  async getTransactionPage(
+    range: { beginExclusive: number; endInclusive: number },
+    options?: { parties?: Party[]; shape?: transaction_shape; limit?: number },
+  ): Promise<TransactionPage> {
+    const { beginExclusive, endInclusive } = range;
+    if (endInclusive <= beginExclusive) {
+      return { transactions: [], reachedOffset: beginExclusive };
+    }
+    const parties = options?.parties ?? (await this.getTokenActAsParties());
+    const wildcard: Filters = {
+      cumulative: [
+        {
+          identifierFilter: {
+            WildcardFilter: { value: { includeCreatedEventBlob: false } },
+          },
+        },
+      ],
+    };
+    const page = await this.client.getUpdates(
+      {
+        beginExclusive,
+        endInclusive,
+        updateFormat: {
+          includeTransactions: {
+            eventFormat: {
+              filtersByParty: Object.fromEntries(parties.map(p => [p, wildcard])),
+              verbose: false,
+            },
+            transactionShape: options?.shape ?? "TRANSACTION_SHAPE_LEDGER_EFFECTS",
+          },
+        },
+      },
+      options?.limit !== undefined ? { limit: options.limit } : undefined,
+    );
+
+    const transactions: Schemas["JsTransaction"][] = [];
+    let reachedOffset = beginExclusive;
+    for (const { update } of page) {
+      if (!update) continue;
+      if ("Transaction" in update) {
+        transactions.push(update.Transaction.value);
+        reachedOffset = Math.max(reachedOffset, update.Transaction.value.offset);
+      } else if ("OffsetCheckpoint" in update) {
+        reachedOffset = Math.max(reachedOffset, update.OffsetCheckpoint.value.offset);
+      } else if ("Reassignment" in update) {
+        reachedOffset = Math.max(reachedOffset, update.Reassignment.value.offset);
+      } else if ("TopologyTransaction" in update) {
+        reachedOffset = Math.max(reachedOffset, update.TopologyTransaction.value.offset);
+      }
+    }
+    // An empty page means nothing visible is left in the range.
+    return {
+      transactions,
+      reachedOffset: page.length === 0 ? endInclusive : reachedOffset,
+    };
   }
 
   /**

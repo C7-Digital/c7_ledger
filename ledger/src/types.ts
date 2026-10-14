@@ -299,6 +299,18 @@ export type VersionedRegistry = (
 
 export type LedgerOffset = "start" | "end" | number;
 
+/**
+ * One page of transactions read by {@link Ledger.getTransactionPage}.
+ *
+ * `reachedOffset` is where the page stops: the last offset it holds, or the
+ * requested end when the range had nothing more to return. Read the next
+ * page with `beginExclusive = reachedOffset` until it equals the end.
+ */
+export type TransactionPage = {
+  transactions: apiComponents["schemas"]["JsTransaction"][];
+  reachedOffset: number;
+};
+
 export type CantonError = JsCantonError;
 
 export interface StreamCloseEvent {

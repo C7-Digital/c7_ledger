@@ -65,6 +65,20 @@ const result = await ledger.create(MyTemplate, payload, [actAsParty]);
 
 // Exercise choices
 const choiceResult = await ledger.exercise(MyChoice, contractId, argument, [actAsParty]);
+
+// Read whole transactions (update id, record time, exercised choices) a page
+// at a time; the participant can cut a page short, so loop on reachedOffset.
+const participantId = await ledger.getParticipantId();
+const end = await ledger.getLedgerEnd();
+let offset = 0;
+while (offset < end) {
+  const page = await ledger.getTransactionPage(
+    { beginExclusive: offset, endInclusive: end },
+    { parties: [party] },
+  );
+  for (const tx of page.transactions) console.log(tx.updateId, tx.recordTime);
+  offset = page.reachedOffset;
+}
 ```
 
 ## Errors
@@ -143,6 +157,20 @@ try {
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.42
+
+Adds update-history and participant reads. Additive; nothing removed.
+
+- `Ledger.getTransactionPage(range, { parties, shape, limit })` returns whole
+  transactions in `(beginExclusive, endInclusive]` (default shape: ledger
+  effects, so exercised choices are present) and the `reachedOffset` to resume
+  from.
+- `Ledger.getParticipantId()` and `TypedHttpClient.getParticipantId()` read
+  `GET /v2/parties/participant-id`.
+- `TypedHttpClient.getUpdates(request, { limit })` sends `POST /v2/updates`.
+- `Ledger.getLedgerEnd()` is now public (it was private); it keeps the
+  one-second cache.
 
 ### Migrating to 0.0.41
 
