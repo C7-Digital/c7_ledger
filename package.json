@@ -9,6 +9,7 @@
     "clean": "pnpm -r clean",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r --filter=!@c7-digital/splice-codegen exec tsgo --noEmit -p tsconfig.json",
+    "lint": "oxlint -c .oxlintrc.json ledger react scan scribe admin pqs scripts",
     "release": "pnpm exec tsx scripts/release.ts"
   },
   "engines": {
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^18.19.130",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "oxlint": "^1.87.0",
     "tsx": "^4.21.0"
   }
 }

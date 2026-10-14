@@ -253,7 +253,7 @@ export const ASYNCAPI_SCHEMA = "";
 /**
  * Replace validation module with lite version in lib-lite
  */
-async function useLiteValidation(): Promise<void> {
+async function applyLiteValidation(): Promise<void> {
   console.log("🔄 Replacing validation with lite version...");
   const libLiteDir = join(projectRoot, "lib-lite", "src");
 
@@ -425,7 +425,7 @@ async function build(): Promise<void> {
     await compileTypeScript("lib-lite");
 
     // Step 7c: Replace validation with lite version (no yaml dependency)
-    await useLiteValidation();
+    await applyLiteValidation();
 
     // Step 8: Clean up any temporary files
     await cleanupTempFiles();

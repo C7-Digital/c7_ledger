@@ -44,8 +44,7 @@
     "watch": "tsgo --watch",
     "clean": "rm -rf lib lib-lite src/generated",
     "prepare": "pnpm build",
-    "test": "vitest run",
-    "lint": "eslint --ext .ts src/"
+    "test": "vitest run"
   },
   "dependencies": {
     "ajv": "^6.12.6",
@@ -72,7 +71,6 @@
     "@types/node": "^18.15.11",
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "eslint": "^9.39.0",
     "openapi-typescript": "^7.4.2",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.11.0",

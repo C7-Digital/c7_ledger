@@ -230,6 +230,8 @@ describe.skipIf(!DAML_CLI)(
     });
 
     it("consumer type-checks with tsgo", () => {
+      // The compiler's output on failure, so a failing run shows the errors.
+      let failure = "";
       try {
         execSync(`${TSGO_BIN} -p tsconfig.json --noEmit`, {
           cwd: consumerDir,
@@ -238,10 +240,10 @@ describe.skipIf(!DAML_CLI)(
         });
       } catch (e: unknown) {
         const err = e as { stderr?: Buffer; stdout?: Buffer; message: string };
-        const output =
+        failure =
           err.stderr?.toString() || err.stdout?.toString() || err.message;
-        throw new Error(`tsgo type-check failed:\n${output}`);
       }
+      expect(failure).toBe("");
     });
 
     it("consumer bundles with vite", async () => {

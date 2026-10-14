@@ -18,7 +18,7 @@ export type LedgerString = Brand<string, "LedgerString">;
 export type UserIdString = Brand<string, "UserIdString">;
 
 // Validation patterns from value.proto
-const NAME_STRING_PATTERN = /^[A-Za-z\$_][A-Za-z0-9\$_]*$/;
+const NAME_STRING_PATTERN = /^[A-Za-z$_][A-Za-z0-9$_]*$/;
 const PACKAGE_ID_STRING_PATTERN = /^[A-Za-z0-9\-_ ]+$/;
 // "<package-ref>:<Module>:<Entity>" — three colon-separated segments, optional
 // leading "#" for the package-name reference form.
@@ -26,7 +26,7 @@ const IDENTIFIER_STRING_PATTERN =
   /^#?[A-Za-z0-9._-]+:[A-Za-z0-9._-]+:[A-Za-z0-9._-]+$/;
 const PARTY_ID_STRING_PATTERN = /^[A-Za-z0-9:\-_ ]+$/;
 const LEDGER_STRING_PATTERN = /^[A-Za-z0-9#:\-_/ ]+$/;
-const USER_ID_STRING_PATTERN = /^[a-zA-Z0-9@^$.!\`\-#+'~_|:]+$/;
+const USER_ID_STRING_PATTERN = /^[a-zA-Z0-9@^$.!`\-#+'~_|:]+$/;
 
 // Length constraints from value.proto
 const MAX_NAME_STRING_LENGTH = 1000;
@@ -65,7 +65,7 @@ export function isValidUserIdString(value: string): value is UserIdString {
 export function createNameString(value: string): NameString {
   if (!isValidNameString(value)) {
     throw new Error(
-      `Invalid NameString: "${value}". Must match [A-Za-z\$_][A-Za-z0-9\$_]* and be ≤ ${MAX_NAME_STRING_LENGTH} chars`
+      `Invalid NameString: "${value}". Must match [A-Za-z$_][A-Za-z0-9$_]* and be ≤ ${MAX_NAME_STRING_LENGTH} chars`
     );
   }
   return value as NameString;
@@ -74,7 +74,7 @@ export function createNameString(value: string): NameString {
 export function createPackageIdString(value: string): PackageIdString {
   if (!isValidPackageIdString(value)) {
     throw new Error(
-      `Invalid PackageIdString: "${value}". Must match [A-Za-z0-9\-_ ]+ and be ≤ ${MAX_PACKAGE_ID_STRING_LENGTH} chars`
+      `Invalid PackageIdString: "${value}". Must match [A-Za-z0-9-_ ]+ and be ≤ ${MAX_PACKAGE_ID_STRING_LENGTH} chars`
     );
   }
   return value as PackageIdString;
@@ -92,7 +92,7 @@ export function createIdentifierString(value: string): IdentifierString {
 export function createPartyIdString(value: string): PartyIdString {
   if (!isValidPartyIdString(value)) {
     throw new Error(
-      `Invalid PartyIdString: "${value}". Must match [A-Za-z0-9:\-_ ]+ and be ≤ ${MAX_PARTY_ID_STRING_LENGTH} chars`
+      `Invalid PartyIdString: "${value}". Must match [A-Za-z0-9:-_ ]+ and be ≤ ${MAX_PARTY_ID_STRING_LENGTH} chars`
     );
   }
   return value as PartyIdString;
@@ -101,7 +101,7 @@ export function createPartyIdString(value: string): PartyIdString {
 export function createLedgerString(value: string): LedgerString {
   if (!isValidLedgerString(value)) {
     throw new Error(
-      `Invalid LedgerString: "${value}". Must match [A-Za-z0-9#:\-_/ ]+ and be ≤ ${MAX_LEDGER_STRING_LENGTH} chars`
+      `Invalid LedgerString: "${value}". Must match [A-Za-z0-9#:-_/ ]+ and be ≤ ${MAX_LEDGER_STRING_LENGTH} chars`
     );
   }
   return value as LedgerString;
@@ -110,7 +110,7 @@ export function createLedgerString(value: string): LedgerString {
 export function createUserIdString(value: string): UserIdString {
   if (!isValidUserIdString(value)) {
     throw new Error(
-      `Invalid UserIdString: "${value}". Must match [a-zA-Z0-9@^$.!\`\-#+'~_|:]+ and be ≤ ${MAX_USER_ID_STRING_LENGTH} chars`
+      `Invalid UserIdString: "${value}". Must match [a-zA-Z0-9@^$.!\`-#+'~_|:]+ and be ≤ ${MAX_USER_ID_STRING_LENGTH} chars`
     );
   }
   return value as UserIdString;

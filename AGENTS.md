@@ -24,10 +24,11 @@ Package-specific notes: [ledger/AGENTS.md](ledger/AGENTS.md).
 ```bash
 pnpm install              # workspace root — installs all packages
 
-# Build / test / typecheck (all packages)
+# Build / test / typecheck / lint (all packages)
 pnpm build
 pnpm test
 pnpm typecheck
+pnpm lint
 pnpm clean
 
 # Single package (from repo root)
@@ -45,13 +46,14 @@ pnpm release -- --package ledger      # ledger only
 2. **react** peers on `@c7-digital/ledger` — release script validates the peer range admits the new ledger version.
 3. **scan** peers on `@c7-digital/ledger` for shared error shapes.
 
-Always run `pnpm build && pnpm typecheck && pnpm test` at repo root before opening a PR.
+Always run `pnpm build && pnpm typecheck && pnpm lint && pnpm test` at repo root before opening a PR.
 
 ## Toolchain
 
 - **One compiler: TypeScript 7 (`tsgo`, from `@typescript/native-preview`).** It does every typecheck and every emit (`lib/`, `lib-lite/`, `dist/`). Classic `typescript` is not a dependency. `openapi-typescript` (the spec codegen) pulls `typescript` in as its own peer to print code; nothing here calls it as a compiler.
 - **`tsc-alias`** still runs after each emit. With `resolveFullPaths` it adds the `.js` extensions Node's ESM loader needs to the relative imports in `lib/`. It reads the tsconfig only; it does not depend on `typescript`.
 - **Tests: vitest** in every package (jest-style globals in ledger/scan/admin/pqs). vitest does not typecheck, so compile-time test assertions (`api-surface.test.ts`, `pqs/src/client.types.test.ts`) are enforced by `pnpm typecheck` and the build, which compile the test files.
+- **Lint: oxlint** (`.oxlintrc.json` at the root; correctness category as errors, `react-hooks/exhaustive-deps` as a warning). It has its own parser, so it needs no `typescript`.
 
 ## Error handling boundary
 
