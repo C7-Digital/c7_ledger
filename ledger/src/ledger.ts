@@ -532,10 +532,13 @@ type IdentifierFilter = components["schemas"]["IdentifierFilter"];
  * the package.
  *
  * The package name comes from the versioned registry (the codegen registers each
- * template under both its hash and its `#<package-name>` prefix). When no
- * registry is supplied, the id is already name-form, or the registry does not
- * know the id, the id is returned unchanged — so this never fails a lookup and a
- * participant that still accepts package ids keeps working.
+ * template under both its hash and its `#<package-name>` prefix). The registry
+ * only reports `packageName` on an EXACT package-id hit; its qualified-name
+ * fallback (for an unknown hash) returns no `packageName`, so an unknown hash is
+ * never rewritten to some other package that merely shares the module:entity
+ * name. When no registry is supplied, the id is already name-form, or the id is
+ * not an exact match, the id is returned unchanged — so this never fails a
+ * lookup and a participant that still accepts package ids keeps working.
  */
 export function toPackageNameId(
   id: IdentifierString,

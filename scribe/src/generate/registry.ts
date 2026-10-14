@@ -126,7 +126,13 @@ export function generateRegistry(
   lines.push(
     "    if (registeredId.startsWith('#') && registeredId.endsWith(':' + templateName)) {"
   );
-  lines.push("      return value;");
+  // This is a qualified-name fallback, not an exact package-id hit: the
+  // requested package id is unknown and only the module:entity name matched.
+  // Drop `packageName` so a consumer that rewrites filters to the package-name
+  // form (@c7-digital/ledger) never rewrites an unknown hash to some other
+  // package that happens to share the qualified name — it keeps the original id
+  // and fails open. Decoding still works (template + version are returned).
+  lines.push("      return { ...value, packageName: undefined };");
   lines.push("    }");
   lines.push("  }");
   lines.push("  return undefined;");

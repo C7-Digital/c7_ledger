@@ -156,6 +156,21 @@ describe("generateRegistry", () => {
     expect(result).toContain("export const lookupTemplate = versionedRegistry;");
     expect(result).toContain("export const getRegisteredTemplates =");
   });
+
+  it("records the package name on each registered value", () => {
+    const result = generateRegistry(mainPkg, [], config);
+    expect(result).toContain(
+      "const packageName = _nameEntry ? _nameEntry[0].slice(1) : undefined;"
+    );
+    expect(result).toContain(
+      "{ type: 'template', template, version, packageName }"
+    );
+  });
+
+  it("drops packageName on the qualified-name fallback (so unknown hashes fail open)", () => {
+    const result = generateRegistry(mainPkg, [], config);
+    expect(result).toContain("return { ...value, packageName: undefined };");
+  });
 });
 
 describe("generateTypeDefs", () => {
@@ -182,6 +197,14 @@ describe("generateTypeDefs", () => {
     expect(result).toContain("export declare const lookupTemplate:");
     expect(result).toContain("export declare function getRegisteredTemplates():");
     expect(result).toContain("VersionedLookupResult");
+  });
+
+  it("declares packageName on both VersionedLookupResult variants", () => {
+    const result = generateTypeDefs(mainPkg, []);
+    // Both the template and interface variants must surface the optional field,
+    // or consumers cannot read the package name the runtime now provides.
+    const matches = result.match(/packageName\?: string/g) ?? [];
+    expect(matches.length).toBe(2);
   });
 
   it("exports PACKAGE_VERSION", () => {

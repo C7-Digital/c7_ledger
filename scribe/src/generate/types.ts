@@ -37,10 +37,10 @@ export function generateTypeDefs(
   lines.push("");
   lines.push("type VersionedLookupResult");
   lines.push(
-    "  = { type: \"template\", template: Template<object, unknown, string>, version: string }"
+    "  = { type: \"template\", template: Template<object, unknown, string>, version: string, packageName?: string }"
   );
   lines.push(
-    "  | { type: \"interface\", interface_: InterfaceCompanion<object, unknown, string>, version: string };"
+    "  | { type: \"interface\", interface_: InterfaceCompanion<object, unknown, string>, version: string, packageName?: string };"
   );
   lines.push("");
   lines.push(
