@@ -63,6 +63,15 @@ type PrepareSubmissionRequest =
 type PrepareSubmissionResponse =
   PrepareSubmissionOperation["responses"]["200"]["content"]["application/json"];
 
+type GetParticipantIdOperation = operations["getV2PartiesParticipant-id"];
+type GetParticipantIdResponse =
+  GetParticipantIdOperation["responses"]["200"]["content"]["application/json"];
+
+type GetUpdatesOperation = operations["postV2Updates"];
+type GetUpdatesRequest = GetUpdatesOperation["requestBody"]["content"]["application/json"];
+type GetUpdatesResponse =
+  GetUpdatesOperation["responses"]["200"]["content"]["application/json"];
+
 type GetConnectedSynchronizersOperation = operations["getV2StateConnected-synchronizers"];
 type GetConnectedSynchronizersResponse =
   GetConnectedSynchronizersOperation["responses"]["200"]["content"]["application/json"];
@@ -302,6 +311,55 @@ export class TypedHttpClient {
       "GET",
       undefined,
       "#/components/schemas/GetLedgerEndResponse"
+    );
+  }
+
+  /**
+   * The id of the participant this client talks to, as the Ledger API names it
+   * (`<name>::<fingerprint>`, the unique identifier without a `PAR::` prefix).
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getParticipantId(): Promise<GetParticipantIdResponse> {
+    return this.request<GetParticipantIdResponse>(
+      "/v2/parties/participant-id",
+      "GET",
+      undefined,
+      "#/components/schemas/GetParticipantIdResponse"
+    );
+  }
+
+  /**
+   * One page of the update history (`POST /v2/updates`): transactions,
+   * reassignments, topology events and offset checkpoints in
+   * `(beginExclusive, endInclusive]`, as `request.updateFormat` selects.
+   *
+   * The participant cuts a page at its `http-list-max-elements-limit` (default
+   * 200) without a continuation token, and `options.limit` can only lower that
+   * cap. A page can therefore end before `endInclusive`; read the next page
+   * from the last offset it holds.
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   * @throws {RangeError} if `options.limit` is not a non-negative safe integer
+   */
+  async getUpdates(
+    request: GetUpdatesRequest,
+    options?: { limit?: number }
+  ): Promise<GetUpdatesResponse> {
+    if (options?.limit !== undefined) {
+      const { limit } = options;
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError(
+          `getUpdates: options.limit must be a non-negative safe integer, got ${limit}`
+        );
+      }
+    }
+    return this.request<GetUpdatesResponse>(
+      "/v2/updates",
+      "POST",
+      request,
+      "#/components/schemas/JsGetUpdatesResponse",
+      true,
+      options?.limit !== undefined ? { limit: options.limit } : undefined
     );
   }
 

@@ -2,8 +2,9 @@ import type { ContractId } from "@daml/types";
 
 import { PqsClient } from "./client.js";
 
-// Compile-time checks: tsc and ts-jest fail this file if a plain string is
-// accepted where a contract id is required.
+// Compile-time checks: the tsgo typecheck (`pnpm typecheck`, and the build)
+// fails this file if a plain string is accepted where a contract id is
+// required. vitest itself does not typecheck.
 describe("PqsClient contract-id inputs", () => {
   it("take a ContractId of any template, not a plain string", async () => {
     const client = new PqsClient({ kind: "connect", connectionString: "postgres://unused" });

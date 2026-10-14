@@ -253,7 +253,7 @@ export const ASYNCAPI_SCHEMA = "";
 /**
  * Replace validation module with lite version in lib-lite
  */
-async function useLiteValidation(): Promise<void> {
+async function applyLiteValidation(): Promise<void> {
   console.log("🔄 Replacing validation with lite version...");
   const libLiteDir = join(projectRoot, "lib-lite", "src");
 
@@ -297,7 +297,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
   console.log(`🔄 Compiling TypeScript to ${outDir}...`);
 
   try {
-    let tscCommand = `pnpm exec tsc -p ${join(projectRoot, "tsconfig.json")}`;
+    let tscCommand = `pnpm exec tsgo -p ${join(projectRoot, "tsconfig.json")}`;
     let aliasCommand = `pnpm exec tsc-alias -p ${join(projectRoot, "tsconfig.json")}`;
 
     if (outDir !== "lib") {
@@ -313,7 +313,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
       const tempConfigPath = join(projectRoot, "tsconfig.temp.json");
       await writeFile(tempConfigPath, JSON.stringify(tempTsConfig, null, 2), "utf-8");
 
-      tscCommand = `pnpm exec tsc -p ${tempConfigPath}`;
+      tscCommand = `pnpm exec tsgo -p ${tempConfigPath}`;
       aliasCommand = `pnpm exec tsc-alias -p ${tempConfigPath}`;
     }
 
@@ -425,7 +425,7 @@ async function build(): Promise<void> {
     await compileTypeScript("lib-lite");
 
     // Step 7c: Replace validation with lite version (no yaml dependency)
-    await useLiteValidation();
+    await applyLiteValidation();
 
     // Step 8: Clean up any temporary files
     await cleanupTempFiles();

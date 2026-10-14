@@ -132,7 +132,7 @@ async function compileTypeScript(): Promise<void> {
   console.log("Compiling TypeScript...");
 
   try {
-    const tscCommand = `pnpm exec tsc -p ${join(projectRoot, "tsconfig.json")}`;
+    const tscCommand = `pnpm exec tsgo -p ${join(projectRoot, "tsconfig.json")}`;
     const aliasCommand = `pnpm exec tsc-alias -p ${join(projectRoot, "tsconfig.json")}`;
 
     const { stdout: tscStdout, stderr: tscStderr } = await execAsync(tscCommand);

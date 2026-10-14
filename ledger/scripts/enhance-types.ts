@@ -87,7 +87,7 @@ function brandApiTypes(inputPath: string, outputPath: string, label: string): nu
   //
   // The regex handles multi-line JSDoc with @description tags and indented fields within object types
   const fieldRegex =
-    /\/\*\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+\/\s*(\w+)(\?)?\s*:\s*([^;,\}\n]+)/g;
+    /\/\*\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+\/\s*(\w+)(\?)?\s*:\s*([^;,}\n]+)/g;
 
   // Use a more compatible approach for regex matching
   const matches: RegExpExecArray[] = [];

@@ -17,7 +17,7 @@
     "noUncheckedIndexedAccess": true,
     "composite": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["node", "jest"],
+    "types": ["node", "vitest/globals"],
     "paths": {
       "@c7-digital/splice-codegen": ["../splice-codegen/.scribe/index.d.ts"]
     }

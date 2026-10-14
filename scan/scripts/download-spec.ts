@@ -240,7 +240,6 @@ async function resolveSchemaDeep(
 async function resolveRefs(
   obj: any,
   currentFilePath: string,
-  rootFilePath: string,
   rootSchemas: Record<string, any>,
 ): Promise<any> {
   if (obj === null || obj === undefined) return obj;
@@ -249,7 +248,7 @@ async function resolveRefs(
   if (Array.isArray(obj)) {
     const resolved = [];
     for (const item of obj) {
-      resolved.push(await resolveRefs(item, currentFilePath, rootFilePath, rootSchemas));
+      resolved.push(await resolveRefs(item, currentFilePath, rootSchemas));
     }
     return resolved;
   }
@@ -273,7 +272,7 @@ async function resolveRefs(
 
   const result: any = {};
   for (const [key, value] of Object.entries(obj)) {
-    result[key] = await resolveRefs(value, currentFilePath, rootFilePath, rootSchemas);
+    result[key] = await resolveRefs(value, currentFilePath, rootSchemas);
   }
   return result;
 }
@@ -287,7 +286,7 @@ async function bundleSpec(scanSpecPath: string, outputPath: string): Promise<voi
   const rootSchemas = scanDoc?.components?.schemas || {};
 
   // Resolve all external $refs (this also collects external schemas)
-  const bundled = await resolveRefs(scanDoc, scanSpecPath, scanSpecPath, rootSchemas);
+  const bundled = await resolveRefs(scanDoc, scanSpecPath, rootSchemas);
 
   // Merge collected external schemas into the bundled document
   if (collectedSchemas.size > 0) {

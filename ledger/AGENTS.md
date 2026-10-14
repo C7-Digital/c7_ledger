@@ -48,9 +48,10 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 
 ```bash
 pnpm test                                    # all ledger tests
-pnpm test -- --testPathPattern=cantonError  # Canton error vocabulary
-pnpm test -- --testPathPattern=error         # transport retry signals
-pnpm test -- --testPathPattern=api-surface  # export contract
+pnpm test -- cantonError                     # Canton error vocabulary
+pnpm test -- error                           # transport retry signals
+pnpm test -- api-surface                     # export contract
+pnpm typecheck                               # from the repo root; vitest does not typecheck
 ```
 
 When adding a public export, update **both** `src/index.ts` and the `it.each([...])` list in `api-surface.test.ts`.

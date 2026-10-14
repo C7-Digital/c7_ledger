@@ -90,14 +90,11 @@ describe("integration: full pipeline", () => {
 
     it("codegen.js uses namespace imports for externals", async () => {
       const content = await readFile(join(outputDir, "codegen.js"), "utf-8");
-      const jtvImport = content.match(/import .+ from "@mojotech\/json-type-validation"/);
-      if (jtvImport) {
-        expect(jtvImport[0]).toContain("import * as");
-      }
-      const typesImport = content.match(/import .+ from "@daml\/types"/);
-      if (typesImport) {
-        expect(typesImport[0]).toContain("import * as");
-      }
+      // Every import of an external, if any, is a namespace import.
+      const externalImports = [
+        ...content.matchAll(/import .+ from "(?:@mojotech\/json-type-validation|@daml\/types)"/g),
+      ].map(m => m[0]);
+      expect(externalImports.filter(i => !i.includes("import * as"))).toEqual([]);
     });
 
     it("codegen.js has no require$$N references (naming mismatch)", async () => {
