@@ -1953,16 +1953,27 @@ export class Ledger {
    * `TRANSACTION_SHAPE_LEDGER_EFFECTS` (the default).
    *
    * The participant can cut a page short of `endInclusive` (see
-   * {@link TypedHttpClient.getUpdates}), so loop on `reachedOffset`.
+   * {@link TypedHttpClient.getUpdates}), so loop on `reachedOffset`. An empty
+   * page means the range is exhausted, so `options.limit` must be at least 1:
+   * a zero cap would return an empty page for a range that still holds
+   * updates.
    *
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
-   * @throws {RangeError} if `options.limit` is not a non-negative safe integer
+   * @throws {RangeError} if `options.limit` is not a positive safe integer
    */
   async getTransactionPage(
     range: { beginExclusive: number; endInclusive: number },
     options?: { parties?: Party[]; shape?: transaction_shape; limit?: number },
   ): Promise<TransactionPage> {
     const { beginExclusive, endInclusive } = range;
+    if (options?.limit !== undefined) {
+      const { limit } = options;
+      if (!Number.isSafeInteger(limit) || limit < 1) {
+        throw new RangeError(
+          `getTransactionPage: options.limit must be a positive safe integer, got ${limit}`
+        );
+      }
+    }
     if (endInclusive <= beginExclusive) {
       return { transactions: [], reachedOffset: beginExclusive };
     }
@@ -1980,6 +1991,8 @@ export class Ledger {
       {
         beginExclusive,
         endInclusive,
+        // Required by the 3.4.x request schema; superseded by updateFormat.
+        verbose: false,
         updateFormat: {
           includeTransactions: {
             eventFormat: {

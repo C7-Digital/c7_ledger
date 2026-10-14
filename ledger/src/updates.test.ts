@@ -127,6 +127,8 @@ describe("Ledger.getTransactionPage", () => {
     const body = calls[0]!.body as Schemas["GetUpdatesRequest"];
     expect(body.beginExclusive).toBe(0);
     expect(body.endInclusive).toBe(5);
+    // The 3.4.x request schema requires it.
+    expect(body.verbose).toBe(false);
     const format = body.updateFormat!.includeTransactions!;
     expect(format.transactionShape).toBe("TRANSACTION_SHAPE_LEDGER_EFFECTS");
     expect(Object.keys(format.eventFormat.filtersByParty!)).toEqual([
@@ -166,6 +168,18 @@ describe("Ledger.getTransactionPage", () => {
       { parties: ["Alice::1220"] },
     );
     expect(page).toEqual({ transactions: [], reachedOffset: 10 });
+  });
+
+  it.each([0, -1, 1.5])("rejects limit %p before any request", async limit => {
+    // A zero cap returns an empty page, which would read as an exhausted range.
+    const calls = serve([transaction(3, "u3")]);
+    await expect(
+      ledger().getTransactionPage(
+        { beginExclusive: 0, endInclusive: 10 },
+        { parties: ["Alice::1220"], limit },
+      ),
+    ).rejects.toThrow(RangeError);
+    expect(calls).toEqual([]);
   });
 
   it("makes no request for an empty range", async () => {
