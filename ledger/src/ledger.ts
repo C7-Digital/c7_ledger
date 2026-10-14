@@ -1935,7 +1935,7 @@ export class Ledger {
 
   /**
    * The id of the participant this ledger client talks to, as the Ledger API
-   * names it (`PAR::<name>::<fingerprint>`).
+   * names it (`<name>::<fingerprint>`, without a `PAR::` prefix).
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async getParticipantId(): Promise<string> {

@@ -316,7 +316,7 @@ export class TypedHttpClient {
 
   /**
    * The id of the participant this client talks to, as the Ledger API names it
-   * (`PAR::<name>::<fingerprint>`).
+   * (`<name>::<fingerprint>`, the unique identifier without a `PAR::` prefix).
    * @throws {LedgerApiError} on non-OK HTTP response from the ledger
    */
   async getParticipantId(): Promise<GetParticipantIdResponse> {

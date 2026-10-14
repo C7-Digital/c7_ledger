@@ -69,9 +69,9 @@ const ledger = () => new Ledger({ token: TEST_TOKEN, httpBaseUrl: BASE });
 
 describe("TypedHttpClient.getParticipantId", () => {
   it("reads the participant id", async () => {
-    const calls = serve({ participantId: "PAR::node::1220aa" });
+    const calls = serve({ participantId: "node::1220aa" });
     await expect(client().getParticipantId()).resolves.toEqual({
-      participantId: "PAR::node::1220aa",
+      participantId: "node::1220aa",
     });
     expect(calls).toEqual([
       { url: `${BASE}/v2/parties/participant-id`, method: "GET", body: undefined },
@@ -108,8 +108,8 @@ describe("TypedHttpClient.getUpdates", () => {
 
 describe("Ledger.getParticipantId", () => {
   it("returns the participant id string", async () => {
-    serve({ participantId: "PAR::node::1220aa" });
-    await expect(ledger().getParticipantId()).resolves.toBe("PAR::node::1220aa");
+    serve({ participantId: "node::1220aa" });
+    await expect(ledger().getParticipantId()).resolves.toBe("node::1220aa");
   });
 });
 
