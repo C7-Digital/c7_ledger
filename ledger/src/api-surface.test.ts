@@ -105,7 +105,8 @@ describe("Public API surface", () => {
 
 describe("Generated type structure", () => {
   // These tests use compile-time type assertions. If a schema property is
-  // removed or renamed, the TypeScript compiler (via ts-jest) will fail here.
+  // removed or renamed, the tsgo typecheck (`pnpm typecheck`, and the build,
+  // which compiles this file) fails here; vitest itself does not typecheck.
 
   it("CreatedEvent has expected properties", () => {
     type CreatedEvent = components["schemas"]["CreatedEvent"];

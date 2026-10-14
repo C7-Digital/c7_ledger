@@ -20,7 +20,7 @@ import { generate } from "../src/generate/index.js";
 const SCRIBE_DIR = resolve(import.meta.dirname, "..");
 const MONOREPO_ROOT = resolve(SCRIBE_DIR, "..");
 const E2E_DAML_DIR = resolve(import.meta.dirname, "daml");
-const TSC_BIN = join(SCRIBE_DIR, "node_modules", ".bin", "tsc");
+const TSGO_BIN = join(SCRIBE_DIR, "node_modules", ".bin", "tsgo");
 
 interface DamlToolchain {
   bin: string;
@@ -109,7 +109,7 @@ describe.skipIf(!DAML_CLI)(
       await generate(analyzed, config);
 
       // 6. Set up node_modules at tmpDir level for module resolution
-      //    (both tsc and vite need to resolve @daml/types, etc.)
+      //    (both tsgo and vite need to resolve @daml/types, etc.)
       const nmBase = join(tmpDir, "node_modules");
       await mkdir(join(nmBase, "@daml"), { recursive: true });
       await mkdir(join(nmBase, "@mojotech"), { recursive: true });
@@ -229,9 +229,9 @@ describe.skipIf(!DAML_CLI)(
       expect(content).toContain("TestModel");
     });
 
-    it("consumer type-checks with tsc", () => {
+    it("consumer type-checks with tsgo", () => {
       try {
-        execSync(`${TSC_BIN} -p tsconfig.json --noEmit`, {
+        execSync(`${TSGO_BIN} -p tsconfig.json --noEmit`, {
           cwd: consumerDir,
           stdio: "pipe",
           timeout: 30_000,
@@ -240,7 +240,7 @@ describe.skipIf(!DAML_CLI)(
         const err = e as { stderr?: Buffer; stdout?: Buffer; message: string };
         const output =
           err.stderr?.toString() || err.stdout?.toString() || err.message;
-        throw new Error(`tsc type-check failed:\n${output}`);
+        throw new Error(`tsgo type-check failed:\n${output}`);
       }
     });
 

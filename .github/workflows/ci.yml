@@ -37,6 +37,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Typecheck
+        # vitest does not typecheck; this compiles every package's tests too.
+        run: pnpm typecheck
+
       - name: Test
         run: pnpm test
 

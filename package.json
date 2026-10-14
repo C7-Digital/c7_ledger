@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",
     "test": "pnpm -r test",
+    "typecheck": "pnpm -r --filter=!@c7-digital/splice-codegen exec tsgo --noEmit -p tsconfig.json",
     "release": "pnpm exec tsx scripts/release.ts"
   },
   "engines": {
@@ -19,7 +20,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^18.19.130",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "tsx": "^4.21.0"
   }
 }

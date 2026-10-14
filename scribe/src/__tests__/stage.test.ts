@@ -9,7 +9,7 @@ import {
   stagePackages,
 } from "../generate/stage.js";
 
-const TSC_BIN = resolve(import.meta.dirname, "../../node_modules/.bin/tsc");
+const TSGO_BIN = resolve(import.meta.dirname, "../../node_modules/.bin/tsgo");
 const SCOPE = "@my-org/codegen";
 const TIME_PKG = "daml-stdlib-DA-Time-Types-1.0.0";
 const MAIN_PKG = "my-project-0.1.0";
@@ -174,7 +174,7 @@ describe("stagePackages", () => {
       })
     );
     expect(() =>
-      execSync(`${TSC_BIN} -p tsconfig.json`, { cwd: tmp, stdio: "pipe" })
+      execSync(`${TSGO_BIN} -p tsconfig.json`, { cwd: tmp, stdio: "pipe" })
     ).not.toThrow();
   });
 });

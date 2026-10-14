@@ -19,8 +19,8 @@ const BASE = "http://localhost:7575";
 
 type Captured = { url: string; method?: string; body?: unknown };
 
-// A plain stub rather than `jest.fn()`: under ESM the `jest` global is not
-// injected.
+// A plain stub rather than a mock function: the test reads the captured
+// calls itself.
 function serve(responseBody: unknown): Captured[] {
   const calls: Captured[] = [];
   globalThis.fetch = (async (url: string, init?: RequestInit) => {

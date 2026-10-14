@@ -32,8 +32,7 @@ const PACKAGE_NAMES_NOT_FOUND: ActiveContractsResponse = {
   },
 };
 
-// Short backoff so the re-widen test runs on real timers in milliseconds. (The
-// repo avoids jest's fake timers, which are not injected under ESM.)
+// Short backoff so the re-widen test runs on real timers in milliseconds.
 const FAST_BACKOFF = { rewidenBackoffMinMs: 10, rewidenBackoffMaxMs: 40 };
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -92,7 +91,7 @@ class FakeWs extends WebSocketClient {
     return () => {};
   }
 
-  // Non-null indexed access for tests (jest asserts length first).
+  // Non-null indexed access for tests (the tests assert length first).
   sub(i: number): Sub {
     const s = this.subs[i];
     if (!s) throw new Error(`no subscription at index ${i} (have ${this.subs.length})`);

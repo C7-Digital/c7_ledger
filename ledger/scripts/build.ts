@@ -297,7 +297,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
   console.log(`🔄 Compiling TypeScript to ${outDir}...`);
 
   try {
-    let tscCommand = `pnpm exec tsc -p ${join(projectRoot, "tsconfig.json")}`;
+    let tscCommand = `pnpm exec tsgo -p ${join(projectRoot, "tsconfig.json")}`;
     let aliasCommand = `pnpm exec tsc-alias -p ${join(projectRoot, "tsconfig.json")}`;
 
     if (outDir !== "lib") {
@@ -313,7 +313,7 @@ async function compileTypeScript(outDir: string = "lib"): Promise<void> {
       const tempConfigPath = join(projectRoot, "tsconfig.temp.json");
       await writeFile(tempConfigPath, JSON.stringify(tempTsConfig, null, 2), "utf-8");
 
-      tscCommand = `pnpm exec tsc -p ${tempConfigPath}`;
+      tscCommand = `pnpm exec tsgo -p ${tempConfigPath}`;
       aliasCommand = `pnpm exec tsc-alias -p ${tempConfigPath}`;
     }
 

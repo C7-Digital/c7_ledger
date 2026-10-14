@@ -38,8 +38,8 @@ function oneShotResponse(status: number, statusText: string, body: string): Resp
 }
 
 function clientReturning(response: Response): TypedHttpClient {
-  // A plain stub rather than `jest.fn()`: under ESM the `jest` global is not
-  // injected, and nothing here inspects the call.
+  // A plain stub rather than a mock function: nothing here inspects the call,
+  // and the stub resets in afterEach.
   globalThis.fetch = (async () => response) as unknown as typeof fetch;
   return new TypedHttpClient({
     token: TEST_TOKEN,

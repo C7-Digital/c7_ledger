@@ -25,10 +25,10 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsgo",
+    "dev": "tsgo --watch",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "prepare": "tsc",
+    "prepare": "tsgo",
     "prepublishOnly": "pnpm run clean && pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -68,12 +68,12 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "jsdom": "^25.0.1",
+    "oidc-client-ts": "^3.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-oidc-context": "^3.3.0",
-    "oidc-client-ts": "^3.2.0",
-    "typescript": "^5.8.3",
     "vitest": "^4.0.18"
   },
   "engines": {
