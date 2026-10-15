@@ -69,6 +69,7 @@ import {
   VersionedRegistry,
 } from "./types";
 import { matchesPartiallyQualified } from "./util";
+import { activeContractsRequest, interfaceFilter, templateFilter } from "./requests";
 import { ValidationMode } from "./validation";
 import * as translate from "./translate";
 import {
@@ -515,36 +516,6 @@ function interfaceEvent_<I extends object, K = unknown>(
     interfaceId: interfaceView.interfaceId,
     packageVersion,
   }
-}
-
-type IdentifierFilter = components["schemas"]["IdentifierFilter"];
-function templateFilter(
-  templateId: IdentifierString,
-  includeCreatedEventBlob: boolean
-): IdentifierFilter {
-  return {
-    TemplateFilter: {
-      value: {
-        templateId: templateId,
-        includeCreatedEventBlob,
-      },
-    },
-  };
-}
-
-function interfaceFilter(
-  interfaceId: IdentifierString,
-  includeCreatedEventBlob: boolean
-): IdentifierFilter {
-  return {
-    InterfaceFilter: {
-      value: {
-        interfaceId: interfaceId,
-        includeInterfaceView: true,
-        includeCreatedEventBlob,
-      },
-    },
-  };
 }
 
 // Convenience constructors for commands
@@ -1474,28 +1445,12 @@ export class Ledger {
 
     const readAsParties_ = readAsParties || (await this.getTokenActAsParties());
 
-    let filtersByParty = readAsParties_.reduce((acc: Record<string, Filters>, key: Party) => {
-      acc[key as string] = {
-        cumulative: [
-          {
-            identifierFilter:
-              // `query` is generic over the template-id (like `create`) so codegen
-              // companions pass without a cast; the brand is internalised here.
-              templateFilter(template.templateId as unknown as IdentifierString, includeCreatedEventBlob),
-          },
-        ],
-      };
-      return acc;
-    }, {});
-
-    const queryRequest: Schemas["GetActiveContractsRequest"] = {
-      verbose: false, // To be deprecated do not rely
+    const queryRequest = activeContractsRequest(
+      readAsParties_,
+      [templateFilter(template.templateId, includeCreatedEventBlob)],
       activeAtOffset,
-      eventFormat: {
-        filtersByParty,
-        verbose,
-      },
-    };
+      verbose,
+    );
 
     const response = await this.client.queryActiveContracts(queryRequest, options);
 
@@ -1534,26 +1489,12 @@ export class Ledger {
 
     const readAsParties_ = readAsParties || (await this.getTokenActAsParties());
 
-    let filtersByParty = readAsParties_.reduce((acc: Record<string, Filters>, key: Party) => {
-      acc[key as string] = {
-        cumulative: [
-          {
-            identifierFilter:
-              interfaceFilter(interface_.templateId as unknown as IdentifierString, includeCreatedEventBlob),
-          },
-        ],
-      };
-      return acc;
-    }, {});
-
-    const queryRequest: Schemas["GetActiveContractsRequest"] = {
-      verbose: false, // To be deprecated do not rely
+    const queryRequest = activeContractsRequest(
+      readAsParties_,
+      [interfaceFilter(interface_.templateId, includeCreatedEventBlob)],
       activeAtOffset,
-      eventFormat: {
-        filtersByParty,
-        verbose,
-      },
-    };
+      verbose,
+    );
 
     const response = await this.client.queryActiveContracts(queryRequest);
 

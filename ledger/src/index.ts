@@ -11,6 +11,13 @@ export {
   convertCommand,
 } from "./ledger";
 export { TypedHttpClient, type TypedHttpClientConfig } from "./client";
+export {
+  activeContractsRequest,
+  templateFilter,
+  interfaceFilter,
+  type IdentifierFilter,
+  type GetActiveContractsRequest,
+} from "./requests";
 export { LedgerApiError, httpStatusOf, type LedgerErrorBody } from "./error";
 export {
   WebSocketClient,

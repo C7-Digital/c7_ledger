@@ -41,6 +41,10 @@ describe("Public API surface", () => {
   it.each([
     "createCmd",
     "createAndExerciseCmd",
+    // Request-body builders, shared with callers on other transports.
+    "activeContractsRequest",
+    "templateFilter",
+    "interfaceFilter",
     "createEventsFromWire",
     "exerciseCmd",
     "setLogger",
