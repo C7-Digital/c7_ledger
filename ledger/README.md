@@ -158,6 +158,28 @@ try {
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
 
+### Migrating to 0.0.43
+
+Exports the request-body builders that `Ledger.query` and
+`Ledger.queryInterface` use. Use them when the request goes over another
+transport, for example a CIP-0103 wallet's `ledgerApi` proxy, so the body has
+the same shape as the one `Ledger` sends. Additive; nothing removed.
+
+- `activeContractsRequest(parties, filters, activeAtOffset, verbose?)` builds
+  the `POST /v2/state/active-contracts` body. The party filter is in
+  `eventFormat`. Canton 3.6 participants reject the deprecated top-level
+  `filter` by default (`DEPRECATED_API_DISABLED`).
+- `templateFilter(templateId, includeCreatedEventBlob?)` and
+  `interfaceFilter(interfaceId, includeCreatedEventBlob?)` build the
+  `IdentifierFilter`s. The interface filter always asks for the interface view.
+- The types `IdentifierFilter` and `GetActiveContractsRequest` are exported.
+
+```typescript
+import { activeContractsRequest, templateFilter } from "@c7-digital/ledger/lite";
+
+const body = activeContractsRequest([party], [templateFilter(Token.templateId)], offset);
+```
+
 ### Migrating to 0.0.42
 
 Adds update-history and participant reads. Additive; nothing removed.
