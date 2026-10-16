@@ -21,7 +21,9 @@ import {
   type ExerciseEvent,
   type Offset,
   type PayloadType,
-  type SummaryRow,
+  type ContractCountRow,
+  type UpdateCountRow,
+  type ChoiceCountRow,
 } from "./types.js";
 
 /** One PQS result row before typing. */
@@ -61,6 +63,15 @@ function partyList(value: unknown): PartyIdString[] {
   return Array.isArray(value) ? value.map((p) => createPartyIdString(text(p))) : [];
 }
 
+// PQS counts are int8; postgres.js returns them as a string or a bigint.
+function count(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(typeof value === "bigint" ? value : text(value));
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw new Error(`PQS returned an invalid count: "${text(value)}"`);
+  }
+  return n;
+}
+
 function bool(value: unknown): boolean {
   return value === true || value === "t" || value === "true";
 }
@@ -76,6 +87,7 @@ function payloadType(value: unknown): PayloadType {
 export function toContract<T>(row: PqsRow): Contract<T> {
   return {
     contractId: contractId<T>(row.contract_id),
+    templateFqn: createIdentifierString(text(row.template_fqn)),
     payload: row.payload as T,
     payloadType: payloadType(row.payload_type),
     createdAtOffset: offset(row.created_at_offset),
@@ -94,6 +106,7 @@ export function toContract<T>(row: PqsRow): Contract<T> {
 export function toCreate<T>(row: PqsRow): CreateEvent<T> {
   return {
     contractId: contractId<T>(row.contract_id),
+    templateFqn: createIdentifierString(text(row.template_fqn)),
     payload: row.payload as T,
     payloadType: payloadType(row.payload_type),
     createdAtOffset: offset(row.created_at_offset),
@@ -135,21 +148,29 @@ export function toExercise<C, R>(row: PqsRow): ExerciseEvent<C, R> {
   };
 }
 
-// Map a `summary_*` row. `template_fqn` is fixed; every other numeric column is
-// a count (name varies per summary function), so they are collected generically.
-export function toSummaryRow(row: PqsRow): SummaryRow {
-  const counts: Record<string, number> = {};
-  for (const [key, value] of Object.entries(row)) {
-    if (key === "template_fqn") continue;
-    if (typeof value === "number") counts[key] = value;
-    else if (typeof value === "bigint") counts[key] = Number(value);
-    else if (
-      typeof value === "string" &&
-      value.trim() !== "" &&
-      !Number.isNaN(Number(value))
-    ) {
-      counts[key] = Number(value);
-    }
-  }
-  return { templateFqn: createIdentifierString(text(row.template_fqn)), counts };
+export function toContractCountRow(row: PqsRow): ContractCountRow {
+  return {
+    templateFqn: createIdentifierString(text(row.template_fqn)),
+    payloadType: payloadType(row.payload_type),
+    count: count(row.count),
+  };
+}
+
+export function toUpdateCountRow(row: PqsRow): UpdateCountRow {
+  return {
+    templateFqn: createIdentifierString(text(row.template_fqn)),
+    payloadType: payloadType(row.payload_type),
+    creates: count(row.creates),
+    archives: count(row.archives),
+  };
+}
+
+export function toChoiceCountRow(row: PqsRow): ChoiceCountRow {
+  return {
+    templateFqn: createIdentifierString(text(row.template_fqn)),
+    choice: createNameString(text(row.choice)),
+    choiceFqn: text(row.choice_fqn),
+    consuming: bool(row.consuming),
+    count: count(row.count),
+  };
 }

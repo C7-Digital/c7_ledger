@@ -53,6 +53,11 @@ export type PayloadType = "template" | "interface";
 /** An active or historical contract with its typed payload. */
 export interface Contract<Payload> {
   contractId: ContractId<Payload>;
+  /**
+   * The template or interface this row projects. One contract has a template
+   * row and one row per interface view, all with the same contract id.
+   */
+  templateFqn: IdentifierString;
   payload: Payload;
   payloadType: PayloadType;
   createdAtOffset: Offset;
@@ -75,6 +80,8 @@ export interface Contract<Payload> {
 /** A contract-create event with its typed payload. */
 export interface CreateEvent<Payload> {
   contractId: ContractId<Payload>;
+  /** The template or interface this row projects (see {@link Contract.templateFqn}). */
+  templateFqn: IdentifierString;
   payload: Payload;
   payloadType: PayloadType;
   createdAtOffset: Offset;
@@ -121,12 +128,29 @@ export interface OffsetRange {
 }
 
 /**
- * A per-template count row from a `summary_*` function. Only `template_fqn` is
- * fixed across the summary functions; the count column(s) differ per function
- * (e.g. `summary_updates` returns creates and archives), so every numeric
- * column is captured in `counts` keyed by its column name.
+ * One row of `summary_active`, `summary_creates`, `summary_archives` or
+ * `summary_transients`: the count for one template or one interface view.
  */
-export interface SummaryRow {
+export interface ContractCountRow {
   templateFqn: IdentifierString;
-  counts: Record<string, number>;
+  payloadType: PayloadType;
+  count: number;
+}
+
+/** One row of `summary_updates`: the create and archive counts for one template or interface view. */
+export interface UpdateCountRow {
+  templateFqn: IdentifierString;
+  payloadType: PayloadType;
+  creates: number;
+  archives: number;
+}
+
+/** One row of `summary_exercises`: the exercise count of one choice. */
+export interface ChoiceCountRow {
+  /** The template or interface that declares the choice. */
+  templateFqn: IdentifierString;
+  choice: NameString;
+  choiceFqn: string;
+  consuming: boolean;
+  count: number;
 }
