@@ -63,9 +63,15 @@ function partyList(value: unknown): PartyIdString[] {
   return Array.isArray(value) ? value.map((p) => createPartyIdString(text(p))) : [];
 }
 
-// PQS counts are int8; postgres.js returns them as a string or a bigint.
+// PQS counts are int8; postgres.js returns them as a string or a bigint. A
+// string must be a plain decimal integer, because `Number` reads "" as 0.
 function count(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(typeof value === "bigint" ? value : text(value));
+  const n =
+    typeof value === "number" || typeof value === "bigint"
+      ? Number(value)
+      : /^\d+$/.test(text(value))
+        ? Number(text(value))
+        : Number.NaN;
   if (!Number.isSafeInteger(n) || n < 0) {
     throw new Error(`PQS returned an invalid count: "${text(value)}"`);
   }

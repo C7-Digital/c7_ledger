@@ -151,6 +151,11 @@ describe("toContractCountRow", () => {
     expect(() =>
       toContractCountRow({ template_fqn: "X:Y:Z", payload_type: "template", count: "abc" }),
     ).toThrow(/invalid count/);
+    for (const bad of ["", " ", "1.5", "-1", "1e3"]) {
+      expect(() =>
+        toContractCountRow({ template_fqn: "X:Y:Z", payload_type: "template", count: bad }),
+      ).toThrow(/invalid count/);
+    }
   });
 });
 
