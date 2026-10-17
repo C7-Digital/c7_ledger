@@ -61,13 +61,17 @@ You can also pass raw `package:Module:Entity` / `:Choice` strings (via
 - `exercises(choice, { fromOffset?, toOffset? })` → `ExerciseEvent<Arg, Result>[]`
 
 **Lookup by contract id**
-- `lookupContract(cid)` → `Contract<unknown>[]` (the contract + its interface views)
+- `lookupContract(cid)` → `Contract<unknown>[]`: the template row and one row per interface
+  view, all with the same contract id. `templateFqn` and `payloadType` tell them apart.
 - `lookupExercises(cid)` → `ExerciseEvent<unknown, unknown>[]`
 
-**Summaries** (per-template counts; cheap parity check for a shadow compare)
+**Summaries** (counts per template and interface view; cheap parity check for a shadow compare)
 - `summaryActive(atOffset?)`, `summaryCreates(range?)`, `summaryArchives(range?)`,
-  `summaryExercises(range?)`, `summaryTransients(range?)`, `summaryUpdates(range?)`
-  → `SummaryRow[]` (`{ templateFqn, counts }`)
+  `summaryTransients(range?)` → `ContractCountRow[]` (`{ templateFqn, payloadType, count }`)
+- `summaryUpdates(range?)` → `UpdateCountRow[]` (`{ templateFqn, payloadType, creates, archives }`)
+- `summaryExercises(range?)` → `ChoiceCountRow[]` (`{ templateFqn, choice, choiceFqn, consuming, count }`),
+  one row per choice. Interface choices appear under the interface that declares them. The
+  exercise rows need scribe's `TransactionTreeStream` datasource; `TransactionStream` stores none.
 
 **Offset / consistency**
 - `latestOffset()` → `Offset | null`
@@ -82,7 +86,8 @@ You can also pass raw `package:Module:Entity` / `:Choice` strings (via
 
 Row types carry the enrichment PQS returns: `packageName`, `packageVersion`,
 `metadata` (the disclosure blob — null unless the template is in scribe's
-`--pipeline-filter-metadata`), `witnesses`, `divulgedOnly`, `payloadType`.
+`--pipeline-filter-metadata`), `witnesses`, `divulgedOnly`, `payloadType`, and on `Contract` and
+`CreateEvent` the `templateFqn` of the template or interface view the row projects.
 
 Offsets are passed per call, so the client is stateless — it never depends on
 the `set_latest` / `set_oldest` session scope.

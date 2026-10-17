@@ -19,7 +19,9 @@ import {
   toContract,
   toCreate,
   toExercise,
-  toSummaryRow,
+  toContractCountRow,
+  toUpdateCountRow,
+  toChoiceCountRow,
   type PqsRow,
 } from "./rows.js";
 import {
@@ -31,7 +33,9 @@ import {
   type ExerciseEvent,
   type Offset,
   type OffsetRange,
-  type SummaryRow,
+  type ContractCountRow,
+  type UpdateCountRow,
+  type ChoiceCountRow,
   type TemplateName,
 } from "./types.js";
 
@@ -156,50 +160,50 @@ export class PqsClient {
     return rows.map((r) => toExercise<unknown, unknown>(r));
   }
 
-  /** Active-contract count per template as of an offset. */
-  async summaryActive(atOffset?: Offset): Promise<SummaryRow[]> {
+  /** Active-contract count per template and interface view as of an offset. */
+  async summaryActive(atOffset?: Offset): Promise<ContractCountRow[]> {
     const rows = await this.rows(this.sql`SELECT * FROM summary_active(${this.atOrLatest(atOffset)})`);
-    return rows.map(toSummaryRow);
+    return rows.map(toContractCountRow);
   }
 
-  /** Create count per template in an offset range. */
-  async summaryCreates(opts?: OffsetRange): Promise<SummaryRow[]> {
+  /** Create count per template and interface view in an offset range. */
+  async summaryCreates(opts?: OffsetRange): Promise<ContractCountRow[]> {
     const rows = await this.rows(
       this.sql`SELECT * FROM summary_creates(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
-    return rows.map(toSummaryRow);
+    return rows.map(toContractCountRow);
   }
 
-  /** Archive count per template in an offset range. */
-  async summaryArchives(opts?: OffsetRange): Promise<SummaryRow[]> {
+  /** Archive count per template and interface view in an offset range. */
+  async summaryArchives(opts?: OffsetRange): Promise<ContractCountRow[]> {
     const rows = await this.rows(
       this.sql`SELECT * FROM summary_archives(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
-    return rows.map(toSummaryRow);
+    return rows.map(toContractCountRow);
   }
 
-  /** Exercise count per template in an offset range. */
-  async summaryExercises(opts?: OffsetRange): Promise<SummaryRow[]> {
+  /** Exercise count per choice (template and interface choices) in an offset range. */
+  async summaryExercises(opts?: OffsetRange): Promise<ChoiceCountRow[]> {
     const rows = await this.rows(
       this.sql`SELECT * FROM summary_exercises(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
-    return rows.map(toSummaryRow);
+    return rows.map(toChoiceCountRow);
   }
 
-  /** Transient (create+archive in one tx) count per template in an offset range. */
-  async summaryTransients(opts?: OffsetRange): Promise<SummaryRow[]> {
+  /** Transient (create+archive in one tx) count per template and interface view in an offset range. */
+  async summaryTransients(opts?: OffsetRange): Promise<ContractCountRow[]> {
     const rows = await this.rows(
       this.sql`SELECT * FROM summary_transients(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
-    return rows.map(toSummaryRow);
+    return rows.map(toContractCountRow);
   }
 
-  /** Create + archive counts per template in an offset range. */
-  async summaryUpdates(opts?: OffsetRange): Promise<SummaryRow[]> {
+  /** Create + archive counts per template and interface view in an offset range. */
+  async summaryUpdates(opts?: OffsetRange): Promise<UpdateCountRow[]> {
     const rows = await this.rows(
       this.sql`SELECT * FROM summary_updates(${this.fromOrOldest(opts?.fromOffset)}, ${this.atOrLatest(opts?.toOffset)})`,
     );
-    return rows.map(toSummaryRow);
+    return rows.map(toUpdateCountRow);
   }
 
   /**

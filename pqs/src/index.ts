@@ -5,7 +5,9 @@ export {
   toCreate,
   toArchive,
   toExercise,
-  toSummaryRow,
+  toContractCountRow,
+  toUpdateCountRow,
+  toChoiceCountRow,
   type PqsRow,
 } from "./rows.js";
 export {
@@ -19,5 +21,7 @@ export {
   type ArchiveEvent,
   type ExerciseEvent,
   type OffsetRange,
-  type SummaryRow,
+  type ContractCountRow,
+  type UpdateCountRow,
+  type ChoiceCountRow,
 } from "./types.js";
