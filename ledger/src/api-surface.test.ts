@@ -189,6 +189,7 @@ describe("Ledger method contract", () => {
   it.each([
     "getTokenUserId",
     "getTokenUserInfo",
+    "refreshTokenUserInfo",
     "getTokenActAsParties",
     "query",
     "queryInterface",
