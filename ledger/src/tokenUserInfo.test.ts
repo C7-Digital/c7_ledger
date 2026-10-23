@@ -25,19 +25,29 @@ function json(body: unknown): Response {
 /**
  * Stub the user endpoints. `rights[user]` is the participant's current
  * CanActAs list of each user; `reads` counts the rights reads.
+ * `holdNextRightsRead` takes the next rights answer when the request
+ * arrives, and returns it only when the caller releases it.
  */
-function stubUsers(rights: Record<string, string[]>): { reads: () => number } {
+function stubUsers(rights: Record<string, string[]>): {
+  reads: () => number;
+  holdNextRightsRead: () => () => void;
+} {
   let reads = 0;
+  let hold: Promise<void> | undefined;
   globalThis.fetch = (async (url: string) => {
     const path = new URL(url).pathname;
     const rightsMatch = /^\/v2\/users\/([^/]+)\/rights$/.exec(path);
     if (rightsMatch) {
       reads += 1;
-      return json({
+      const body = {
         rights: (rights[rightsMatch[1] ?? ""] ?? []).map((party: string) => ({
           kind: { CanActAs: { value: { party } } },
         })),
-      });
+      };
+      const held = hold;
+      hold = undefined;
+      if (held) await held;
+      return json(body);
     }
     const userMatch = /^\/v2\/users\/([^/]+)$/.exec(path);
     if (userMatch) {
@@ -45,7 +55,16 @@ function stubUsers(rights: Record<string, string[]>): { reads: () => number } {
     }
     throw new Error(`unexpected request ${path}`);
   }) as unknown as typeof fetch;
-  return { reads: () => reads };
+  return {
+    reads: () => reads,
+    holdNextRightsRead: () => {
+      let release = () => {};
+      hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+  };
 }
 
 function makeLedger(maxAgeMs?: number): Ledger {
@@ -128,6 +147,25 @@ describe("token user rights", () => {
     rights["test-user"] = ["alice::1220", "erin::1220"];
     ledger.setToken(TEST_TOKEN);
     expect(await ledger.getTokenActAsParties()).toEqual(["alice::1220", "erin::1220"]);
+    expect(stub.reads()).toBe(2);
+  });
+
+  it("keeps a read that a setToken overtook out of the cache", async () => {
+    const rights = { "test-user": ["alice::1220"] };
+    const stub = stubUsers(rights);
+    const ledger = makeLedger();
+    const release = stub.holdNextRightsRead();
+    const before = ledger.getTokenActAsParties();
+    // The held read has taken the old rights; then the token changes.
+    await vi.waitFor(() => expect(stub.reads()).toBe(1));
+    rights["test-user"] = ["alice::1220", "frank::1220"];
+    ledger.setToken(TEST_TOKEN);
+    release();
+    expect(await before).toEqual(["alice::1220"]);
+
+    expect(await ledger.getTokenActAsParties()).toEqual(["alice::1220", "frank::1220"]);
+    expect(stub.reads()).toBe(2);
+    expect(await ledger.getTokenActAsParties()).toEqual(["alice::1220", "frank::1220"]);
     expect(stub.reads()).toBe(2);
   });
 });
