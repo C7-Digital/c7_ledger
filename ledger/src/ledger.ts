@@ -654,7 +654,17 @@ export interface LedgerOptions {
    */
   rewidenBackoffMinMs?: number;
   rewidenBackoffMaxMs?: number;
+  /**
+   * How long (ms) the token user's rights stay cached. Every call that does
+   * not name its parties acts and reads as these rights, so a right that the
+   * participant revoked or granted takes effect at the next read after this
+   * age. Defaults to 60s.
+   */
+  tokenUserInfoMaxAgeMs?: number;
 }
+
+/** Default age limit of the cached token user and its rights. */
+const TOKEN_USER_INFO_MAX_AGE_MS = 60_000;
 
 type FilterSpec 
   = { type: "template", templateId: IdentifierString } 
@@ -1277,7 +1287,9 @@ export class Ledger {
   private ledgerEndCache?: { offset: number; timestamp: number };
   private ledgerEndPromise?: Promise<number>;
   private tokenUserId: string;
-  private tokenUserInfo: User | null = null;
+  private tokenUserInfo?: { user: User; readAt: number };
+  private tokenUserInfoPromise?: Promise<User | null>;
+  private tokenUserInfoMaxAgeMs: number;
   private httpBaseUrl: string;
   private options: LedgerOptions;
 
@@ -1296,16 +1308,26 @@ export class Ledger {
       responseDelay: options.responseDelay,
     });
     this.options = options;
+    this.tokenUserInfoMaxAgeMs = options.tokenUserInfoMaxAgeMs ?? TOKEN_USER_INFO_MAX_AGE_MS;
   }
 
   /**
    * Update the authentication token used for HTTP requests.
    * Active streams should be updated separately via stream.updateToken().
+   * The token user's rights are read again on the next call that needs them,
+   * because the new token can belong to another user or carry new rights.
    */
   setToken(newToken: string): void {
-    logTokenExpiration(newToken, "Ledger setToken");
+    const tokenInfo = logTokenExpiration(newToken, "Ledger setToken");
+    this.tokenUserId = tokenInfo.userId;
     this.client.token = newToken;
     this.options = { ...this.options, token: newToken };
+    this.dropTokenUserInfo();
+  }
+
+  private dropTokenUserInfo(): void {
+    this.tokenUserInfo = undefined;
+    this.tokenUserInfoPromise = undefined;
   }
 
   private generateCommandId(): LedgerString {
@@ -1397,14 +1419,45 @@ export class Ledger {
     return this.tokenUserId;
   }
 
-  /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
+  /**
+   * The token user and its rights. The answer is cached for
+   * `tokenUserInfoMaxAgeMs`; concurrent callers share one read.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
   async getTokenUserInfo(): Promise<User | null> {
-    if (this.tokenUserInfo) {
-      return this.tokenUserInfo;
-    } else {
-      this.tokenUserInfo = await this.getUserInfo(this.tokenUserId);
-      return this.tokenUserInfo;
+    const cached = this.tokenUserInfo;
+    if (cached && Date.now() - cached.readAt < this.tokenUserInfoMaxAgeMs) {
+      return cached.user;
     }
+    return this.refreshTokenUserInfo();
+  }
+
+  /**
+   * Read the token user and its rights from the participant now, and cache
+   * the answer. Call it after an authorization error, when a right of the
+   * token user can have changed.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async refreshTokenUserInfo(): Promise<User | null> {
+    if (!this.tokenUserInfoPromise) {
+      const userId = this.tokenUserId;
+      const read = this.getUserInfo(userId).then(
+        user => {
+          // A setToken during the read replaces this read; keep its answer out.
+          if (this.tokenUserInfoPromise === read) {
+            this.tokenUserInfo = user ? { user, readAt: Date.now() } : undefined;
+            this.tokenUserInfoPromise = undefined;
+          }
+          return user;
+        },
+        (error: unknown) => {
+          if (this.tokenUserInfoPromise === read) this.tokenUserInfoPromise = undefined;
+          throw error;
+        }
+      );
+      this.tokenUserInfoPromise = read;
+    }
+    return this.tokenUserInfoPromise;
   }
 
   /** @throws {LedgerApiError} on non-OK HTTP response from the ledger */
