@@ -38,7 +38,7 @@
     "@daml/types": ">=3.4.0 <4.0.0"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=24.0.0",
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
