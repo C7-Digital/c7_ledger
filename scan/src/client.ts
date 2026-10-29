@@ -46,6 +46,8 @@ type GetPartyToParticipantResponse =
 // ─── Network Info ──────────────────────────────────────────────────────
 
 type GetDsoInfoResponse = Typed.GetDsoInfoResponse;
+type GetDsoInfoV1Response = Typed.GetDsoInfoV1Response;
+type GetSvInfoResponse = Typed.GetSvInfoResponse;
 
 type GetDsoPartyIdOperation = operations["getDsoPartyId"];
 type GetDsoPartyIdResponse = {
@@ -312,6 +314,11 @@ export interface ScanClientConfig {
   debug?: boolean;
 }
 
+/** A Scan that does not have the endpoint answers 404. */
+function isNotFound(error: unknown): boolean {
+  return error instanceof ScanApiError && error.status === 404;
+}
+
 // ─── ScanClient ────────────────────────────────────────────────────────
 
 // The Scan API is spec'd as public — its content (DSO party, mining
@@ -453,8 +460,43 @@ export class ScanClient {
 
   // ─── Network Info ──────────────────────────────────────────────────
 
+  /**
+   * @deprecated Splice deprecates `/v0/dso`. Use {@link getDsoInfoV1}, and
+   * {@link getSvInfo} for `sv_user` and `sv_party_id`.
+   */
   async getDsoInfo(): Promise<GetDsoInfoResponse> {
     return this.request<GetDsoInfoResponse>("/v0/dso", "GET");
+  }
+
+  /**
+   * The DSO information, without the SV that operates this Scan. Splice 0.10
+   * adds `/v1/dso`. A Scan without it answers 404, and then this method reads
+   * `/v0/dso` and removes the SV fields, so the answer has the same shape on
+   * every Splice version.
+   */
+  async getDsoInfoV1(): Promise<GetDsoInfoV1Response> {
+    try {
+      return await this.request<GetDsoInfoV1Response>("/v1/dso", "GET");
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      const { sv_user: _svUser, sv_party_id: _svPartyId, ...dso } = await this.getDsoInfo();
+      return dso;
+    }
+  }
+
+  /**
+   * The SV that operates this Scan. Splice 0.10 adds `/v0/sv-info`. A Scan
+   * without it answers 404, and then this method reads the SV fields of
+   * `/v0/dso`.
+   */
+  async getSvInfo(): Promise<GetSvInfoResponse> {
+    try {
+      return await this.request<GetSvInfoResponse>("/v0/sv-info", "GET");
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      const { sv_user, sv_party_id } = await this.getDsoInfo();
+      return { sv_user, sv_party_id };
+    }
   }
 
   async getDsoPartyId(): Promise<GetDsoPartyIdResponse> {
