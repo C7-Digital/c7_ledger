@@ -319,6 +319,14 @@ function isNotFound(error: unknown): boolean {
   return error instanceof ScanApiError && error.status === 404;
 }
 
+/**
+ * The endpoints (base URL + path) that answered 404 in this process. A later
+ * request to one of them goes to its fallback directly, so each new client
+ * does not pay a 404 again. An upgraded Scan still serves the deprecated
+ * fallback endpoints, so the record stays correct for the process.
+ */
+const missingEndpoints = new Set<string>();
+
 // ─── ScanClient ────────────────────────────────────────────────────────
 
 // The Scan API is spec'd as public — its content (DSO party, mining
@@ -472,16 +480,14 @@ export class ScanClient {
    * The DSO information, without the SV that operates this Scan. Splice 0.10
    * adds `/v1/dso`. A Scan without it answers 404, and then this method reads
    * `/v0/dso` and removes the SV fields, so the answer has the same shape on
-   * every Splice version.
+   * every Splice version. After one 404, every client of that Scan reads
+   * `/v0/dso` directly.
    */
   async getDsoInfoV1(): Promise<GetDsoInfoV1Response> {
-    try {
-      return await this.request<GetDsoInfoV1Response>("/v1/dso", "GET");
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
+    return this.getOrFallback("/v1/dso", async () => {
       const { sv_user: _svUser, sv_party_id: _svPartyId, ...dso } = await this.getDsoInfo();
       return dso;
-    }
+    });
   }
 
   /**
@@ -490,12 +496,28 @@ export class ScanClient {
    * `/v0/dso`.
    */
   async getSvInfo(): Promise<GetSvInfoResponse> {
-    try {
-      return await this.request<GetSvInfoResponse>("/v0/sv-info", "GET");
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
+    return this.getOrFallback("/v0/sv-info", async () => {
       const { sv_user, sv_party_id } = await this.getDsoInfo();
       return { sv_user, sv_party_id };
+    });
+  }
+
+  /**
+   * GET `path`, or call `fallback` when this Scan does not have `path`. A 404
+   * is recorded in {@link missingEndpoints}; any other error is thrown.
+   */
+  private async getOrFallback<TResponse>(
+    path: string,
+    fallback: () => Promise<TResponse>,
+  ): Promise<TResponse> {
+    const endpoint = `${this.baseUrl}${path}`;
+    if (missingEndpoints.has(endpoint)) return fallback();
+    try {
+      return await this.request<TResponse>(path, "GET");
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      missingEndpoints.add(endpoint);
+      return fallback();
     }
   }
 
