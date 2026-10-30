@@ -1,8 +1,15 @@
-import { afterEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 import { ScanClient } from "./client.js";
 import { ScanApiError } from "./error.js";
 
-const BASE = "https://scan.example.com/api/scan";
+// The client remembers a 404 for each base URL in the process, so each test
+// uses its own Scan.
+let scanCount = 0;
+let BASE = "";
+beforeEach(() => {
+  scanCount += 1;
+  BASE = `https://scan-${scanCount}.example.com/api/scan`;
+});
 
 const DSO_V1 = {
   dso_party_id: "DSO::1220aa",
@@ -19,7 +26,7 @@ const SV_INFO = { sv_user: "sv1", sv_party_id: "sv1::1220cc" };
 function stubScan(routes: Record<string, unknown>): string[] {
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (input: string) => {
-    const path = input.slice(BASE.length);
+    const path = new URL(input).pathname.slice("/api/scan".length);
     calls.push(path);
     if (!(path in routes)) {
       return new Response("Not Found", { status: 404, statusText: "Not Found" });
@@ -51,10 +58,25 @@ describe("getDsoInfoV1", () => {
     expect(calls).toEqual(["/v1/dso", "/v0/dso"]);
   });
 
+  it("reads /v0/dso directly after one 404, also from a new client", async () => {
+    const calls = stubScan({ "/v0/dso": { ...DSO_V1, ...SV_INFO } });
+    await new ScanClient({ baseUrl: BASE }).getDsoInfoV1();
+    expect(await new ScanClient({ baseUrl: BASE }).getDsoInfoV1()).toEqual(DSO_V1);
+    expect(calls).toEqual(["/v1/dso", "/v0/dso", "/v0/dso"]);
+  });
+
+  it("keeps the 404 record for each Scan apart", async () => {
+    const calls = stubScan({ "/v0/dso": { ...DSO_V1, ...SV_INFO } });
+    await new ScanClient({ baseUrl: BASE }).getDsoInfoV1();
+    const other = BASE.replace("scan-", "other-scan-");
+    await new ScanClient({ baseUrl: other }).getDsoInfoV1();
+    expect(calls).toEqual(["/v1/dso", "/v0/dso", "/v1/dso", "/v0/dso"]);
+  });
+
   it("does not read /v0/dso when /v1/dso fails for another reason", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (input: string) => {
-      calls.push(input.slice(BASE.length));
+      calls.push(new URL(input).pathname.slice("/api/scan".length));
       return new Response("Bad Gateway", { status: 502, statusText: "Bad Gateway" });
     });
     const failure = new ScanClient({ baseUrl: BASE }).getDsoInfoV1();
