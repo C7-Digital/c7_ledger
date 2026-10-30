@@ -56,9 +56,11 @@ export interface MaybeCachedContractWithState<TPayload> {
 
 // ─── getDsoInfo ─────────────────────────────────────────────────────────
 
-export interface GetDsoInfoResponse {
-  sv_user: string;
-  sv_party_id: Party;
+/**
+ * The DSO information (`/v1/dso`). It is the same on every Scan instance, so
+ * a caller can compare the answers of several Scans.
+ */
+export interface GetDsoInfoV1Response {
   dso_party_id: Party;
   voting_threshold: number;
   latest_mining_round: ContractWithState<Round.OpenMiningRound>;
@@ -67,6 +69,18 @@ export interface GetDsoInfoResponse {
   sv_node_states: ContractWithState<SvState.SvNodeState>[];
   initial_round?: string;
 }
+
+/** The SV that operates one Scan instance (`/v0/sv-info`). */
+export interface GetSvInfoResponse {
+  sv_user: string;
+  sv_party_id: Party;
+}
+
+/**
+ * The deprecated `/v0/dso` answer: the DSO information together with the SV
+ * that operates the Scan instance.
+ */
+export interface GetDsoInfoResponse extends GetDsoInfoV1Response, GetSvInfoResponse {}
 
 // ─── listValidatorLicenses ──────────────────────────────────────────────
 

@@ -20,6 +20,8 @@ export type {
   MaybeCachedContractWithState,
   // Typed Scan API responses
   GetDsoInfoResponse,
+  GetDsoInfoV1Response,
+  GetSvInfoResponse,
   ListValidatorLicensesResponse,
   GetClosedRoundsResponse,
   GetOpenAndIssuingMiningRoundsResponse,
