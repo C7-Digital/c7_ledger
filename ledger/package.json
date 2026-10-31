@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@c7-digital/ledger",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "type": "module",
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
@@ -33,6 +33,11 @@
       "types": "./lib/src/sets.d.ts",
       "import": "./lib/src/sets.js",
       "default": "./lib/src/sets.js"
+    },
+    "./service-account": {
+      "types": "./lib/src/serviceAccount.d.ts",
+      "import": "./lib/src/serviceAccount.js",
+      "default": "./lib/src/serviceAccount.js"
     }
   },
   "bin": {
@@ -54,10 +59,14 @@
   },
   "peerDependencies": {
     "@daml/types": ">=3.4.0 <4.0.0",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "openid-client": "^6.5.0"
   },
   "peerDependenciesMeta": {
     "yaml": {
+      "optional": true
+    },
+    "openid-client": {
       "optional": true
     }
   },
@@ -72,6 +81,7 @@
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "openapi-typescript": "^7.4.2",
+    "openid-client": "6.8.8",
     "tsc-alias": "^1.8.16",
     "tsx": "^4.11.0",
     "vitest": "^4.0.18",

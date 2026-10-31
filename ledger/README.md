@@ -81,6 +81,56 @@ while (offset < end) {
 }
 ```
 
+## Service-account tokens
+
+A server that acts on the ledger as a service account imports
+`@c7-digital/ledger/service-account`. It gets tokens through the OAuth 2.0
+client-credentials grant from any OpenID Connect issuer, and it keeps the token
+valid. This entry point is separate from the main one for two reasons: only a
+server can keep a client secret, and it needs the optional peer dependency
+`openid-client` (`pnpm add openid-client`).
+
+```typescript
+import { Ledger } from "@c7-digital/ledger";
+import {
+  ClientCredentialsTokenSource,
+  TokenRefresher,
+} from "@c7-digital/ledger/service-account";
+
+const source = new ClientCredentialsTokenSource({
+  issuer: new URL("https://auth.example.com/realms/my-realm"),
+  clientId: "my-service",
+  clientSecret: process.env.CLIENT_SECRET!,
+  audience: "https://ledger.example.com", // only if the issuer needs it
+});
+
+let ledger: Ledger | null = null;
+const refresher = new TokenRefresher({
+  source,
+  onToken: ({ token }) => ledger?.setToken(token),
+  onFailure: ({ error, failures, retryInMs }) =>
+    console.warn("token refresh failed", { error, failures, retryInMs }),
+});
+
+const { token } = await refresher.start(); // throws if the first token fails
+ledger = new Ledger({ token, httpBaseUrl: "https://participant.example.com" });
+```
+
+- `TokenRefresher` refreshes at 80 % of the token lifetime. After a failure it
+  retries with backoff (5 s, doubled each time, at most 60 s) until a refresh
+  succeeds. A stream that holds its own token must also be updated in
+  `onToken`.
+- `refreshNow()` gets a new token at once, for example after the ledger rejects
+  the current token. Calls during a refresh join that refresh.
+- `status()` gives the last refresh, the next refresh, the token expiry, the
+  last error and the number of failures, for a health page.
+- `stop()` stops the refresh.
+- `ClientCredentialsTokenSource` finds the token endpoint through the issuer's
+  `.well-known/openid-configuration`. It refuses http unless
+  `allowInsecureHttp` is set; set it only for a local issuer.
+- Any other `TokenSource` (an object with `mint()`) works with
+  `TokenRefresher` too.
+
 ## Errors
 
 A non-OK HTTP response throws a `LedgerApiError` carrying the status and the
@@ -157,6 +207,16 @@ try {
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
+
+### Migrating to 0.0.45
+
+Adds the entry point `@c7-digital/ledger/service-account` (see
+[Service-account tokens](#service-account-tokens)): `TokenRefresher`,
+`ClientCredentialsTokenSource`, `retryDelayMs`, and the types `TokenSource`,
+`MintedToken`, `RefreshFailure`, `TokenRefresherStatus`,
+`TokenRefresherOptions` and `ClientCredentialsOptions`. `openid-client` is a
+new optional peer dependency, needed only for this entry point. Additive;
+nothing removed.
 
 ### Migrating to 0.0.43
 
