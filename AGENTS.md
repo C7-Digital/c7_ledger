@@ -70,6 +70,10 @@ A consumer imports these and keeps only its own domain **policy**: retry budgets
 - **Type-driven** — Prefer tagged sums (`LedgerErrorBody`) over optional flags. Export new public API from `ledger/src/index.ts` and add names to `api-surface.test.ts`.
 - **Behavior-driven** — Green `tsc` is not done. Add unit tests beside the module (`*.test.ts`); for ledger, extend `api-surface.test.ts` when adding exports.
 - **Structural over instanceof** — Error helpers use shape probes so duplicated package copies in pnpm trees still work.
+- **Test for callers we do not own** — A public API gets inputs from callers outside C7. Our apps use only one well-behaved path, so their tests and E2E suites do not prove the API. A new or changed public API gets these tests:
+  - **Conformance table** — when it talks to an external service or follows a standard. One `it.each` row for each behavior that the standard allows or a real server shows, with the expected result (a value or a specific error). Example: the issuer table in `ledger/src/clientCredentials.test.ts`.
+  - **Property test** (fast-check) — when it keeps state or uses timers. Generate the caller's inputs (sync throws, rejections, async callbacks, zero, negative and very large values) and the caller's actions, then check invariants after each action. Include "no unhandled rejection". Example: `ledger/src/tokenRefresher.property.test.ts`.
+  - **Compile-time test** — for each callback, option and interface that a caller implements. Show what must compile and, with `@ts-expect-error`, what must not. Example: `ledger/src/serviceAccount.types.test.ts`.
 
 ## Boundaries
 
@@ -101,5 +105,7 @@ Canonical skills: **`.claude/skills/`**. Cursor: `.cursor/skills/` (symlink). Se
 | `ledger-release` | Version bump, publish to npm, consumer pin update |
 
 ## Copilot / review hygiene
+
+Before you open a PR that adds or changes a public API, do an adversarial pass: list what a caller outside C7 can pass in (sync throw, async callback, zero, negative, very large, a server that a standard allows but our apps do not use), and add each item to the tests above. A Copilot finding on a public API means that one of these tests is missing: add the test with the fix.
 
 Review the **error/transport slice** holistically — not just the diff hunk. If a consumer PR duplicates ledger error regexes, the fix belongs in c7_ledger first, then a version bump in the consumer.

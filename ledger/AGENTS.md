@@ -51,10 +51,14 @@ pnpm test                                    # all ledger tests
 pnpm test -- cantonError                     # Canton error vocabulary
 pnpm test -- error                           # transport retry signals
 pnpm test -- api-surface                     # export contract
+pnpm test -- clientCredentials               # issuer conformance table
+pnpm test -- property                        # fast-check invariants
 pnpm typecheck                               # from the repo root; vitest does not typecheck
 ```
 
 When adding a public export, update **both** `src/index.ts` and the `it.each([...])` list in `api-surface.test.ts`.
+
+A failing property test prints a `Counterexample` (the smallest scenario that breaks an invariant) and a `seed`. To run that case again, pass the seed to `fc.assert` (`{ seed, path }`) while you fix it. Do not commit the seed.
 
 ## Release
 

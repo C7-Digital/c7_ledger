@@ -59,8 +59,8 @@
   },
   "peerDependencies": {
     "@daml/types": ">=3.4.0 <4.0.0",
-    "yaml": "^2.8.1",
-    "openid-client": "^6.5.0"
+    "openid-client": "^6.5.0",
+    "yaml": "^2.8.1"
   },
   "peerDependenciesMeta": {
     "yaml": {
@@ -80,6 +80,7 @@
     "@types/node": "^18.15.11",
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "fast-check": "4.10.2",
     "openapi-typescript": "^7.4.2",
     "openid-client": "6.8.8",
     "tsc-alias": "^1.8.16",
