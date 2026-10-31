@@ -12,16 +12,25 @@ type TokenAnswer =
 interface FakeIssuer {
   discoveries: () => number;
   tokenRequests: () => URLSearchParams[];
+  authorizations: () => Array<string | null>;
 }
 
-/** An issuer that serves discovery and answers token requests in order. */
+/** The client authentication methods that Keycloak lists. */
+const KEYCLOAK_AUTH_METHODS = ["client_secret_basic", "client_secret_post"];
+
+/**
+ * An issuer that serves discovery and answers token requests in order.
+ * `authMethods` null leaves the methods out of the discovery document.
+ */
 function fakeIssuer(
   issuer: string,
   answers: TokenAnswer[],
   discoveryStatuses: number[] = [],
+  authMethods: string[] | null = KEYCLOAK_AUTH_METHODS,
 ): FakeIssuer {
   let discoveries = 0;
   const tokenRequests: URLSearchParams[] = [];
+  const authorizations: Array<string | null> = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -33,10 +42,14 @@ function fakeIssuer(
         return Response.json({
           issuer,
           token_endpoint: `${issuer}/protocol/openid-connect/token`,
+          ...(authMethods === null
+            ? {}
+            : { token_endpoint_auth_methods_supported: authMethods }),
         });
       }
       if (url === `${issuer}/protocol/openid-connect/token`) {
         tokenRequests.push(new URLSearchParams(String(init?.body)));
+        authorizations.push(new Headers(init?.headers).get("authorization"));
         const answer = answers[tokenRequests.length - 1] ?? { kind: "token" };
         if (answer.kind === "status") {
           return Response.json(
@@ -55,7 +68,11 @@ function fakeIssuer(
       return new Response("not found", { status: 404 });
     }),
   );
-  return { discoveries: () => discoveries, tokenRequests: () => tokenRequests };
+  return {
+    discoveries: () => discoveries,
+    tokenRequests: () => tokenRequests,
+    authorizations: () => authorizations,
+  };
 }
 
 function source(
@@ -121,6 +138,37 @@ describe("ClientCredentialsTokenSource", () => {
     const issuer = fakeIssuer(ISSUER, [{ kind: "token", expiresIn: 300 }]);
     await source().mint();
     expect(issuer.tokenRequests()[0]?.has("audience")).toBe(false);
+  });
+
+  it("sends the secret in the body when the issuer supports it", async () => {
+    const issuer = fakeIssuer(ISSUER, [{ kind: "token", expiresIn: 300 }]);
+    await source().mint();
+    expect(issuer.tokenRequests()[0]?.get("client_secret")).toBe("test-secret");
+    expect(issuer.authorizations()[0]).toBeNull();
+  });
+
+  for (const methods of [["client_secret_basic"], null]) {
+    it(`sends the secret in the Authorization header when the issuer lists ${methods === null ? "no methods" : "only client_secret_basic"}`, async () => {
+      const issuer = fakeIssuer(
+        ISSUER,
+        [{ kind: "token", expiresIn: 300 }],
+        [],
+        methods,
+      );
+      await source().mint();
+      expect(issuer.tokenRequests()[0]?.has("client_secret")).toBe(false);
+      // RFC 6749 form-encodes the id and the secret before Basic encoding.
+      expect(issuer.authorizations()[0]).toBe(
+        `Basic ${btoa("svc:test%2Dsecret")}`,
+      );
+    });
+  }
+
+  it("refuses an issuer that supports no client-secret method", async () => {
+    fakeIssuer(ISSUER, [], [], ["private_key_jwt"]);
+    await expect(source().mint()).rejects.toThrow(
+      "supports none of client_secret_post, client_secret_basic (it supports: private_key_jwt)",
+    );
   });
 
   it("rejects a token response without expires_in", async () => {

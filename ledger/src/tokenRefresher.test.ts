@@ -171,6 +171,78 @@ describe("TokenRefresher", () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  it("retries after a source that throws synchronously", async () => {
+    let calls = 0;
+    const { tokens, failures, refresher } = make({
+      mint: () => {
+        calls += 1;
+        if (calls === 2) throw new Error("sync failure");
+        return Promise.resolve({
+          token: `token-${calls}`,
+          expiresAt: new Date(Date.now() + LIFETIME_MS),
+        });
+      },
+    });
+    await refresher.start();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    expect(failures.map((f) => f.failures)).toEqual([1]);
+    expect(refresher.status().lastError).toBe("sync failure");
+
+    await vi.advanceTimersByTimeAsync(retryDelayMs(1));
+    expect(tokens).toEqual(["token-1", "token-3"]);
+  });
+
+  it("logs a rejected async onToken and onFailure, and keeps the schedule", async () => {
+    const source = scriptedSource(["ok", "fail"]);
+    const seen: string[] = [];
+    refresher = new TokenRefresher({
+      source,
+      onToken: async (m) => {
+        seen.push(m.token);
+        throw new Error("async onToken failed");
+      },
+      onFailure: async () => {
+        seen.push("failure");
+        throw new Error("async onFailure failed");
+      },
+    });
+    await refresher.start();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS + retryDelayMs(1));
+    expect(seen).toEqual(["token-1", "failure", "token-3"]);
+    expect(refresher.status()).toMatchObject({ failures: 0, lastError: null });
+  });
+
+  it("refuses a first token that expires too soon to refresh", async () => {
+    const { tokens, refresher } = make({
+      mint: async () => ({
+        token: "short",
+        expiresAt: new Date(Date.now() + 500),
+      }),
+    });
+    await expect(refresher.start()).rejects.toThrow("too soon to refresh");
+    expect(tokens).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("retries after a refreshed token that expires too soon", async () => {
+    let calls = 0;
+    const { tokens, failures, refresher } = make({
+      mint: async () => {
+        calls += 1;
+        return {
+          token: `token-${calls}`,
+          expiresAt: new Date(Date.now() + (calls === 2 ? 500 : LIFETIME_MS)),
+        };
+      },
+    });
+    await refresher.start();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    expect(failures).toHaveLength(1);
+    expect(refresher.status().lastError).toMatch(/too soon to refresh/);
+    await vi.advanceTimersByTimeAsync(retryDelayMs(1));
+    expect(tokens).toEqual(["token-1", "token-3"]);
+  });
+
   it("does not let a failing onToken stop the schedule", async () => {
     refresher = new TokenRefresher({
       source: scriptedSource([]),

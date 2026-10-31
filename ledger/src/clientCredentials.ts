@@ -3,10 +3,13 @@
  * client-credentials grant, from any OpenID Connect issuer.
  */
 import {
+  ClientSecretBasic,
+  ClientSecretPost,
+  Configuration,
   allowInsecureRequests,
   clientCredentialsGrant,
   discovery,
-  type Configuration,
+  type ClientAuth,
 } from "openid-client";
 
 import type { MintedToken, TokenSource } from "./tokenRefresher";
@@ -54,21 +57,34 @@ export class ClientCredentialsTokenSource implements TokenSource {
 
   /** Discovers the issuer once. A failed discovery runs again on the next mint. */
   private discover(): Promise<Configuration> {
-    const { issuer, clientId, clientSecret, allowInsecureHttp } = this.opts;
-    this.configuration ??= discovery(
-      issuer,
-      clientId,
-      clientSecret,
-      undefined,
-      {
-        execute: allowInsecureHttp ? [allowInsecureRequests] : [],
-        timeout: this.opts.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
-      },
-    ).catch((e: unknown) => {
+    this.configuration ??= this.discoverOnce().catch((e: unknown) => {
       this.configuration = null;
       throw e;
     });
     return this.configuration;
+  }
+
+  /**
+   * Reads the issuer metadata, then makes a configuration that sends the
+   * client secret by a method that the token endpoint supports.
+   */
+  private async discoverOnce(): Promise<Configuration> {
+    const { issuer, clientId, clientSecret, allowInsecureHttp } = this.opts;
+    const timeout = this.opts.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+    const discovered = await discovery(issuer, clientId, clientSecret, undefined, {
+      execute: allowInsecureHttp ? [allowInsecureRequests] : [],
+      timeout,
+    });
+    const server = discovered.serverMetadata();
+    const config = new Configuration(
+      server,
+      clientId,
+      clientSecret,
+      secretAuthentication(server.token_endpoint_auth_methods_supported, clientSecret),
+    );
+    config.timeout = timeout;
+    if (allowInsecureHttp) allowInsecureRequests(config);
+    return config;
   }
 
   private parameters(): Record<string, string> {
@@ -78,6 +94,23 @@ export class ClientCredentialsTokenSource implements TokenSource {
       ...(scope ? { scope } : {}),
     };
   }
+}
+
+/**
+ * Sends the secret in the request body when the issuer supports it, else in
+ * the Authorization header. An issuer that lists no methods supports the
+ * header (RFC 8414).
+ */
+function secretAuthentication(
+  supported: string[] | undefined,
+  clientSecret: string,
+): ClientAuth {
+  if (supported === undefined) return ClientSecretBasic(clientSecret);
+  if (supported.includes("client_secret_post")) return ClientSecretPost(clientSecret);
+  if (supported.includes("client_secret_basic")) return ClientSecretBasic(clientSecret);
+  throw new Error(
+    `The token endpoint supports none of client_secret_post, client_secret_basic (it supports: ${supported.join(", ")})`,
+  );
 }
 
 /**

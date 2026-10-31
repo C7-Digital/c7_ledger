@@ -35,7 +35,11 @@ export interface TokenRefresherStatus {
 
 export interface TokenRefresherOptions {
   source: TokenSource;
-  /** Receives each new token. An error from it is logged; the schedule does not change. */
+  /**
+   * Receives each new token. It can be async. An error or a rejected
+   * promise from it is logged; the schedule does not change. The same
+   * applies to `onFailure`.
+   */
   onToken: (minted: MintedToken) => void;
   onFailure?: (failure: RefreshFailure) => void;
   /** The part of the token lifetime after which to refresh. Default 0.8. */
@@ -49,6 +53,7 @@ export interface TokenRefresherOptions {
 export const DEFAULT_REFRESH_AT_FRACTION = 0.8;
 export const DEFAULT_RETRY_BASE_MS = 5_000;
 export const DEFAULT_RETRY_MAX_MS = 60_000;
+// A token whose refresh delay is shorter expires too soon to use.
 const MIN_REFRESH_MS = 1_000;
 // setTimeout runs a longer delay at once.
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -88,7 +93,7 @@ export class TokenRefresher {
     this.state = "starting";
     let minted: MintedToken;
     try {
-      minted = await this.opts.source.mint();
+      minted = await this.mint();
     } catch (e) {
       if (this.state === "starting") this.state = "new";
       throw e;
@@ -131,8 +136,7 @@ export class TokenRefresher {
   }
 
   private refresh(): Promise<MintedToken> {
-    this.inFlight ??= this.opts.source
-      .mint()
+    this.inFlight ??= this.mint()
       .then(
         (minted) => {
           if (this.state === "running") this.accept(minted);
@@ -149,19 +153,37 @@ export class TokenRefresher {
     return this.inFlight;
   }
 
+  /**
+   * Gets a token from the source. A synchronous throw from the source and a
+   * token that expires too soon to refresh both give a rejected promise.
+   */
+  private mint(): Promise<MintedToken> {
+    return new Promise<MintedToken>((resolve) => {
+      resolve(this.opts.source.mint());
+    }).then((minted) => {
+      const delayMs = this.refreshDelayMs(minted);
+      if (delayMs < MIN_REFRESH_MS) {
+        throw new Error(
+          `The token expires at ${minted.expiresAt.toISOString()}, too soon to refresh it before it expires`,
+        );
+      }
+      return minted;
+    });
+  }
+
+  private refreshDelayMs(minted: MintedToken): number {
+    const lifetimeMs = minted.expiresAt.getTime() - Date.now();
+    const fraction = this.opts.refreshAtFraction ?? DEFAULT_REFRESH_AT_FRACTION;
+    return lifetimeMs * fraction;
+  }
+
   private accept(minted: MintedToken): void {
     this.lastRefreshAt = new Date();
     this.tokenExpiresAt = minted.expiresAt;
     this.lastError = null;
     this.failures = 0;
-    const lifetimeMs = minted.expiresAt.getTime() - Date.now();
-    const fraction = this.opts.refreshAtFraction ?? DEFAULT_REFRESH_AT_FRACTION;
-    this.arm(Math.max(MIN_REFRESH_MS, lifetimeMs * fraction));
-    try {
-      this.opts.onToken(minted);
-    } catch (e) {
-      logger.error("TokenRefresher: onToken failed", e);
-    }
+    this.arm(Math.max(MIN_REFRESH_MS, this.refreshDelayMs(minted)));
+    notify("onToken", () => this.opts.onToken(minted));
   }
 
   private reject(error: unknown): void {
@@ -173,11 +195,10 @@ export class TokenRefresher {
       this.opts.retryMaxMs,
     );
     this.arm(retryInMs);
-    try {
-      this.opts.onFailure?.({ error, failures: this.failures, retryInMs });
-    } catch (e) {
-      logger.error("TokenRefresher: onFailure failed", e);
-    }
+    const failures = this.failures;
+    notify("onFailure", () =>
+      this.opts.onFailure?.({ error, failures, retryInMs }),
+    );
   }
 
   private arm(delayMs: number): void {
@@ -196,5 +217,17 @@ export class TokenRefresher {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.nextRefreshAt = null;
+  }
+}
+
+/** Calls a hook, and logs a throw or a rejected promise from it. */
+function notify(name: string, hook: () => unknown): void {
+  const log = (e: unknown): void => {
+    logger.error(`TokenRefresher: ${name} failed`, e);
+  };
+  try {
+    Promise.resolve(hook()).catch(log);
+  } catch (e) {
+    log(e);
   }
 }

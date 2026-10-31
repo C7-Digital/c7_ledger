@@ -119,14 +119,19 @@ ledger = new Ledger({ token, httpBaseUrl: "https://participant.example.com" });
 - `TokenRefresher` refreshes at 80 % of the token lifetime. After a failure it
   retries with backoff (5 s, doubled each time, at most 60 s) until a refresh
   succeeds. A stream that holds its own token must also be updated in
-  `onToken`.
+  `onToken`. A token that expires too soon to refresh before it expires
+  counts as a failure.
+- `onToken` and `onFailure` can be async. A throw or a rejected promise from
+  them is logged, and the schedule does not change.
 - `refreshNow()` gets a new token at once, for example after the ledger rejects
   the current token. Calls during a refresh join that refresh.
 - `status()` gives the last refresh, the next refresh, the token expiry, the
   last error and the number of failures, for a health page.
 - `stop()` stops the refresh.
 - `ClientCredentialsTokenSource` finds the token endpoint through the issuer's
-  `.well-known/openid-configuration`. It refuses http unless
+  `.well-known/openid-configuration`. It sends the client secret in the
+  request body when the issuer supports `client_secret_post`, else in the
+  Authorization header (`client_secret_basic`). It refuses http unless
   `allowInsecureHttp` is set; set it only for a local issuer.
 - Any other `TokenSource` (an object with `mint()`) works with
   `TokenRefresher` too.
