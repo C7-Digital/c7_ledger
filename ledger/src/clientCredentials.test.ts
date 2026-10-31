@@ -135,6 +135,20 @@ describe("ClientCredentialsTokenSource", () => {
     );
   });
 
+  it("names the network cause when the issuer cannot be reached", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw Object.assign(new TypeError("fetch failed"), {
+          cause: { code: "ECONNREFUSED" },
+        });
+      }),
+    );
+    await expect(source().mint()).rejects.toThrow(
+      `OIDC discovery to ${ISSUER} failed: fetch failed (ECONNREFUSED)`,
+    );
+  });
+
   it("refuses an http issuer unless insecure http is allowed", async () => {
     const http = "http://localhost:8080/realms/test";
     fakeIssuer(http, [{ kind: "token", expiresIn: 300 }]);

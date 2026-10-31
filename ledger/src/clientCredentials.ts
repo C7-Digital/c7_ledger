@@ -95,12 +95,12 @@ function issuerError(step: string, issuer: URL, e: unknown): Error {
     typeof err.error === "string" ? err.error : null,
     typeof err.error_description === "string" ? err.error_description : null,
   ].filter((p): p is string => p !== null);
+  // A network failure has no status; its cause names it (ECONNREFUSED).
+  const code = fields(err.cause).code;
   const detail =
     parts.length > 0
       ? parts.join(" ")
-      : e instanceof Error
-        ? e.message
-        : String(e);
+      : `${e instanceof Error ? e.message : String(e)}${typeof code === "string" ? ` (${code})` : ""}`;
   return Object.assign(
     new Error(`OIDC ${step} to ${issuer.href} failed: ${detail}`),
     { cause: e },
