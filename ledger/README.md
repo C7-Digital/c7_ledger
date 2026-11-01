@@ -132,7 +132,9 @@ ledger = new Ledger({ token, httpBaseUrl: "https://participant.example.com" });
   `.well-known/openid-configuration`. It sends the client secret in the
   request body when the issuer supports `client_secret_post`, else in the
   Authorization header (`client_secret_basic`). It refuses http unless
-  `allowInsecureHttp` is set; set it only for a local issuer.
+  `allowInsecureHttp` is set; set it only for a local issuer. With
+  `allowInsecureHttp`, an http token endpoint must have the same origin
+  (scheme, host and port) as the issuer, because the client secret goes to it.
 - Any other `TokenSource` (an object with `mint()`) works with
   `TokenRefresher` too.
 

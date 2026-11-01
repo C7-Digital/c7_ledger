@@ -22,7 +22,11 @@ export interface ClientCredentialsOptions {
   /** Sent as the `audience` parameter. Some issuers (Auth0) need it. */
   audience?: string;
   scope?: string;
-  /** Lets the requests use http. Use it only for a local issuer. */
+  /**
+   * Lets the requests use http. Use it only for a local issuer. An http token
+   * endpoint must then have the same origin as the issuer, because the client
+   * secret goes to it.
+   */
   allowInsecureHttp?: boolean;
   /** The timeout of each request to the issuer. Default 10 s. */
   timeoutSeconds?: number;
@@ -76,6 +80,7 @@ export class ClientCredentialsTokenSource implements TokenSource {
       timeout,
     });
     const server = discovered.serverMetadata();
+    if (allowInsecureHttp) requireIssuerOriginForHttp(server.token_endpoint, issuer);
     const config = new Configuration(
       server,
       clientId,
@@ -93,6 +98,23 @@ export class ClientCredentialsTokenSource implements TokenSource {
       ...(audience ? { audience } : {}),
       ...(scope ? { scope } : {}),
     };
+  }
+}
+
+/**
+ * Refuses an http token endpoint on an origin other than the issuer's. The
+ * discovery document names the token endpoint, and the client secret goes to
+ * it, so an issuer that is allowed http must not send the secret over http to
+ * another host or port. An https token endpoint on any host is accepted.
+ */
+function requireIssuerOriginForHttp(tokenEndpoint: string | undefined, issuer: URL): void {
+  if (tokenEndpoint === undefined) return;
+  const endpoint = URL.parse(tokenEndpoint);
+  if (endpoint === null || endpoint.protocol !== "http:") return;
+  if (endpoint.origin !== issuer.origin) {
+    throw new Error(
+      `The token endpoint ${endpoint.origin} uses http and is not at the issuer's origin ${issuer.origin}`,
+    );
   }
 }
 

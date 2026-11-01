@@ -47,12 +47,14 @@ interface FakeIssuer {
 
 /**
  * An issuer that gives the discovery answers and the token answers in order.
- * After the last answer of a kind, it gives that last answer again.
+ * After the last answer of a kind, it gives that last answer again. The token
+ * answers come from `tokenUrl`, which can be on another host.
  */
 function fakeIssuer(
   issuer: string,
   discoveries: Answer[],
   tokens: Answer[],
+  tokenUrl = `${issuer}${TOKEN_PATH}`,
 ): FakeIssuer {
   let discoveryCount = 0;
   const tokenRequests: Array<{ body: URLSearchParams; authorization: string | null }> = [];
@@ -81,7 +83,7 @@ function fakeIssuer(
         discoveryCount += 1;
         return respond(pick(discoveries, discoveryCount - 1));
       }
-      if (url === `${issuer}${TOKEN_PATH}`) {
+      if (url === tokenUrl) {
         tokenRequests.push({
           body: new URLSearchParams(String(init?.body)),
           authorization: new Headers(init?.headers).get("authorization"),
@@ -123,6 +125,8 @@ interface CaseSetup {
   name: string;
   issuer?: string;
   allowInsecureHttp?: boolean;
+  /** The token endpoint that the discovery answer names. */
+  tokenEndpoint?: string;
   discovery?: Answer;
   token?: Answer;
 }
@@ -140,6 +144,24 @@ interface FailCase extends CaseSetup {
 
 const OPENID = (s: string): string => `OIDC discovery to ${ISSUER} failed: ${s}`;
 const TOKEN = (s: string): string => `OIDC token request to ${ISSUER} failed: ${s}`;
+
+/**
+ * Token endpoints that an http issuer must not send the secret to: http, on
+ * an origin other than the issuer's.
+ */
+const HTTP_ELSEWHERE: FailCase[] = (
+  [
+    ["another host", "http://other.example/realms/test/token"],
+    ["another port on the same host", "http://localhost:9090/realms/test/token"],
+    ["another name for the same machine", "http://127.0.0.1:8080/realms/test/token"],
+  ] satisfies Array<[string, string]>
+).map(([where, tokenEndpoint]) => ({
+  name: `http issuer with allowInsecureHttp, http token endpoint on ${where}`,
+  issuer: HTTP_ISSUER,
+  allowInsecureHttp: true,
+  tokenEndpoint,
+  fails: `OIDC discovery to ${HTTP_ISSUER} failed: The token endpoint ${new URL(tokenEndpoint).origin} uses http and is not at the issuer's origin http://localhost:8080`,
+}));
 
 /** Issuer behaviors that the OAuth 2.0 and OpenID Connect standards allow, or that real issuers show. */
 const MINT_CASES: MintCase[] = [
@@ -182,6 +204,14 @@ const MINT_CASES: MintCase[] = [
     name: "http issuer with allowInsecureHttp",
     issuer: HTTP_ISSUER,
     allowInsecureHttp: true,
+    secretIn: "body",
+    lifetimeSeconds: 300,
+  },
+  {
+    name: "http issuer with allowInsecureHttp, https token endpoint on another host",
+    issuer: HTTP_ISSUER,
+    allowInsecureHttp: true,
+    tokenEndpoint: "https://tokens.example/realms/test/token",
     secretIn: "body",
     lifetimeSeconds: 300,
   },
@@ -259,12 +289,24 @@ const FAIL_CASES: FailCase[] = [
   },
   // Transport.
   { name: "http issuer without allowInsecureHttp", issuer: HTTP_ISSUER, fails: /HTTPS/ },
+  {
+    name: "https issuer, http token endpoint, without allowInsecureHttp",
+    tokenEndpoint: "http://issuer.example/realms/test/token",
+    fails: /HTTPS/,
+  },
+  ...HTTP_ELSEWHERE,
 ];
 
 /** Starts a mint from a source that talks to the fake issuer of `c`. */
 function mintFor(c: CaseSetup): { fake: FakeIssuer; minting: Promise<MintedToken> } {
   const issuer = c.issuer ?? ISSUER;
-  const fake = fakeIssuer(issuer, [c.discovery ?? discoveryAnswer(issuer)], [c.token ?? tokenAnswer()]);
+  const tokenUrl = c.tokenEndpoint ?? `${issuer}${TOKEN_PATH}`;
+  const fake = fakeIssuer(
+    issuer,
+    [c.discovery ?? discoveryAnswer(issuer, { token_endpoint: tokenUrl })],
+    [c.token ?? tokenAnswer()],
+    tokenUrl,
+  );
   const minting = source({
     issuer: new URL(issuer),
     ...(c.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
@@ -293,6 +335,12 @@ describe("ClientCredentialsTokenSource issuer conformance", () => {
 
   it.each(FAIL_CASES)("fails: $name", async (c) => {
     await expect(mintFor(c).minting).rejects.toThrow(c.fails);
+  });
+
+  it.each(HTTP_ELSEWHERE)("sends no token request: $name", async (c) => {
+    const { fake, minting } = mintFor(c);
+    await expect(minting).rejects.toThrow(c.fails);
+    expect(fake.tokenRequests()).toEqual([]);
   });
 });
 
