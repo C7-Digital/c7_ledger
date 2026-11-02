@@ -54,6 +54,10 @@ type GetDsoPartyIdResponse = {
   dso_party_id: Party;
 };
 
+type GetMigrationIdResponse = {
+  migration_id: number;
+};
+
 type ListDsoSequencersOperation = operations["listDsoSequencers"];
 type ListDsoSequencersResponse =
   ListDsoSequencersOperation["responses"]["200"]["content"]["application/json"];
@@ -523,6 +527,16 @@ export class ScanClient {
 
   async getDsoPartyId(): Promise<GetDsoPartyIdResponse> {
     return this.request<GetDsoPartyIdResponse>("/v0/dso-party-id", "GET");
+  }
+
+  /**
+   * The migration id of the synchronizer that this Scan serves now. Use it
+   * for each request that takes a `migration_id`. Do not get it from
+   * {@link getDsoSequencers}: a sequencer of a logical synchronizer upgrade
+   * has a `synchronizerSerial`, and its `migrationId` is -1.
+   */
+  async getMigrationId(): Promise<GetMigrationIdResponse> {
+    return this.request<GetMigrationIdResponse>("/v0/migrations/last", "GET");
   }
 
   async getDsoSequencers(): Promise<ListDsoSequencersResponse> {
