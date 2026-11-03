@@ -235,6 +235,7 @@ describe("Ledger method contract", () => {
     "getToken",
     "setToken",
     "streamCompletions",
+    "streamCommandCompletions",
     "streamActiveContracts",
     "streamUpdates",
   ])("WebSocketClient.prototype has method %s", (method) => {

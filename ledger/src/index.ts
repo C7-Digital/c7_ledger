@@ -24,6 +24,7 @@ export {
   type StreamConfig,
   type CompletionStreamRequest,
   type CompletionStreamMessage,
+  type CommandCompletionsStreamRequest,
   type ActiveContractsStreamRequest,
   type ActiveContractsStreamMessage,
   type UpdatesStreamRequest,

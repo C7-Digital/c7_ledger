@@ -15,8 +15,7 @@ import type {
   JsCantonError,
 } from "./types";
 
-const TEST_TOKEN =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+const TEST_TOKEN = "test-token";
 const BASE_URL = "http://localhost:7575";
 
 interface Captured {

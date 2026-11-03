@@ -4,8 +4,8 @@ A standalone, repeatable build system for generating TypeScript types from OpenA
 
 ## Features
 
-- **SDK Version Targeting**: Generate types for specific Daml SDK versions
-- **Auto-Discovery**: Automatically find the latest specification files
+- **One target spec**: `specs/` holds the JSON Ledger API spec pair of one Canton line (see the [supported versions table](../README.md#supported-versions))
+- **Auto-Discovery**: Finds the spec pair in `specs/` when no version is given
 - **In-Place Branding**: Apply value.proto constraints to generated types
 - **Parallel Processing**: Optimize build performance with concurrent operations
 - **Schema Embedding**: Include YAML schemas for runtime validation
@@ -16,15 +16,19 @@ A standalone, repeatable build system for generating TypeScript types from OpenA
 ### As NPM Script
 
 ```bash
-pnpm build                           # Use configured SDK version
-pnpm build -- --sdk-version=3.4.0   # Override SDK version
+pnpm build    # builds from the spec pair that ledger/package.json names
 ```
+
+`ledger/package.json` passes `--sdk-version=3.6.5-snapshot.20261027`. The flag
+selects `specs/openapi_<version>.yaml` and `specs/asyncapi_<version>.yaml`, so it
+must name the pair that `specs/` holds. To move to a new Canton line, see
+[README.md](README.md#openapi-specification).
 
 ### As Standalone Binary
 
 ```bash
-pnpm exec ledger-build                        # Auto-discover latest specs
-pnpm exec ledger-build --sdk-version=3.4.0    # Target specific SDK version
+pnpm exec ledger-build                                          # Auto-discover the spec pair
+pnpm exec ledger-build --sdk-version=3.6.5-snapshot.20261027    # Name the spec pair
 ```
 
 ### Programmatic Usage
@@ -97,7 +101,7 @@ To use this build system in other projects:
    ```json
    {
      "scripts": {
-       "generate-types": "pnpm exec ledger-build --sdk-version=3.4.0"
+       "generate-types": "pnpm exec ledger-build --sdk-version=3.6.5-snapshot.20261027"
      }
    }
    ```
@@ -106,18 +110,14 @@ To use this build system in other projects:
 
    ```
    specs/
-   ├── openapi_3.4.0.yaml
-   └── asyncapi_3.4.0.yaml
+   ├── openapi_3.6.5-snapshot.20261027.yaml
+   └── asyncapi_3.6.5-snapshot.20261027.yaml
    ```
 
 4. **Run the build**:
    ```bash
    pnpm run generate-types
    ```
-
-## Environment Variables
-
-- `SDK_VERSION`: Default SDK version (overridden by --sdk-version)
 
 ## Exit Codes
 
