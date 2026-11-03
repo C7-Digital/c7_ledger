@@ -4,7 +4,7 @@
  * Build script for @c7-digital/scan
  *
  * Steps:
- * 1. Parse --splice-version (default: 0.5.10)
+ * 1. Parse --splice-version (default: 0.9.4)
  * 2. If bundled spec doesn't exist, run download-spec.ts
  * 3. Run openapi-typescript to generate types
  * 4. Generate sdk-version.ts constant
@@ -29,7 +29,7 @@ function getSpliceVersion(): string {
   if (versionArg) {
     return versionArg.split("=")[1]!;
   }
-  return "0.6.1";
+  return "0.9.4";
 }
 
 async function discoverSpecFile(version?: string): Promise<{ specPath: string; version: string }> {

@@ -25,12 +25,14 @@ export interface StreamConfig {
 type ChannelEndpoint = keyof channels;
 
 type CompletionChannel = channels["/v2/commands/completions"];
+type CommandCompletionsChannel = channels["/v2/commands/command-completions"];
 type ActiveContractsChannel = channels["/v2/state/active-contracts"];
-type UpdatesChannel = channels["/v2/updates/flats"];
+type UpdatesChannel = channels["/v2/updates"];
 
 // Re-export AsyncAPI types for convenience
 export type CompletionStreamRequest = CompletionChannel["publish"]["message"];
 export type CompletionStreamMessage = CompletionChannel["subscribe"]["message"];
+export type CommandCompletionsStreamRequest = CommandCompletionsChannel["publish"]["message"];
 export type ActiveContractsStreamRequest = ActiveContractsChannel["publish"]["message"];
 export type ActiveContractsStreamMessage = ActiveContractsChannel["subscribe"]["message"];
 export type UpdatesStreamRequest = UpdatesChannel["publish"]["message"];
@@ -54,6 +56,8 @@ export type UpdatesResponse = Response<components["schemas"]["JsGetUpdatesRespon
 // Constant mapping from endpoints to their JSON Schema validation paths
 const SCHEMA_MAP: Record<ChannelEndpoint, string> = {
   "/v2/commands/completions": "#/components/schemas/Either_JsCantonError_CompletionStreamResponse",
+  "/v2/commands/command-completions":
+    "#/components/schemas/Either_JsCantonError_CompletionStreamResponse",
   "/v2/state/active-contracts":
     "#/components/schemas/Either_JsCantonError_JsGetActiveContractsResponse",
   "/v2/updates": "#/components/schemas/Either_JsCantonError_JsGetUpdatesResponse",
@@ -207,7 +211,11 @@ export class WebSocketClient {
   }
 
   /**
-   * Stream command completions in real-time
+   * Stream command completions in real-time.
+   *
+   * @deprecated Canton 3.6 deprecates `/v2/commands/completions`. Use
+   *   {@link streamCommandCompletions}, which reads
+   *   `/v2/commands/command-completions`.
    */
   streamCompletions(
     request: CompletionStreamRequest,
@@ -217,6 +225,30 @@ export class WebSocketClient {
   ): StopClient {
     return this.stream(
       "/v2/commands/completions",
+      request,
+      rawMessage =>
+        onMessage(
+          parseStreamResponse<components["schemas"]["CompletionStreamResponse"]>(rawMessage)
+        ),
+      onError,
+      onClose
+    );
+  }
+
+  /**
+   * Stream command completions from `/v2/commands/command-completions`.
+   * The messages are the same as {@link streamCompletions}. The request has
+   * optional `parties`: without them, a user with `CanReadAsAnyParty` reads
+   * the completions of every party.
+   */
+  streamCommandCompletions(
+    request: CommandCompletionsStreamRequest,
+    onMessage: (message: CompletionResponse) => void,
+    onError?: (error: Error) => void,
+    onClose?: (code: number, reason: string) => void
+  ): StopClient {
+    return this.stream(
+      "/v2/commands/command-completions",
       request,
       rawMessage =>
         onMessage(

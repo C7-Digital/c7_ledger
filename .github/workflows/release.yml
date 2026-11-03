@@ -48,7 +48,7 @@ jobs:
           echo "$HOME/.dpm/bin" >> $GITHUB_PATH
 
       - name: Install Daml SDK via dpm
-        run: $HOME/.dpm/bin/dpm install 3.4.11
+        run: $HOME/.dpm/bin/dpm install 3.5.2
 
       - run: pnpm install --frozen-lockfile
 

@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@c7-digital/ledger": "file:../ledger",
-    "@daml/types": "3.4.11",
+    "@daml/types": "3.5.2",
     "@types/node": "^18.15.11",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "vitest": "^4.0.18"

@@ -52,6 +52,8 @@ import {
   DisclosedContract,
   ExerciseCommand,
   Event,
+  GetPreferredPackagesRequest,
+  GetPreferredPackagesResponse,
   Interface,
   LedgerOffset,
   Stream,
@@ -2038,6 +2040,18 @@ export class Ledger {
     identityProviderId?: string,
   ) {
     return this.client.getConnectedSynchronizers(party, participantId, identityProviderId);
+  }
+
+  /**
+   * The preferred package for each package name in the request. See
+   * {@link TypedHttpClient.getPreferredPackages}.
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getPreferredPackages(
+    request: GetPreferredPackagesRequest,
+  ): Promise<GetPreferredPackagesResponse> {
+    return this.client.getPreferredPackages(request);
   }
 
   private initClient(): WebSocketClient {

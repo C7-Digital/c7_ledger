@@ -16,23 +16,12 @@ This package provides a TypeScript client for interacting with Canton's JSON Led
 
 The npm package has its own `0.0.x` version line, independent of the Canton spec it targets. Pre-1.0, every release is a patch bump; a breaking change also gets a `Migrating to 0.0.N` note below. The Canton runtime and JSON API spec this client is built against are versioned separately and surfaced as `SDK_VERSION` (see below), not as the package version.
 
-This package ships against two cooperating but independently-versioned things:
+This package ships against two independently versioned things:
 
-- **Daml SDK runtime** (`@daml/types`): pinned at `3.4.11` — the compiler/types version shipped with splice 0.6.x.
-- **JSON Ledger API spec** (selected by the build flag and surfaced as `SDK_VERSION`): defaults to `3.5.1-snapshot.20260423.18760.0` — the Canton 3.5.x runtime vendored inside splice 0.6.1, which is what DevNet/TestNet/MainNet actually serve.
+- **JSON Ledger API spec** (surfaced as `SDK_VERSION`): `3.6.5-snapshot.20261027`, from Canton's `release-line-3.6`. Splice 0.9.x runs Canton 3.6.x, and that is what DevNet, TestNet and MainNet serve. Only this spec is checked in (`specs/openapi_<version>.yaml` and `specs/asyncapi_<version>.yaml`).
+- **Daml SDK** (`@daml/types`): a peer dependency (`>=3.4.0 <4.0.0`), so the app chooses its copy. The tests and CI use 3.5.2, the SDK that Splice 0.9.x builds with.
 
-Two spec files are checked in to cover both runtimes you might point this client at:
-
-| File | Source | When to use |
-|---|---|---|
-| `specs/openapi_3.5.1-snapshot.20260423.18760.0.yaml` (default) | Canton 3.5.x via splice 0.6.1 | Talking to a splice 0.6.x participant (DevNet/TestNet/MainNet) |
-| `specs/openapi_3.4.11.yaml` | Canton 3.4.11 via `dpm sandbox` | Local dev against the dpm-bundled sandbox (Canton 3.4.x line) |
-
-To switch, override the build flag: `pnpm build -- --sdk-version=3.4.11`.
-
-> Why two? `dpm` bundles `canton-enterprise-<daml-sdk-version>.jar`, so Daml SDK 3.4.11 ⇒ Canton 3.4.11. Splice 0.6.x decouples this: it uses Daml SDK 3.4.11 for compilation but pins Canton 3.5.x as the runtime. Canton 3.5.x adds 5 paths (notably `streamContinuationToken` on ACS streaming) that Canton 3.4.x doesn't expose.
-
-**Version compatibility**: Use the package version that matches your Canton participant node version for best compatibility.
+The [supported versions table](../README.md#supported-versions) lists the Canton, Splice and Daml SDK versions of each release. A release targets one Canton line; it does not support older lines.
 
 ## Installation
 
@@ -375,10 +364,12 @@ pnpm lint
 
 The package uses the JSON Ledger API specification served by Canton, vendored as `specs/openapi_<canton-version>.yaml` and `specs/asyncapi_<canton-version>.yaml`. The version encodes the Canton runtime release.
 
-To update or add a spec:
+To move to a new Canton line:
 
-1. Get the spec from the canton runtime your target environment uses. Two paths:
-   - **From splice** (Canton 3.5.x line): at any splice 0.6.x tag, the canton specs live under `canton/community/ledger/ledger-json-api/src/test/resources/json-api-docs/{openapi,asyncapi}.yaml`. Copy them into `ledger/specs/` renamed to `{openapi,asyncapi}_<canton-snapshot-version>.yaml`.
-   - **From a live participant** (any Canton version): curl `http://<participant>:<json-api-port>/docs/openapi` and `/docs/asyncapi`. For local dev with `dpm sandbox`, that's `http://localhost:7575/docs/{openapi,asyncapi}`.
-2. Update the build script's `--sdk-version=<version>` flag (the flag name is historical — it actually selects the spec file).
-3. Run `pnpm build` to regenerate types.
+1. Get the spec of the Canton line that the network runs. Two paths:
+   - **From Canton** (both files): on the `release-line-<major.minor>` branch of the Canton repository (or the newest `<major.minor>-open-source-<date>` branch), the specs are `community/ledger/ledger-json-api/src/test/resources/json-api-docs/{openapi,asyncapi}.yaml`. Splice vendors only the OpenAPI file, under `canton/` of its release line. Use it to check that the paths and schemas agree.
+   - **From a live participant**: curl `http://<participant>:<json-api-port>/docs/openapi` and `/docs/asyncapi`.
+2. Replace the files in `ledger/specs/` with `{openapi,asyncapi}_<canton-version>.yaml`, and remove the previous pair.
+3. Change the build script's `--sdk-version=<version>` flag in `ledger/package.json` (the flag name is historical; it selects the spec file) and the expected `SDK_VERSION` in `src/api-surface.test.ts`.
+4. Add a row to the [supported versions table](../README.md#supported-versions).
+5. Run `pnpm build` to regenerate types.

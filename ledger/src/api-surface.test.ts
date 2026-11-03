@@ -210,6 +210,7 @@ describe("Ledger method contract", () => {
     "getLedgerEnd",
     "getParticipantId",
     "getTransactionPage",
+    "getPreferredPackages",
   ])("Ledger.prototype has method %s", (method) => {
     expect(typeof (ledger as any)[method]).toBe("function");
   });
@@ -225,6 +226,7 @@ describe("Ledger method contract", () => {
     "getLedgerEnd",
     "getParticipantId",
     "getUpdates",
+    "getPreferredPackages",
   ])("TypedHttpClient.prototype has method %s", (method) => {
     expect(typeof TypedHttpClient.prototype[method as keyof TypedHttpClient]).toBe("function");
   });
@@ -233,6 +235,7 @@ describe("Ledger method contract", () => {
     "getToken",
     "setToken",
     "streamCompletions",
+    "streamCommandCompletions",
     "streamActiveContracts",
     "streamUpdates",
   ])("WebSocketClient.prototype has method %s", (method) => {
@@ -278,13 +281,13 @@ describe("createUser request shape", () => {
 });
 
 describe("SDK version", () => {
-  it("SDK_VERSION equals 3.5.1-snapshot.20260423.18760.0", () => {
-    expect(LedgerPackage.SDK_VERSION).toBe("3.5.1-snapshot.20260423.18760.0");
+  it("SDK_VERSION equals 3.6.5-snapshot.20261027", () => {
+    expect(LedgerPackage.SDK_VERSION).toBe("3.6.5-snapshot.20261027");
   });
 
   it("SDK_VERSION matches semver-or-snapshot pattern", () => {
     expect(LedgerPackage.SDK_VERSION).toMatch(
-      /^\d+\.\d+\.\d+(-snapshot\.\d{8}\.\d+\.\d+)?$/
+      /^\d+\.\d+\.\d+(-snapshot\.\d{8}(\.\d+)*)?$/
     );
   });
 });

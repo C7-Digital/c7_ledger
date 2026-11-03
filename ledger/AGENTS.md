@@ -23,11 +23,10 @@ lib-lite/            # Lite build without embedded schemas (@c7-digital/ledger/l
 
 ## Build / specs
 
-Default build targets Canton **3.5.x** (splice 0.6.x participants). Local `dpm sandbox` uses **3.4.11**:
+The build targets one Canton line: **3.6.x** (Splice 0.9.x, what the networks run). `specs/` holds only that spec pair. Do not add specs for older lines; a new line replaces the pair (see [README.md](README.md#openapi-specification)).
 
 ```bash
-pnpm build                                              # default spec
-pnpm build -- --sdk-version=3.4.11                      # sandbox line
+pnpm build                                              # the one spec
 ```
 
 Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
