@@ -1,5 +1,6 @@
 /**
  * `getPreferredPackages` against the answers that a participant can give.
+ * `Ledger.getPreferredPackages` gives the same answers as `TypedHttpClient`.
  *
  * The client does not interpret the answer: it sends the request body as it is
  * and returns the response as it is. A reject arrives as a LedgerApiError that
@@ -7,6 +8,7 @@
  */
 import { TypedHttpClient } from "./client";
 import { LedgerApiError } from "./error";
+import { Ledger } from "./ledger";
 import type {
   GetPreferredPackagesRequest,
   GetPreferredPackagesResponse,
@@ -142,5 +144,30 @@ describe("getPreferredPackages answers", () => {
     expect((err as LedgerApiError).responseBody).toBe(
       "The requested resource could not be found.",
     );
+  });
+});
+
+describe("Ledger.getPreferredPackages", () => {
+  const ledger = () => new Ledger({ token: TEST_TOKEN, httpBaseUrl: BASE_URL });
+
+  it("POSTs the request and returns the response unchanged", async () => {
+    const response: GetPreferredPackagesResponse = {
+      packageReferences: [reference("lib", "2.0.0"), reference("model", "1.0.0")],
+      synchronizerId: "sync::1",
+    };
+    const { calls } = respond(200, JSON.stringify(response));
+    await expect(ledger().getPreferredPackages(request)).resolves.toEqual(response);
+    const call = onlyCall(calls);
+    expect(call.url).toBe(`${BASE_URL}/v2/interactive-submission/preferred-packages`);
+    expect(call.init.method).toBe("POST");
+    expect(JSON.parse(String(call.init.body))).toEqual(request);
+  });
+
+  it("rejects with the Canton code when no package is vetted", async () => {
+    const error = cantonError("NO_PREFERRED_PACKAGES_FOUND", 9);
+    respond(400, JSON.stringify(error));
+    const err = await ledger().getPreferredPackages(request).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LedgerApiError);
+    expect((err as LedgerApiError).cantonError?.code).toBe(error.code);
   });
 });
