@@ -44,7 +44,7 @@
     "ledger-build": "./scripts/build.ts"
   },
   "scripts": {
-    "build": "tsx scripts/build.ts --sdk-version=3.5.1-snapshot.20260423.18760.0",
+    "build": "tsx scripts/build.ts --sdk-version=3.6.5-snapshot.20261027",
     "compile": "tsgo -p tsconfig.json && tsc-alias -p tsconfig.json",
     "watch": "tsgo --watch",
     "clean": "rm -rf lib lib-lite src/generated",

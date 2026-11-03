@@ -54,6 +54,8 @@ export type UpdatesResponse = Response<components["schemas"]["JsGetUpdatesRespon
 // Constant mapping from endpoints to their JSON Schema validation paths
 const SCHEMA_MAP: Record<ChannelEndpoint, string> = {
   "/v2/commands/completions": "#/components/schemas/Either_JsCantonError_CompletionStreamResponse",
+  "/v2/commands/command-completions":
+    "#/components/schemas/Either_JsCantonError_CompletionStreamResponse",
   "/v2/state/active-contracts":
     "#/components/schemas/Either_JsCantonError_JsGetActiveContractsResponse",
   "/v2/updates": "#/components/schemas/Either_JsCantonError_JsGetUpdatesResponse",
