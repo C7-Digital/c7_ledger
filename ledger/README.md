@@ -19,7 +19,7 @@ The npm package has its own `0.0.x` version line, independent of the Canton spec
 This package ships against two independently versioned things:
 
 - **JSON Ledger API spec** (surfaced as `SDK_VERSION`): `3.6.5-snapshot.20261027`, from Canton's `release-line-3.6`. Splice 0.9.x runs Canton 3.6.x, and that is what DevNet, TestNet and MainNet serve. Only this spec is checked in (`specs/openapi_<version>.yaml` and `specs/asyncapi_<version>.yaml`).
-- **Daml SDK runtime** (`@daml/types`): pinned at `3.4.11`.
+- **Daml SDK** (`@daml/types`): a peer dependency (`>=3.4.0 <4.0.0`), so the app chooses its copy. The tests and CI use 3.5.2, the SDK that Splice 0.9.x builds with.
 
 The [supported versions table](../README.md#supported-versions) lists the Canton, Splice and Daml SDK versions of each release. A release targets one Canton line; it does not support older lines.
 

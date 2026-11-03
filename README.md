@@ -13,13 +13,23 @@ Canton Network (DevNet, TestNet, MainNet) runs when the release is made. We buil
 test against that line only. To use a different Canton line, use the release whose row
 names it.
 
-| `@c7-digital/ledger` | Canton (JSON Ledger API spec) | Splice | Daml SDK (`@daml/types`) | Tested against |
+| `@c7-digital/ledger` | Canton (JSON Ledger API spec) | Splice | Daml SDK: built with / apps use (`@daml/types`) | Tested against |
 |---|---|---|---|---|
-| 0.0.47 | 3.6.x (`3.6.5-snapshot.20261027`, Canton `release-line-3.6`) | 0.9.x | 3.4.11 | Unit tests on the 3.6 types; `getPreferredPackages` by hand on a Canton 3.5.18 participant |
-| 0.0.16 – 0.0.46 | 3.5.x (`3.5.1-snapshot.20260423.18760.0`) | 0.6.x – 0.8.x | 3.4.11 | Unit tests |
+| 0.0.47 | 3.6.x (`3.6.5-snapshot.20261027`, Canton `release-line-3.6`) | 0.9.x | 3.5.2 / `>=3.4.0 <4.0.0` | Unit tests on the 3.6 types; `getPreferredPackages` by hand on a Canton 3.5.18 participant |
+| 0.0.16 – 0.0.46 | 3.5.x (`3.5.1-snapshot.20260423.18760.0`) | 0.6.x – 0.8.x | 3.4.11 / `>=3.4.0 <4.0.0` | Unit tests |
 
 "Tested against" names the participants that a release was checked on. Add a row
 for each release that changes a column.
+
+The Daml SDK column has two parts. "Built with" is the SDK of this repository's
+tests, CI (`dpm install`) and generated Splice bindings: the SDK that the target
+Splice line builds with. "Apps use" is the `@daml/types` peer range: an app installs
+its own `@daml/types` in that range.
+
+`@c7-digital/scan` 0.0.17 has `@daml/types` as a peer dependency, not a dependency.
+An app that uses scan installs `@daml/types` itself (`pnpm add @daml/types@3.5.2`).
+Then the app and the packages share one copy, and their `ContractId` and `Party`
+types agree.
 
 ## Follow-ups
 

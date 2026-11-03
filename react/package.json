@@ -63,7 +63,7 @@
   },
   "devDependencies": {
     "@c7-digital/ledger": "file:../ledger",
-    "@daml/types": "3.4.9",
+    "@daml/types": "3.5.2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.12",
