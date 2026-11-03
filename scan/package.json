@@ -24,7 +24,7 @@
     }
   },
   "scripts": {
-    "build": "tsx scripts/build.ts --splice-version=0.6.1",
+    "build": "tsx scripts/build.ts --splice-version=0.9.4",
     "compile": "tsgo -p tsconfig.json && tsc-alias -p tsconfig.json",
     "watch": "tsgo --watch",
     "clean": "rm -rf lib src/generated lib/_vendor",

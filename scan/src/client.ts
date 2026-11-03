@@ -92,7 +92,7 @@ type GetUpdateByIdV2Response =
 
 // ─── ACS State ─────────────────────────────────────────────────────────
 
-type GetAcsSnapshotOperation = operations["getAcsSnapshotAt"];
+type GetAcsSnapshotOperation = operations["getAcsSnapshotAtV2"];
 type GetAcsSnapshotRequest =
   GetAcsSnapshotOperation["requestBody"]["content"]["application/json"];
 type GetAcsSnapshotResponse =
@@ -114,13 +114,13 @@ type ForceAcsSnapshotResponse =
 
 // ─── Holdings ──────────────────────────────────────────────────────────
 
-type GetHoldingsStateOperation = operations["getHoldingsStateAt"];
+type GetHoldingsStateOperation = operations["getHoldingsStateAtV2"];
 type GetHoldingsStateRequest =
   GetHoldingsStateOperation["requestBody"]["content"]["application/json"];
 type GetHoldingsStateResponse =
   GetHoldingsStateOperation["responses"]["200"]["content"]["application/json"];
 
-type GetHoldingsSummaryOperation = operations["getHoldingsSummaryAt"];
+type GetHoldingsSummaryOperation = operations["getHoldingsSummaryAtV1"];
 type GetHoldingsSummaryRequest =
   GetHoldingsSummaryOperation["requestBody"]["content"]["application/json"];
 type GetHoldingsSummaryResponse =
@@ -178,14 +178,6 @@ type FeatureSupportResponse =
 type ListFeaturedAppRightsResponse = Typed.ListFeaturedAppRightsResponse;
 type LookupFeaturedAppRightResponse = Typed.LookupFeaturedAppRightResponse;
 
-// ─── Validator Faucets ─────────────────────────────────────────────────
-
-type GetTopValidatorsByValidatorFaucetsOperation = operations["getTopValidatorsByValidatorFaucets"];
-type GetTopValidatorsByValidatorFaucetsParams =
-  GetTopValidatorsByValidatorFaucetsOperation["parameters"]["query"];
-type GetTopValidatorsByValidatorFaucetsResponse =
-  GetTopValidatorsByValidatorFaucetsOperation["responses"]["200"]["content"]["application/json"];
-
 // ─── Transfers ─────────────────────────────────────────────────────────
 
 type LookupTransferPreapprovalByPartyResponse = Typed.LookupTransferPreapprovalByPartyResponse;
@@ -212,34 +204,6 @@ type ListAmuletPriceVotesOperation = operations["listAmuletPriceVotes"];
 type ListAmuletPriceVotesResponse =
   ListAmuletPriceVotesOperation["responses"]["200"]["content"]["application/json"];
 
-// ─── Round Aggregates (deprecated but actively used) ──────────────────
-
-type GetAggregatedRoundsOperation = operations["getAggregatedRounds"];
-type GetAggregatedRoundsResponse =
-  GetAggregatedRoundsOperation["responses"]["200"]["content"]["application/json"];
-
-type ListRoundTotalsOperation = operations["listRoundTotals"];
-type ListRoundTotalsRequest =
-  ListRoundTotalsOperation["requestBody"]["content"]["application/json"];
-type ListRoundTotalsResponse =
-  ListRoundTotalsOperation["responses"]["200"]["content"]["application/json"];
-
-type ListRoundPartyTotalsOperation = operations["listRoundPartyTotals"];
-type ListRoundPartyTotalsRequest =
-  ListRoundPartyTotalsOperation["requestBody"]["content"]["application/json"];
-type ListRoundPartyTotalsResponse =
-  ListRoundPartyTotalsOperation["responses"]["200"]["content"]["application/json"];
-
-type GetRoundOfLatestDataOperation = operations["getRoundOfLatestData"];
-type GetRoundOfLatestDataResponse =
-  GetRoundOfLatestDataOperation["responses"]["200"]["content"]["application/json"];
-
-type GetTopProvidersByAppRewardsOperation = operations["getTopProvidersByAppRewards"];
-type GetTopProvidersByAppRewardsParams =
-  GetTopProvidersByAppRewardsOperation["parameters"]["query"];
-type GetTopProvidersByAppRewardsResponse =
-  GetTopProvidersByAppRewardsOperation["responses"]["200"]["content"]["application/json"];
-
 // ─── Migrations ────────────────────────────────────────────────────────
 
 type MigrationScheduleResponse =
@@ -264,14 +228,6 @@ type GetMemberTrafficStatusResponse =
 type GetBackfillingStatusOperation = operations["getBackfillingStatus"];
 type GetBackfillingStatusResponse =
   GetBackfillingStatusOperation["responses"]["200"]["content"]["application/json"];
-
-type GetSynchronizerIdentitiesOperation = operations["getSynchronizerIdentities"];
-type GetSynchronizerIdentitiesResponse =
-  GetSynchronizerIdentitiesOperation["responses"]["200"]["content"]["application/json"];
-
-type GetSynchronizerBootstrappingTransactionsOperation = operations["getSynchronizerBootstrappingTransactions"];
-type GetSynchronizerBootstrappingTransactionsResponse =
-  GetSynchronizerBootstrappingTransactionsOperation["responses"]["200"]["content"]["application/json"];
 
 type GetUpdatesBeforeOperation = operations["getUpdatesBefore"];
 type GetUpdatesBeforeRequest =
@@ -589,7 +545,7 @@ export class ScanClient {
   // ─── ACS State ─────────────────────────────────────────────────────
 
   async getAcsSnapshot(body: GetAcsSnapshotRequest): Promise<GetAcsSnapshotResponse> {
-    return this.request<GetAcsSnapshotResponse>("/v0/state/acs", "POST", { body });
+    return this.request<GetAcsSnapshotResponse>("/v2/state/acs", "POST", { body });
   }
 
   async getAcsSnapshotTimestamp(
@@ -622,11 +578,11 @@ export class ScanClient {
   // ─── Holdings ──────────────────────────────────────────────────────
 
   async getHoldingsState(body: GetHoldingsStateRequest): Promise<GetHoldingsStateResponse> {
-    return this.request<GetHoldingsStateResponse>("/v0/holdings/state", "POST", { body });
+    return this.request<GetHoldingsStateResponse>("/v2/holdings/state", "POST", { body });
   }
 
   async getHoldingsSummary(body: GetHoldingsSummaryRequest): Promise<GetHoldingsSummaryResponse> {
-    return this.request<GetHoldingsSummaryResponse>("/v0/holdings/summary", "POST", { body });
+    return this.request<GetHoldingsSummaryResponse>("/v1/holdings/summary", "POST", { body });
   }
 
   // ─── Rounds ────────────────────────────────────────────────────────
@@ -710,18 +666,6 @@ export class ScanClient {
     );
   }
 
-  // ─── Validator Faucets ────────────────────────────────────────────
-
-  async getTopValidatorsByValidatorFaucets(
-    params: GetTopValidatorsByValidatorFaucetsParams,
-  ): Promise<GetTopValidatorsByValidatorFaucetsResponse> {
-    return this.request<GetTopValidatorsByValidatorFaucetsResponse>(
-      "/v0/top-validators-by-validator-faucets",
-      "GET",
-      { query: params as Record<string, unknown> },
-    );
-  }
-
   // ─── Transfers ────────────────────────────────────────────────────
 
   async lookupTransferPreapprovalByParty(
@@ -778,48 +722,6 @@ export class ScanClient {
     );
   }
 
-  // ─── Round Aggregates ────────────────────────────────────────────
-
-  async getAggregatedRounds(): Promise<GetAggregatedRoundsResponse> {
-    return this.request<GetAggregatedRoundsResponse>(
-      "/v0/aggregated-rounds",
-      "GET",
-    );
-  }
-
-  async getRoundOfLatestData(): Promise<GetRoundOfLatestDataResponse> {
-    return this.request<GetRoundOfLatestDataResponse>(
-      "/v0/round-of-latest-data",
-      "GET",
-    );
-  }
-
-  async listRoundTotals(body: ListRoundTotalsRequest): Promise<ListRoundTotalsResponse> {
-    return this.request<ListRoundTotalsResponse>(
-      "/v0/round-totals",
-      "POST",
-      { body },
-    );
-  }
-
-  async listRoundPartyTotals(body: ListRoundPartyTotalsRequest): Promise<ListRoundPartyTotalsResponse> {
-    return this.request<ListRoundPartyTotalsResponse>(
-      "/v0/round-party-totals",
-      "POST",
-      { body },
-    );
-  }
-
-  async getTopProvidersByAppRewards(
-    params: GetTopProvidersByAppRewardsParams,
-  ): Promise<GetTopProvidersByAppRewardsResponse> {
-    return this.request<GetTopProvidersByAppRewardsResponse>(
-      "/v0/top-providers-by-app-rewards",
-      "GET",
-      { query: params as Record<string, unknown> },
-    );
-  }
-
   // ─── Migrations ───────────────────────────────────────────────────
 
   async getMigrationSchedule(): Promise<MigrationScheduleResponse | null> {
@@ -867,24 +769,6 @@ export class ScanClient {
   async getBackfillingStatus(): Promise<GetBackfillingStatusResponse> {
     return this.request<GetBackfillingStatusResponse>(
       "/v0/backfilling/status",
-      "GET",
-    );
-  }
-
-  async getSynchronizerIdentities(
-    domainIdPrefix: string,
-  ): Promise<GetSynchronizerIdentitiesResponse> {
-    return this.request<GetSynchronizerIdentitiesResponse>(
-      `/v0/synchronizer-identities/${encodeURIComponent(domainIdPrefix)}`,
-      "GET",
-    );
-  }
-
-  async getSynchronizerBootstrappingTransactions(
-    domainIdPrefix: string,
-  ): Promise<GetSynchronizerBootstrappingTransactionsResponse> {
-    return this.request<GetSynchronizerBootstrappingTransactionsResponse>(
-      `/v0/synchronizer-bootstrapping-transactions/${encodeURIComponent(domainIdPrefix)}`,
       "GET",
     );
   }
