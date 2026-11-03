@@ -210,6 +210,7 @@ describe("Ledger method contract", () => {
     "getLedgerEnd",
     "getParticipantId",
     "getTransactionPage",
+    "getPreferredPackages",
   ])("Ledger.prototype has method %s", (method) => {
     expect(typeof (ledger as any)[method]).toBe("function");
   });
@@ -225,6 +226,7 @@ describe("Ledger method contract", () => {
     "getLedgerEnd",
     "getParticipantId",
     "getUpdates",
+    "getPreferredPackages",
   ])("TypedHttpClient.prototype has method %s", (method) => {
     expect(typeof TypedHttpClient.prototype[method as keyof TypedHttpClient]).toBe("function");
   });

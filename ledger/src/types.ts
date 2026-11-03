@@ -41,6 +41,29 @@ export type JsCantonError = components["schemas"]["JsCantonError"];
 export type DisclosedContract = apiComponents["schemas"]["DisclosedContract"];
 
 /**
+ * A package name, and the parties whose participants must all vet the package
+ * that is selected for that name.
+ */
+export type PackageVettingRequirement = apiComponents["schemas"]["PackageVettingRequirement"];
+
+/** One vetted package: its id, its name and its version. */
+export type PackageReference = apiComponents["schemas"]["PackageReference"];
+
+/**
+ * The body of `POST /v2/interactive-submission/preferred-packages`. Give one
+ * requirement for each package name. Without `synchronizerId`, the participant
+ * uses the vetting state of every synchronizer that it is connected to.
+ */
+export type GetPreferredPackagesRequest = apiComponents["schemas"]["GetPreferredPackagesRequest"];
+
+/**
+ * The preferred packages: one {@link PackageReference} for each requested
+ * package name, and the synchronizer whose vetting state was used. The order
+ * of `packageReferences` is not specified, so find an entry by `packageName`.
+ */
+export type GetPreferredPackagesResponse = apiComponents["schemas"]["GetPreferredPackagesResponse"];
+
+/**
  * Type guard for a Canton error payload.
  *
  * Checks the *types* of the schema's four required fields, not merely that the

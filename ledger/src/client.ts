@@ -13,6 +13,7 @@ import { Party } from "@daml/types";
 import { paths, operations } from "./generated/api";
 import { SchemaValidator, ValidationMode } from "./validation";
 import { LedgerApiError, readErrorBody } from "./error";
+import type { GetPreferredPackagesRequest, GetPreferredPackagesResponse } from "./types";
 
 // Extract request/response types for specific operations
 type SubmitAndWaitOperation = operations["postV2CommandsSubmit-and-wait"];
@@ -385,6 +386,31 @@ export class TypedHttpClient {
       "GET",
       undefined,
       "#/components/schemas/GetConnectedSynchronizersResponse",
+    );
+  }
+
+  /**
+   * The preferred package for each package name in the request: the highest
+   * version that every participant hosting the given parties has vetted. The
+   * response has one reference for each requested name; find an entry by
+   * `packageName`, not by position.
+   *
+   * This replaces `GET /v2/interactive-submission/preferred-package-version`,
+   * which Canton 3.6 disables by default.
+   *
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger. When no
+   *   package satisfies a requirement, the Canton code is
+   *   `NO_PREFERRED_PACKAGES_FOUND`; for an unknown package name it is
+   *   `PACKAGE_NAMES_NOT_FOUND`.
+   */
+  async getPreferredPackages(
+    request: GetPreferredPackagesRequest,
+  ): Promise<GetPreferredPackagesResponse> {
+    return this.request<GetPreferredPackagesResponse>(
+      "/v2/interactive-submission/preferred-packages",
+      "POST",
+      request,
+      "#/components/schemas/GetPreferredPackagesResponse",
     );
   }
 
