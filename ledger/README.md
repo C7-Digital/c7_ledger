@@ -204,6 +204,23 @@ try {
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.
 
+### Migrating to 0.0.48
+
+Adds `Ledger.getLatestPrunedOffsets()` and
+`TypedHttpClient.getLatestPrunedOffsets()`, which read
+`GET /v2/state/latest-pruned-offsets`, and the type `PrunedOffsets`. A read of
+the update history on a pruned participant must begin at or after
+`participantPrunedUpToInclusive`. Additive; nothing removed.
+
+```typescript
+const { participantPrunedUpToInclusive } = await ledger.getLatestPrunedOffsets();
+const end = await ledger.getLedgerEnd();
+const page = await ledger.getTransactionPage(
+  { beginExclusive: participantPrunedUpToInclusive, endInclusive: end },
+  { parties: [party] },
+);
+```
+
 ### Migrating to 0.0.45
 
 Adds the entry point `@c7-digital/ledger/service-account` (see

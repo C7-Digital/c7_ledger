@@ -79,6 +79,38 @@ describe("TypedHttpClient.getParticipantId", () => {
   });
 });
 
+describe("TypedHttpClient.getLatestPrunedOffsets", () => {
+  it("reads the pruned offsets", async () => {
+    const calls = serve({ participantPrunedUpToInclusive: 42, allDivulgedContractsPrunedUpToInclusive: 40 });
+    await expect(client().getLatestPrunedOffsets()).resolves.toEqual({
+      participantPrunedUpToInclusive: 42,
+      allDivulgedContractsPrunedUpToInclusive: 40,
+    });
+    expect(calls).toEqual([
+      { url: `${BASE}/v2/state/latest-pruned-offsets`, method: "GET", body: undefined },
+    ]);
+  });
+});
+
+describe("Ledger.getLatestPrunedOffsets", () => {
+  it("returns the pruned offsets", async () => {
+    serve({ participantPrunedUpToInclusive: 42, allDivulgedContractsPrunedUpToInclusive: 40 });
+    await expect(ledger().getLatestPrunedOffsets()).resolves.toEqual({
+      participantPrunedUpToInclusive: 42,
+      allDivulgedContractsPrunedUpToInclusive: 40,
+    });
+  });
+
+  it("reads an offset that the participant leaves out as 0", async () => {
+    // A participant that has never pruned can leave the default 0 out of the JSON.
+    serve({});
+    await expect(ledger().getLatestPrunedOffsets()).resolves.toEqual({
+      participantPrunedUpToInclusive: 0,
+      allDivulgedContractsPrunedUpToInclusive: 0,
+    });
+  });
+});
+
 describe("TypedHttpClient.getUpdates", () => {
   const request: Schemas["GetUpdatesRequest"] = {
     beginExclusive: 10,
