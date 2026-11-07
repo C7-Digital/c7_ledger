@@ -64,6 +64,10 @@ type PrepareSubmissionRequest =
 type PrepareSubmissionResponse =
   PrepareSubmissionOperation["responses"]["200"]["content"]["application/json"];
 
+type GetLatestPrunedOffsetsOperation = operations["getV2StateLatest-pruned-offsets"];
+type GetLatestPrunedOffsetsResponse =
+  GetLatestPrunedOffsetsOperation["responses"]["200"]["content"]["application/json"];
+
 type GetParticipantIdOperation = operations["getV2PartiesParticipant-id"];
 type GetParticipantIdResponse =
   GetParticipantIdOperation["responses"]["200"]["content"]["application/json"];
@@ -312,6 +316,21 @@ export class TypedHttpClient {
       "GET",
       undefined,
       "#/components/schemas/GetLedgerEndResponse"
+    );
+  }
+
+  /**
+   * The offsets up to which the participant has pruned its history
+   * (`GET /v2/state/latest-pruned-offsets`). A read of the update history must
+   * begin at or after `participantPrunedUpToInclusive`.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getLatestPrunedOffsets(): Promise<GetLatestPrunedOffsetsResponse> {
+    return this.request<GetLatestPrunedOffsetsResponse>(
+      "/v2/state/latest-pruned-offsets",
+      "GET",
+      undefined,
+      "#/components/schemas/GetLatestPrunedOffsetsResponse"
     );
   }
 

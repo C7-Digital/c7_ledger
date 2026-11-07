@@ -209,6 +209,7 @@ describe("Ledger method contract", () => {
     "allocateParty",
     "getLedgerEnd",
     "getParticipantId",
+    "getLatestPrunedOffsets",
     "getTransactionPage",
     "getPreferredPackages",
   ])("Ledger.prototype has method %s", (method) => {
@@ -225,6 +226,7 @@ describe("Ledger method contract", () => {
     "allocateParty",
     "getLedgerEnd",
     "getParticipantId",
+    "getLatestPrunedOffsets",
     "getUpdates",
     "getPreferredPackages",
   ])("TypedHttpClient.prototype has method %s", (method) => {

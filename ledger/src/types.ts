@@ -323,6 +323,17 @@ export type VersionedRegistry = (
 export type LedgerOffset = "start" | "end" | number;
 
 /**
+ * The offsets up to which the participant has pruned its history, read by
+ * {@link Ledger.getLatestPrunedOffsets}. 0 means that nothing is pruned.
+ */
+export type PrunedOffsets = {
+  /** A history read must begin at or after this offset. */
+  participantPrunedUpToInclusive: number;
+  /** The offset up to which the participant has pruned the divulged contracts. */
+  allDivulgedContractsPrunedUpToInclusive: number;
+};
+
+/**
  * One page of transactions read by {@link Ledger.getTransactionPage}.
  *
  * `reachedOffset` is where the page stops: the last offset it holds, or the

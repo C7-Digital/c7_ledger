@@ -68,6 +68,7 @@ import {
   MultiStream,
   TemplateMapping,
   TransactionPage,
+  PrunedOffsets,
   VersionedRegistry,
 } from "./types";
 import { matchesPartiallyQualified } from "./util";
@@ -1927,6 +1928,21 @@ export class Ledger {
       synchronizerId: synchronizerId ?? "",
       verboseHashing: verboseHashing ?? false,
     });
+  }
+
+  /**
+   * The offsets up to which the participant has pruned its history. A history
+   * read (`getTransactionPage`, `streamHistoryUpdates`, `getUpdates`) must
+   * begin at or after `participantPrunedUpToInclusive`. An offset that the
+   * participant leaves out is 0: nothing is pruned.
+   * @throws {LedgerApiError} on non-OK HTTP response from the ledger
+   */
+  async getLatestPrunedOffsets(): Promise<PrunedOffsets> {
+    const answer = await this.client.getLatestPrunedOffsets();
+    return {
+      participantPrunedUpToInclusive: answer.participantPrunedUpToInclusive ?? 0,
+      allDivulgedContractsPrunedUpToInclusive: answer.allDivulgedContractsPrunedUpToInclusive ?? 0,
+    };
   }
 
   /**
