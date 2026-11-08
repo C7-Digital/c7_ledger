@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { afterEach, vi } from "vitest";
 import { ScanClient } from "./client.js";
-import { ScanApiError, ScanUnavailableError } from "./error.js";
+import { ScanApiError, ScanProxyAuthError, ScanUnavailableError } from "./error.js";
 
 // A model of the list client: each request asks the ready Scans in their
 // given order, then the cooling Scans, the earliest to recover first. It stops
@@ -126,6 +126,122 @@ describe("a list of Scans (property)", () => {
             };
             expect(observed).toEqual(expected);
             vi.setSystemTime(Date.now() + step.advanceMs);
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// A model of the proxy route: the token, then the proxy (unless it cools
+// down), then the Scans. Only an unavailable proxy cools down; a proxy answer
+// makes it ready.
+
+type TokenOutcome = "token" | "none" | "throws";
+type ProxyOutcome = "ok" | "unauthorized" | "answer" | "unavailable" | "network";
+type ScanOutcome = "ok" | "unavailable";
+
+interface ProxyStep {
+  token: TokenOutcome;
+  proxy: ProxyOutcome;
+  scan: ScanOutcome;
+  advanceMs: number;
+}
+
+describe("the scan proxy (property)", () => {
+  it("asks the proxy at most once, only with a token and when it is not cooling, and falls back only when it is unavailable", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            token: fc.constantFrom<TokenOutcome>("token", "token", "none", "throws"),
+            proxy: fc.constantFrom<ProxyOutcome>("ok", "unauthorized", "answer", "unavailable", "network"),
+            scan: fc.constantFrom<ScanOutcome>("ok", "unavailable"),
+            advanceMs: fc.integer({ min: 0, max: 3 * COOLDOWN_MS }),
+          }),
+          { minLength: 1, maxLength: 10 },
+        ),
+        async (steps: ProxyStep[]) => {
+          runCount += 1;
+          const scan = `https://s-${runCount}.example.com/api/scan`;
+          const validator = `https://v-${runCount}.example.com/api/validator`;
+          vi.useFakeTimers({ toFake: ["Date"] });
+          vi.setSystemTime(new Date("2026-11-07T00:00:00Z"));
+
+          let step: ProxyStep = steps[0]!;
+          const calls: string[] = [];
+          vi.stubGlobal("fetch", (input: string) => {
+            const fromProxy = input.startsWith(validator);
+            calls.push(fromProxy ? "proxy" : "scan");
+            if (fromProxy && step.proxy === "network") return Promise.reject(new TypeError("fetch failed"));
+            const code = fromProxy
+              ? { ok: 200, unauthorized: 401, answer: 400, unavailable: 503, network: 0 }[step.proxy]
+              : step.scan === "ok"
+                ? 200
+                : 503;
+            return Promise.resolve(
+              new Response(JSON.stringify({ dso_party_id: fromProxy ? "proxy" : "scan" }), {
+                status: code,
+                headers: { "content-type": "application/json" },
+              }),
+            );
+          });
+          const client = new ScanClient({
+            baseUrls: [scan],
+            cooldownMs: COOLDOWN_MS,
+            validator: {
+              baseUrl: validator,
+              token: () => {
+                if (step.token === "throws") throw new Error("no session");
+                return step.token === "token" ? "t" : undefined;
+              },
+            },
+          });
+          let proxyCoolingUntil = 0;
+
+          for (const s of steps) {
+            step = s;
+            calls.length = 0;
+            const now = Date.now();
+            const result = await client.getDsoPartyId().then(
+              value => ({ value: value.dso_party_id }),
+              (error: unknown) => ({
+                error:
+                  error instanceof ScanProxyAuthError
+                    ? "auth"
+                    : error instanceof ScanUnavailableError
+                      ? `unavailable:${error.attempts.map(a => (a.baseUrl === validator ? "proxy" : "scan")).join(",")}`
+                      : error instanceof ScanApiError
+                        ? `answer:${error.status}`
+                        : `other:${error instanceof Error ? error.message : String(error)}`,
+              }),
+            );
+
+            const scans = s.scan === "ok" ? { value: "scan" } : { error: "unavailable:scan" };
+            let expected: { calls: string[]; result: unknown };
+            if (s.token === "throws") {
+              expected = { calls: [], result: { error: "other:no session" } };
+            } else if (s.token === "none") {
+              expected = { calls: ["scan"], result: scans };
+            } else if (proxyCoolingUntil > now) {
+              expected = { calls: ["scan"], result: scans };
+            } else if (s.proxy === "ok") {
+              proxyCoolingUntil = 0;
+              expected = { calls: ["proxy"], result: { value: "proxy" } };
+            } else if (s.proxy === "unauthorized") {
+              expected = { calls: ["proxy"], result: { error: "auth" } };
+            } else if (s.proxy === "answer") {
+              expected = { calls: ["proxy"], result: { error: "answer:400" } };
+            } else {
+              proxyCoolingUntil = now + COOLDOWN_MS;
+              expected = {
+                calls: ["proxy", "scan"],
+                result: s.scan === "ok" ? { value: "scan" } : { error: "unavailable:proxy,scan" },
+              };
+            }
+            expect({ calls: [...calls], result }).toEqual(expected);
+            vi.setSystemTime(Date.now() + s.advanceMs);
           }
         },
       ),

@@ -1,6 +1,6 @@
 // Compile-time checks of the ScanClient config. `pnpm typecheck` and the build
 // compile this file; the runtime test only makes vitest load it.
-import { ScanClient, type ScanClientConfig, type ScanListConfig } from "./client.js";
+import { ScanClient, type ScanClientConfig, type ScanListConfig, type ScanRead } from "./client.js";
 
 const ONE = "https://scan-1.example.com/api/scan";
 const TWO = "https://scan-2.example.com/api/scan";
@@ -23,8 +23,31 @@ export const unchecked: ScanClientConfig = { baseUrls: fallbacks };
 // @ts-expect-error one Scan or a list, not both
 export const both: ScanClientConfig = { baseUrl: ONE, baseUrls: [TWO] };
 
-// @ts-expect-error the cooldown applies to a list only
-export const cooldownOnOne: ScanClientConfig = { baseUrl: ONE, cooldownMs: 1 };
+// One Scan with the validator's scan proxy: the cooldown applies to the proxy.
+export const withProxy: ScanClientConfig = {
+  baseUrl: ONE,
+  cooldownMs: 1,
+  validator: { baseUrl: "/api/validator", token: () => "a-token" },
+};
+export const asyncToken: ScanClientConfig = {
+  baseUrls: [ONE, TWO],
+  validator: { baseUrl: "/api/validator", token: async () => undefined },
+};
+
+// @ts-expect-error the token is a function, so that a refreshed token applies
+export const tokenString: ScanClientConfig = { baseUrl: ONE, validator: { baseUrl: "/api/validator", token: "a-token" } };
+
+// @ts-expect-error the proxy needs its base URL
+export const proxyWithoutBase: ScanClientConfig = { baseUrl: ONE, validator: { token: () => "a-token" } };
+
+// An onRead hook gets the source of each read.
+export const withHook: ScanClientConfig = {
+  baseUrl: ONE,
+  onRead: (read: ScanRead) => {
+    const source: "proxy" | "scan" = read.source;
+    void source;
+  },
+};
 
 // @ts-expect-error a Scan is required
 export const none: ScanClientConfig = {};

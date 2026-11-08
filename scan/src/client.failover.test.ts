@@ -107,6 +107,16 @@ describe("a list of Scans: which answer of the first Scan moves on to the next S
     expect(isScanUnavailable(new DOMException("timed out", "TimeoutError"))).toBe(true);
     expect(isScanUnavailable(new ScanApiError(404, "Not Found", { kind: "empty" }))).toBe(false);
   });
+
+  it("isScanUnavailable reads a ScanApiError of another package copy by its shape", () => {
+    // An error object from a second installed copy fails `instanceof`.
+    const copy = (status: number) => Object.assign(new Error(`HTTP ${status}`), { name: "ScanApiError", status, statusText: "x" });
+    expect(isScanUnavailable(copy(404))).toBe(false);
+    expect(isScanUnavailable(copy(400))).toBe(false);
+    expect(isScanUnavailable(copy(403))).toBe(true);
+    expect(isScanUnavailable(copy(503))).toBe(true);
+    expect(isScanUnavailable({ status: 404 })).toBe(true);
+  });
 });
 
 describe("a list of Scans: order and cooldown", () => {
@@ -165,7 +175,7 @@ describe("a list of Scans: order and cooldown", () => {
     expect(calls, "scanA cooled first, so it recovers first").toEqual([scanA]);
   });
 
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("refuses timeoutMs %s", timeoutMs => {
+  it.each([0, -1, 0.5, 2_147_483_648, Number.NaN, Number.POSITIVE_INFINITY])("refuses timeoutMs %s", timeoutMs => {
     expect(() => new ScanClient({ baseUrls: [scanA], timeoutMs })).toThrow(RangeError);
     expect(() => new ScanClient({ baseUrl: scanA, timeoutMs })).toThrow(RangeError);
   });
@@ -234,6 +244,26 @@ describe("one Scan: the errors reach the caller as they are", () => {
 
 describe("a list of Scans and the newer endpoints", () => {
   const DSO_V1 = { dso_party_id: "DSO::1220aa", voting_threshold: 3, sv_node_states: [] };
+
+  it("uses the fallback of the Scans that answered 404 when the other Scans are unavailable", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: string) => {
+      const url = new URL(input);
+      calls.push(`${url.host.split(".")[0]}${url.pathname.slice("/api/scan".length)}`);
+      if (input.startsWith(scanB)) return new Response("busy", { status: 503 });
+      if (url.pathname.endsWith("/v1/dso")) return new Response("Not Found", { status: 404 });
+      return new Response(JSON.stringify({ ...DSO_V1, sv_user: "sv", sv_party_id: "sv::1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const client = new ScanClient({ baseUrls: [scanA, scanB] });
+    await expect(client.getDsoInfoV1()).resolves.toEqual(DSO_V1);
+    calls.length = 0;
+    // scanA is excluded for /v1/dso; scanB is unavailable; scanA still serves /v0/dso.
+    await expect(client.getDsoInfoV1()).resolves.toEqual(DSO_V1);
+    expect(calls).toEqual([`scan-b-${testCount}/v1/dso`, `scan-a-${testCount}/v0/dso`]);
+  });
 
   it("records a 404 for the Scan that gave it, and asks the other Scans for the newer path", async () => {
     const calls: string[] = [];

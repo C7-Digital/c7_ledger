@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, vi } from "vitest";
 import YAML from "yaml";
 
-import { ScanClient } from "./client.js";
+import { PROXY_PATHS, ScanClient } from "./client.js";
 import { SPLICE_VERSION } from "./generated/sdk-version.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +20,8 @@ function clientPaths(): string[] {
   const found = new Set<string>();
   for (const m of src.matchAll(/["`](\/v\d+\/[^"`?]*)["`?]/g)) {
     const path = m[1]!.replace(/\$\{[^}]+\}/g, "{param}").replace(/\/$/, "/{param}");
+    // The validator's scan-proxy paths are checked against its own spec below.
+    if (path.includes("/scan-proxy/")) continue;
     found.add(path);
   }
   return [...found].sort();
@@ -46,6 +48,32 @@ describe("ScanClient paths", () => {
       expect(spec.has(path)).toBe(true);
     },
   );
+});
+
+// The validator scan-proxy paths of a later Splice line. The client reads
+// them first and reads the Scans on a 404 (see client.proxy.test.ts).
+const LATER_SPLICE_PROXY_PATHS = new Set(["/v1/scan-proxy/dso"]);
+
+/** The GET or POST paths of the validator's scan-proxy spec, with every parameter named `{param}`. */
+function proxySpecPaths(): Map<string, string[]> {
+  const spec = YAML.parse(
+    readFileSync(join(here, "..", "specs", `scan_proxy_${SPLICE_VERSION}.yaml`), "utf-8"),
+  ) as { paths: Record<string, Record<string, unknown>> };
+  return new Map(
+    Object.entries(spec.paths).map(([p, ops]) => [p.replace(/\{[^}]+\}/g, "{param}"), Object.keys(ops)]),
+  );
+}
+
+describe("ScanClient scan-proxy paths", () => {
+  const spec = proxySpecPaths();
+
+  it.each(
+    Object.entries(PROXY_PATHS)
+      .map(([read, path]) => [read, path.replace(/\{[^}]+\}/g, "{param}")] as const)
+      .filter(([, path]) => !LATER_SPLICE_PROXY_PATHS.has(path)),
+  )(`%s: %s is in the Splice ${SPLICE_VERSION} scan-proxy spec`, (_read, path) => {
+    expect(spec.has(path)).toBe(true);
+  });
 });
 
 describe("ScanClient reads ACS and holdings from the current endpoints", () => {

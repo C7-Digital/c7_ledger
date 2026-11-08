@@ -117,9 +117,36 @@ export async function readErrorBody(
 }
 
 /**
- * One Scan of a list that could not answer a request.
+ * The validator's scan proxy refused the access token (401). The token's
+ * issuer or audience does not match the validator's auth config, so every
+ * proxy read fails the same way: this is a configuration error, and the client
+ * does not hide it with a read from the Scans.
+ */
+export class ScanProxyAuthError extends Error {
+  /** The base URL of the validator API. */
+  public readonly baseUrl: string;
+  public readonly status = 401;
+  public readonly statusText: string;
+  /** The proxy's answer. */
+  public readonly error: ScanApiError;
+
+  constructor(baseUrl: string, error: ScanApiError) {
+    super(
+      `The validator scan proxy at ${baseUrl} refused the access token (HTTP 401). ` +
+        "Check that the token's issuer and audience match the validator's auth config.",
+    );
+    this.name = "ScanProxyAuthError";
+    this.baseUrl = baseUrl;
+    this.statusText = error.statusText;
+    this.error = error;
+  }
+}
+
+/**
+ * One source that could not answer a request: a Scan of the list, or the
+ * validator's scan proxy (its `baseUrl` is the validator API).
  *
- * `http`: the Scan (or the gateway in front of it) answered with an
+ * `http`: the source (or the gateway in front of it) answered with an
  * unavailable status, for example 403 from an IP allowlist. `transport`: no
  * response came back (network, CORS, timeout); `error` is what `fetch` threw.
  */
@@ -128,6 +155,7 @@ export type ScanAttempt =
   | { readonly kind: "transport"; readonly baseUrl: string; readonly error: unknown };
 
 export function attemptOf(baseUrl: string, error: unknown): ScanAttempt {
+  // Errors here come from this package's own requests, so `instanceof` holds.
   return error instanceof ScanApiError
     ? { kind: "http", baseUrl, error }
     : { kind: "transport", baseUrl, error };

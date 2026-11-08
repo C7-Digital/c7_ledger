@@ -73,10 +73,47 @@ const scan = new ScanClient({
   error, or the error of `fetch`, and it has no timeout unless you set `timeoutMs`.
 
 The list gives availability, not trust: the client uses the first answer, and
-does not compare the answers of several Scans (as the Splice validator's BFT
-Scan connection does). Use only Scans that accept requests from your IP
-addresses. A browser app can also use a list: give it the paths of
-same-origin proxies, one for each Scan.
+does not compare the answers of several Scans. Use only Scans that accept
+requests from your IP addresses. A browser app can also use a list: give it the
+paths of same-origin proxies, one for each Scan.
+
+#### The validator's scan proxy (0.0.18)
+
+A validator reads Scan with Splice's BFT Scan connection: it asks several Scans
+and needs f+1 equal answers. Its scan proxy (`/v0/scan-proxy/*` of the
+validator API) gives these reads to apps. Add it to the config, and the reads
+that the proxy serves go to it first:
+
+```ts
+const scan = new ScanClient({
+  baseUrls: [preferredScanUrl, ...fallbackScanUrls],
+  validator: {
+    baseUrl: "https://validator.example.com/api/validator", // or a same-origin proxy path
+    token: () => auth.accessToken(), // called for each request; undefined reads the Scans
+  },
+  onRead: ({ path, source, baseUrl }) => metrics.count(source), // optional
+});
+```
+
+- The proxy needs a JWT that the validator accepts (its issuer and audience).
+  It needs no user rights.
+- `PROXY_PATHS` lists the reads that the proxy serves: the DSO party and DSO
+  info (`/v1/scan-proxy/dso` from Splice 0.10), featured-app rights, rounds,
+  AmuletRules, ANS, transfer preapprovals and commands, holdings summaries, and
+  unclaimed development-fund coupons. Every other read goes to the Scans.
+- When the proxy is unavailable (the same statuses as a Scan), the client logs
+  a warning, reads the Scans, and tries the Scans first for `cooldownMs`. A 404
+  is the network's answer, except for a path that the validator does not serve
+  (an older Splice line): then the client reads the Scans for that path.
+- A 401 from the proxy is a configuration error: the client throws
+  `ScanProxyAuthError` and does not read the Scans.
+- The proxy answers two reads in a different shape from Scan.
+  `getCurrentMiningRounds()` and `getCurrentAmuletRules()` give the proxy's
+  shape (full contracts). Without a proxy they read Scan with an empty cache.
+  `getOpenAndIssuingMiningRounds()` and `getAmuletRules()` keep Scan's cache
+  protocol, and always read the Scans.
+- `scan/specs/scan_proxy_0.9.4.yaml` is the validator's proxy spec, and
+  `client.paths.test.ts` checks `PROXY_PATHS` against it.
 
 #### Migrating to scan 0.0.17
 
