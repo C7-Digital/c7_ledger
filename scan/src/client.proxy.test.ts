@@ -277,6 +277,21 @@ describe("onRead", () => {
     ]);
   });
 
+  it("logs the rejection of an async hook, and does not change the read", async () => {
+    stub({ [validator]: ok(DSO) });
+    const warn = vi.spyOn(logger, "warn");
+    const c = new ScanClient({
+      baseUrl: scanA,
+      validator: { baseUrl: validator, token: () => "t" },
+      onRead: async () => {
+        throw new Error("async hook bug");
+      },
+    });
+    await expect(c.getDsoPartyId()).resolves.toEqual(DSO);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(warn.mock.calls.map(args => String(args[0])).some(m => m.includes("async hook bug"))).toBe(true);
+  });
+
   it("does not change the read when the hook throws", async () => {
     stub({ [validator]: ok(DSO) });
     const c = new ScanClient({

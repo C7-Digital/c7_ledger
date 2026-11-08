@@ -245,6 +245,48 @@ describe("one Scan: the errors reach the caller as they are", () => {
 describe("a list of Scans and the newer endpoints", () => {
   const DSO_V1 = { dso_party_id: "DSO::1220aa", voting_threshold: 3, sv_node_states: [] };
 
+  it("asks the other Scans for the newer path before it uses the fallback (mixed Splice lines)", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: string) => {
+      const url = new URL(input);
+      calls.push(`${url.host.split(".")[0]}${url.pathname.slice("/api/scan".length)}`);
+      const older = input.startsWith(scanA);
+      if (url.pathname.endsWith("/v1/dso")) {
+        return older
+          ? new Response("Not Found", { status: 404 })
+          : new Response(JSON.stringify(DSO_V1), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      // The legacy endpoint is unavailable on every Scan.
+      return new Response("busy", { status: 503 });
+    });
+    const client = new ScanClient({ baseUrls: [scanA, scanB] });
+    await expect(client.getDsoInfoV1()).resolves.toEqual(DSO_V1);
+    expect(calls).toEqual([`scan-a-${testCount}/v1/dso`, `scan-b-${testCount}/v1/dso`]);
+  });
+
+  it("uses the fallback when every Scan of the list answers 404 for the newer path", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: string) => {
+      const url = new URL(input);
+      calls.push(`${url.host.split(".")[0]}${url.pathname.slice("/api/scan".length)}`);
+      if (url.pathname.endsWith("/v1/dso")) return new Response("Not Found", { status: 404 });
+      return new Response(JSON.stringify({ ...DSO_V1, sv_user: "sv", sv_party_id: "sv::1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const client = new ScanClient({ baseUrls: [scanA, scanB] });
+    await expect(client.getDsoInfoV1()).resolves.toEqual(DSO_V1);
+    expect(calls).toEqual([
+      `scan-a-${testCount}/v1/dso`,
+      `scan-b-${testCount}/v1/dso`,
+      `scan-a-${testCount}/v0/dso`,
+    ]);
+    calls.length = 0;
+    await client.getDsoInfoV1();
+    expect(calls).toEqual([`scan-a-${testCount}/v0/dso`]);
+  });
+
   it("uses the fallback of the Scans that answered 404 when the other Scans are unavailable", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (input: string) => {
@@ -281,7 +323,7 @@ describe("a list of Scans and the newer endpoints", () => {
     });
     const client = new ScanClient({ baseUrls: [scanA, scanB] });
     await client.getDsoInfoV1();
-    expect(calls).toEqual([`scan-a-${testCount}/v1/dso`, `scan-a-${testCount}/v0/dso`]);
+    expect(calls).toEqual([`scan-a-${testCount}/v1/dso`, `scan-b-${testCount}/v1/dso`]);
 
     calls.length = 0;
     await client.getDsoInfoV1();

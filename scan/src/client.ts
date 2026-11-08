@@ -586,13 +586,22 @@ export class ScanClient {
     );
   }
 
-  /** Report a read to {@link ScanClientOptions.onRead}; its errors do not reach the read. */
+  /**
+   * Report a read to {@link ScanClientOptions.onRead}. Its errors, thrown or
+   * from a rejected promise of an async hook, are logged and do not reach the
+   * read.
+   */
   private reported(read: ScanRead): void {
     if (this.onRead === undefined) return;
+    const hookFailed = (error: unknown): void =>
+      logger.warn(`The onRead hook failed (${describeError(error)}); the read is not changed`);
     try {
-      this.onRead(read);
+      const result: unknown = this.onRead(read);
+      if (typeof (result as PromiseLike<unknown> | null)?.then === "function") {
+        (result as PromiseLike<unknown>).then(undefined, hookFailed);
+      }
     } catch (error) {
-      logger.warn(`The onRead hook threw (${describeError(error)}); the read is not changed`);
+      hookFailed(error);
     }
   }
 
@@ -677,6 +686,12 @@ export class ScanClient {
     path: string,
     scans: readonly string[],
     send: (baseUrl: string) => Promise<TResponse>,
+    /**
+     * Optional. Called when a Scan of a list answers 404 for a path that a
+     * later Splice line adds: that Scan does not have the path, so the client
+     * asks the next Scan, with no cooldown.
+     */
+    onMissing?: (baseUrl: string) => void,
   ): Promise<TResponse> {
     if (!this.isList) {
       const result = await send(scans[0]!);
@@ -691,6 +706,11 @@ export class ScanClient {
         this.reported({ path, source: "scan", baseUrl });
         return result;
       } catch (error) {
+        if (onMissing !== undefined && isNotFound(error)) {
+          coolingUntil.delete(baseUrl);
+          onMissing(baseUrl);
+          continue;
+        }
         if (!isScanUnavailable(error)) {
           // An answer, for example 404: the Scan is available.
           coolingUntil.delete(baseUrl);
@@ -914,19 +934,27 @@ export class ScanClient {
   ): Promise<TResponse> {
     const scans = this.baseUrls.filter(baseUrl => !missingEndpoints.has(`${baseUrl}${path}`));
     if (scans.length === 0) return fallback();
-    const excluded = scans.length < this.baseUrls.length;
+    // Some Scans do not have `path`: they still serve the fallback endpoint.
+    let someMissing = scans.length < this.baseUrls.length;
+    const missing = (baseUrl: string): void => {
+      missingEndpoints.add(`${baseUrl}${path}`);
+      someMissing = true;
+    };
     try {
-      return await this.onAnyScan(path, scans, async baseUrl => {
-        try {
-          return await this.requestTo<TResponse>(baseUrl, path, "GET");
-        } catch (error) {
-          if (isNotFound(error)) missingEndpoints.add(`${baseUrl}${path}`);
-          throw error;
-        }
-      });
+      // A list asks every Scan for `path` before it uses the fallback.
+      return await this.onAnyScan(
+        path,
+        scans,
+        baseUrl => this.requestTo<TResponse>(baseUrl, path, "GET"),
+        missing,
+      );
     } catch (error) {
-      // The Scans that answered 404 still serve the fallback endpoint.
-      if (isNotFound(error) || (excluded && error instanceof ScanUnavailableError)) return fallback();
+      if (isNotFound(error)) {
+        // One Scan (no list): it does not have `path`.
+        missing(this.baseUrls[0]);
+        return fallback();
+      }
+      if (someMissing && error instanceof ScanUnavailableError) return fallback();
       throw error;
     }
   }
