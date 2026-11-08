@@ -8,7 +8,14 @@ import { Party } from "@daml/types";
 import { operations, components } from "./generated/api.js";
 import type * as Typed from "./types.js";
 import { logger } from "./logger.js";
-import { ScanApiError, readErrorBody } from "./error.js";
+import {
+  ScanApiError,
+  ScanUnavailableError,
+  type ScanAttempt,
+  attemptOf,
+  describeError,
+  readErrorBody,
+} from "./error.js";
 
 // ─── Party-refined types ──────────────────────────────────────────────
 // The OpenAPI spec uses plain `string` for party identifiers. We refine
@@ -267,16 +274,75 @@ type GetVersionResponse =
 
 // ─── Client Config ─────────────────────────────────────────────────────
 
-export interface ScanClientConfig {
-  /** Base URL of the Scan API, e.g. "https://scan.example.com/api/scan" */
-  baseUrl: string;
+interface ScanClientOptions {
   /** Enable verbose request/response logging via the logger */
   debug?: boolean;
+  /**
+   * Abort a request to one Scan after this many milliseconds. With a list of
+   * Scans, the client then tries the next Scan. Default: no limit for one Scan,
+   * {@link DEFAULT_LIST_TIMEOUT_MS} for a list.
+   */
+  timeoutMs?: number;
 }
+
+/** One Scan. Its errors reach the caller as they are. */
+export interface SingleScanConfig extends ScanClientOptions {
+  /** Base URL of the Scan API, e.g. "https://scan.example.com/api/scan" */
+  baseUrl: string;
+  baseUrls?: never;
+}
+
+/** Base URLs of the Scan API of one network, the preferred Scan first. */
+export type ScanBaseUrls = readonly [string, ...string[]];
+
+/**
+ * An ordered list of Scans of one network. Each Super Validator runs a Scan, and
+ * each Scan serves the same network state. The client sends each request to the
+ * first Scan that is not cooling down. When that Scan is unavailable (see
+ * {@link isScanUnavailable}), the client tries the next Scan.
+ */
+export interface ScanListConfig extends ScanClientOptions {
+  baseUrls: ScanBaseUrls;
+  baseUrl?: never;
+  /**
+   * After a Scan is unavailable, the client tries the other Scans first for
+   * this many milliseconds. Default {@link DEFAULT_COOLDOWN_MS}.
+   */
+  cooldownMs?: number;
+}
+
+export type ScanClientConfig = SingleScanConfig | ScanListConfig;
+
+/** The default per-Scan request limit of a list of Scans. */
+export const DEFAULT_LIST_TIMEOUT_MS = 15_000;
+
+/** The default time that a list client tries the other Scans first. */
+export const DEFAULT_COOLDOWN_MS = 30_000;
 
 /** A Scan that does not have the endpoint answers 404. */
 function isNotFound(error: unknown): boolean {
   return error instanceof ScanApiError && error.status === 404;
+}
+
+/**
+ * The HTTP statuses that tell that this Scan cannot answer now, not that the
+ * request is wrong. 401 and 403 come from an IP allowlist or a gateway in front
+ * of a Scan (Scan itself has no authentication), 408 and 429 from load, and 5xx
+ * from the Scan or its proxy. Every other status is the network's answer, and
+ * another Scan gives the same answer.
+ */
+const UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([401, 403, 408, 429]);
+
+/**
+ * Whether `error` (from one Scan) means that this Scan is unavailable, so that
+ * another Scan can answer. A failed `fetch` (network, CORS, timeout) is also
+ * unavailable.
+ */
+export function isScanUnavailable(error: unknown): boolean {
+  if (error instanceof ScanApiError) {
+    return error.status >= 500 || UNAVAILABLE_STATUSES.has(error.status);
+  }
+  return true;
 }
 
 /**
@@ -287,6 +353,28 @@ function isNotFound(error: unknown): boolean {
  */
 const missingEndpoints = new Set<string>();
 
+/**
+ * For each Scan base URL, the time (`Date.now()`) until which list clients try
+ * the other Scans first. It is shared in the process, because an app often makes
+ * a new client for each action, and each one must not pay for a refusing Scan
+ * again.
+ */
+const coolingUntil = new Map<string, number>();
+
+/**
+ * The order in which to try `scans` now: the Scans that are not cooling down,
+ * in their given order, then the cooling Scans, the earliest to recover first.
+ * A cooling Scan stays in the order, so a request still has a chance when every
+ * Scan is cooling.
+ */
+function tryOrder(scans: readonly string[], now: number): string[] {
+  const ready = scans.filter(s => (coolingUntil.get(s) ?? 0) <= now);
+  const cooling = scans
+    .filter(s => (coolingUntil.get(s) ?? 0) > now)
+    .sort((a, b) => coolingUntil.get(a)! - coolingUntil.get(b)!);
+  return [...ready, ...cooling];
+}
+
 // ─── ScanClient ────────────────────────────────────────────────────────
 
 // The Scan API is spec'd as public — its content (DSO party, mining
@@ -294,17 +382,48 @@ const missingEndpoints = new Set<string>();
 // to read, and the reference OpenAPI schema declares no `security:`
 // requirement. Deployments that gate Scan behind a corporate reverse
 // proxy do so at the network layer (VPN, mTLS, nginx-basic-auth); this
-// client doesn't participate in that.
+// client doesn't participate in that. Many SV Scans allow only the IPs of
+// known validators, and refuse other callers with 403: a list of Scans
+// ({@link ScanListConfig}) keeps the client working when one Scan refuses.
 export class ScanClient {
-  public readonly baseUrl: string;
+  /** The Scans, the preferred Scan first. */
+  public readonly baseUrls: ScanBaseUrls;
   public debug: boolean;
+  private readonly isList: boolean;
+  private readonly timeoutMs: number | undefined;
+  private readonly cooldownMs: number;
 
   constructor(config: ScanClientConfig) {
-    this.baseUrl = config.baseUrl;
+    if (config.baseUrls !== undefined) {
+      const unique = [...new Set(config.baseUrls)];
+      if (unique.length === 0) {
+        throw new RangeError("ScanClient: baseUrls must name at least one Scan");
+      }
+      this.baseUrls = [unique[0]!, ...unique.slice(1)];
+      this.isList = true;
+      this.timeoutMs = config.timeoutMs ?? DEFAULT_LIST_TIMEOUT_MS;
+      this.cooldownMs = config.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+    } else {
+      this.baseUrls = [config.baseUrl];
+      this.isList = false;
+      this.timeoutMs = config.timeoutMs;
+      this.cooldownMs = 0;
+    }
+    if (this.timeoutMs !== undefined && !(Number.isFinite(this.timeoutMs) && this.timeoutMs > 0)) {
+      throw new RangeError(`ScanClient: timeoutMs must be a positive number, not ${this.timeoutMs}`);
+    }
+    if (!(Number.isFinite(this.cooldownMs) && this.cooldownMs >= 0)) {
+      throw new RangeError(`ScanClient: cooldownMs must be zero or more, not ${this.cooldownMs}`);
+    }
     this.debug = config.debug ?? false;
   }
 
-  private async request<TResponse>(
+  /** The preferred Scan. */
+  public get baseUrl(): string {
+    return this.baseUrls[0];
+  }
+
+  private request<TResponse>(
     path: string,
     method: "GET" | "POST",
     options?: {
@@ -312,7 +431,55 @@ export class ScanClient {
       query?: Record<string, unknown>;
     },
   ): Promise<TResponse> {
-    let url = `${this.baseUrl}${path}`;
+    return this.onAnyScan(this.baseUrls, baseUrl =>
+      this.requestTo<TResponse>(baseUrl, path, method, options),
+    );
+  }
+
+  /**
+   * Call `send` on one Scan of `scans`. One Scan: its result or its error. A
+   * list: the first Scan in {@link tryOrder} that is not unavailable. An
+   * unavailable Scan cools down. When every Scan is unavailable, the client
+   * throws {@link ScanUnavailableError}.
+   */
+  private async onAnyScan<TResponse>(
+    scans: readonly string[],
+    send: (baseUrl: string) => Promise<TResponse>,
+  ): Promise<TResponse> {
+    if (!this.isList) return send(scans[0]!);
+    const attempts: ScanAttempt[] = [];
+    for (const baseUrl of tryOrder(scans, Date.now())) {
+      try {
+        const result = await send(baseUrl);
+        coolingUntil.delete(baseUrl);
+        return result;
+      } catch (error) {
+        if (!isScanUnavailable(error)) {
+          // An answer, for example 404: the Scan is available.
+          coolingUntil.delete(baseUrl);
+          throw error;
+        }
+        attempts.push(attemptOf(baseUrl, error));
+        const wasReady = (coolingUntil.get(baseUrl) ?? 0) <= Date.now();
+        coolingUntil.set(baseUrl, Date.now() + this.cooldownMs);
+        if (wasReady) {
+          logger.warn(`Scan ${baseUrl} is unavailable (${describeError(error)}); trying the other Scans first`);
+        }
+      }
+    }
+    throw new ScanUnavailableError(attempts);
+  }
+
+  private async requestTo<TResponse>(
+    baseUrl: string,
+    path: string,
+    method: "GET" | "POST",
+    options?: {
+      body?: unknown;
+      query?: Record<string, unknown>;
+    },
+  ): Promise<TResponse> {
+    let url = `${baseUrl}${path}`;
 
     // Append query parameters
     if (options?.query) {
@@ -350,6 +517,9 @@ export class ScanClient {
     const requestInit: RequestInit = { method, credentials: "omit", headers };
     if (options?.body) {
       requestInit.body = JSON.stringify(options.body);
+    }
+    if (this.timeoutMs !== undefined) {
+      requestInit.signal = AbortSignal.timeout(this.timeoutMs);
     }
 
     if (this.debug) {
@@ -463,20 +633,27 @@ export class ScanClient {
   }
 
   /**
-   * GET `path`, or call `fallback` when this Scan does not have `path`. A 404
-   * is recorded in {@link missingEndpoints}; any other error is thrown.
+   * GET `path`, or call `fallback` when the Scan does not have `path`. A 404 is
+   * recorded in {@link missingEndpoints} for the Scan that gave it; any other
+   * error is thrown. A list client asks only the Scans that are not recorded.
    */
   private async getOrFallback<TResponse>(
     path: string,
     fallback: () => Promise<TResponse>,
   ): Promise<TResponse> {
-    const endpoint = `${this.baseUrl}${path}`;
-    if (missingEndpoints.has(endpoint)) return fallback();
+    const scans = this.baseUrls.filter(baseUrl => !missingEndpoints.has(`${baseUrl}${path}`));
+    if (scans.length === 0) return fallback();
     try {
-      return await this.request<TResponse>(path, "GET");
+      return await this.onAnyScan(scans, async baseUrl => {
+        try {
+          return await this.requestTo<TResponse>(baseUrl, path, "GET");
+        } catch (error) {
+          if (isNotFound(error)) missingEndpoints.add(`${baseUrl}${path}`);
+          throw error;
+        }
+      });
     } catch (error) {
       if (!isNotFound(error)) throw error;
-      missingEndpoints.add(endpoint);
       return fallback();
     }
   }

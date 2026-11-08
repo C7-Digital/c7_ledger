@@ -115,3 +115,49 @@ export async function readErrorBody(
     return { kind: "text", text: raw };
   }
 }
+
+/**
+ * One Scan of a list that could not answer a request.
+ *
+ * `http`: the Scan (or the gateway in front of it) answered with an
+ * unavailable status, for example 403 from an IP allowlist. `transport`: no
+ * response came back (network, CORS, timeout); `error` is what `fetch` threw.
+ */
+export type ScanAttempt =
+  | { readonly kind: "http"; readonly baseUrl: string; readonly error: ScanApiError }
+  | { readonly kind: "transport"; readonly baseUrl: string; readonly error: unknown };
+
+export function attemptOf(baseUrl: string, error: unknown): ScanAttempt {
+  return error instanceof ScanApiError
+    ? { kind: "http", baseUrl, error }
+    : { kind: "transport", baseUrl, error };
+}
+
+/** A short text for a log line or a message, for any thrown value. */
+export function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name === "Error" || error.name === "ScanApiError"
+      ? error.message
+      : `${error.name}: ${error.message}`;
+  }
+  return String(error);
+}
+
+/**
+ * The error a list client ({@link ScanListConfig}) throws when no Scan of the
+ * list could answer. Each Scan that the client tried is in {@link attempts}, in
+ * the order of the tries. An answer from a Scan, for example 404 or 400, is not
+ * this error: the client throws that answer's {@link ScanApiError}.
+ */
+export class ScanUnavailableError extends Error {
+  public readonly attempts: readonly ScanAttempt[];
+
+  constructor(attempts: readonly ScanAttempt[]) {
+    super(
+      `No Scan answered (${attempts.length} tried): ` +
+        attempts.map(a => `${a.baseUrl}: ${describeError(a.error)}`).join("; "),
+    );
+    this.name = "ScanUnavailableError";
+    this.attempts = attempts;
+  }
+}

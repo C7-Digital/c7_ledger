@@ -36,12 +36,47 @@ payloads that Scan returns.
 
 | `@c7-digital/scan` | Splice (Scan API spec) | Splice DARs | Tested against |
 |---|---|---|---|
+| 0.0.18 | 0.9.4 (`scan/specs/scan_bundled_0.9.4.yaml`) | `splice-amulet` 0.1.24, `splice-amulet-name-service` 0.1.25, `splice-dso-governance` 0.1.30 | Unit tests (with the list of Scans) |
 | 0.0.17 | 0.9.4 (`scan/specs/scan_bundled_0.9.4.yaml`) | `splice-amulet` 0.1.24, `splice-amulet-name-service` 0.1.25, `splice-dso-governance` 0.1.30 | Unit tests; a consumer app's holdings reads on a Splice 0.8.3 Scan |
 | 0.0.16 and earlier | 0.6.1 | `splice-amulet` 0.1.18, `splice-amulet-name-service` 0.1.19, `splice-dso-governance` 0.1.24 | Unit tests |
 
 A test (`scan/src/client.paths.test.ts`) checks that each path `ScanClient` calls
 is in the target spec. The exceptions are `/v1/dso` and `/v0/sv-info`, which a
 later Splice line adds: the client reads them first and uses its fallback on a 404.
+
+#### A list of Scans (0.0.18)
+
+Each Super Validator runs a Scan, and each Scan serves the same network state.
+Many SV Scans allow only the IP addresses of known validators, and refuse other
+callers with 403. Give the client a list of Scans, so that it continues to work
+when one Scan refuses or fails:
+
+```ts
+const scan = new ScanClient({
+  baseUrls: [preferredScanUrl, ...fallbackScanUrls], // the preferred Scan first
+  timeoutMs: 15_000, // for each Scan; the default for a list
+  cooldownMs: 30_000, // the default
+});
+```
+
+- The client sends each request to the first Scan that is not cooling down.
+- These results make a Scan unavailable: a failed `fetch` (network, CORS,
+  timeout), 401, 403, 408, 429 and 5xx. The client then tries the next Scan with
+  the same request, and the unavailable Scan cools down. During the cooldown, all
+  clients in the process try the other Scans first.
+- Every other status is the network's answer, for example 400 or 404. The client
+  throws its `ScanApiError` and does not ask another Scan.
+- When no Scan answers, the client throws `ScanUnavailableError`. Its `attempts`
+  give each Scan that the client tried, and its error.
+- `isScanUnavailable(error)` tells which errors make a Scan unavailable.
+- With `baseUrl` (one Scan), the client works as before: it throws the Scan's
+  error, or the error of `fetch`, and it has no timeout unless you set `timeoutMs`.
+
+The list gives availability, not trust: the client uses the first answer, and
+does not compare the answers of several Scans (as the Splice validator's BFT
+Scan connection does). Use only Scans that accept requests from your IP
+addresses. A browser app can also use a list: give it the paths of
+same-origin proxies, one for each Scan.
 
 #### Migrating to scan 0.0.17
 
