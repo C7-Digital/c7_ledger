@@ -115,3 +115,77 @@ export async function readErrorBody(
     return { kind: "text", text: raw };
   }
 }
+
+/**
+ * The validator's scan proxy refused the access token (401). The token's
+ * issuer or audience does not match the validator's auth config, so every
+ * proxy read fails the same way: this is a configuration error, and the client
+ * does not hide it with a read from the Scans.
+ */
+export class ScanProxyAuthError extends Error {
+  /** The base URL of the validator API. */
+  public readonly baseUrl: string;
+  public readonly status = 401;
+  public readonly statusText: string;
+  /** The proxy's answer. */
+  public readonly error: ScanApiError;
+
+  constructor(baseUrl: string, error: ScanApiError) {
+    super(
+      `The validator scan proxy at ${baseUrl} refused the access token (HTTP 401). ` +
+        "Check that the token's issuer and audience match the validator's auth config.",
+    );
+    this.name = "ScanProxyAuthError";
+    this.baseUrl = baseUrl;
+    this.statusText = error.statusText;
+    this.error = error;
+  }
+}
+
+/**
+ * One source that could not answer a request: a Scan of the list, or the
+ * validator's scan proxy (its `baseUrl` is the validator API).
+ *
+ * `http`: the source (or the gateway in front of it) answered with an
+ * unavailable status, for example 403 from an IP allowlist. `transport`: no
+ * response came back (network, CORS, timeout); `error` is what `fetch` threw.
+ */
+export type ScanAttempt =
+  | { readonly kind: "http"; readonly baseUrl: string; readonly error: ScanApiError }
+  | { readonly kind: "transport"; readonly baseUrl: string; readonly error: unknown };
+
+export function attemptOf(baseUrl: string, error: unknown): ScanAttempt {
+  // Errors here come from this package's own requests, so `instanceof` holds.
+  return error instanceof ScanApiError
+    ? { kind: "http", baseUrl, error }
+    : { kind: "transport", baseUrl, error };
+}
+
+/** A short text for a log line or a message, for any thrown value. */
+export function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name === "Error" || error.name === "ScanApiError"
+      ? error.message
+      : `${error.name}: ${error.message}`;
+  }
+  return String(error);
+}
+
+/**
+ * The error a list client ({@link ScanListConfig}) throws when no Scan of the
+ * list could answer. Each Scan that the client tried is in {@link attempts}, in
+ * the order of the tries. An answer from a Scan, for example 404 or 400, is not
+ * this error: the client throws that answer's {@link ScanApiError}.
+ */
+export class ScanUnavailableError extends Error {
+  public readonly attempts: readonly ScanAttempt[];
+
+  constructor(attempts: readonly ScanAttempt[]) {
+    super(
+      `No Scan answered (${attempts.length} tried): ` +
+        attempts.map(a => `${a.baseUrl}: ${describeError(a.error)}`).join("; "),
+    );
+    this.name = "ScanUnavailableError";
+    this.attempts = attempts;
+  }
+}

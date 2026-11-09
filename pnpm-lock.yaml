@@ -190,6 +190,9 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260707.2
         version: 7.0.0-dev.20260707.2
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
       openapi-typescript:
         specifier: ^7.4.2
         version: 7.10.1(typescript@5.9.3)

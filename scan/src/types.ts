@@ -103,10 +103,30 @@ export interface GetOpenAndIssuingMiningRoundsResponse {
   issuing_mining_rounds: Record<string, MaybeCachedContractWithState<Round.IssuingMiningRound>>;
 }
 
+/**
+ * The open and issuing mining rounds as full contracts: the answer of the
+ * validator's scan proxy (`GET /v0/scan-proxy/open-and-issuing-mining-rounds`).
+ * Scan's own endpoint answers with a cache protocol instead
+ * ({@link GetOpenAndIssuingMiningRoundsResponse}).
+ */
+export interface GetOpenAndIssuingMiningRoundsProxyResponse {
+  open_mining_rounds: ContractWithState<Round.OpenMiningRound>[];
+  issuing_mining_rounds: ContractWithState<Round.IssuingMiningRound>[];
+}
+
 // ─── getAmuletRules ─────────────────────────────────────────────────────
 
 export interface GetAmuletRulesResponse {
   amulet_rules_update: MaybeCachedContractWithState<AmuletRules.AmuletRules>;
+}
+
+/**
+ * The AmuletRules contract: the answer of the validator's scan proxy
+ * (`GET /v0/scan-proxy/amulet-rules`). Scan's own endpoint answers with a
+ * cache protocol instead ({@link GetAmuletRulesResponse}).
+ */
+export interface GetAmuletRulesProxyResponse {
+  amulet_rules: ContractWithState<AmuletRules.AmuletRules>;
 }
 
 // ─── getExternalPartyAmuletRules ────────────────────────────────────────
