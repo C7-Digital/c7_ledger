@@ -7,6 +7,7 @@
  * from Splice DAR files via @c7-digital/splice-codegen.
  */
 import type { Party } from "@daml/types";
+import type { components, operations } from "./generated/api.js";
 import type {
   Amulet,
   AmuletRules,
@@ -185,3 +186,31 @@ export interface ListUnclaimedDevelopmentFundCouponsResponse {
 export interface ListDsoRulesVoteRequestsResponse {
   vote_requests: Contract<DsoRules.VoteRequest>[];
 }
+
+// ─── updateHistory (POST /v2/updates) ───────────────────────────────────
+
+/**
+ * One item in the update-history feed (`POST /v2/updates`). A Scan update is
+ * either a transaction or a synchronizer reassignment, so discriminate the
+ * union before reading transaction-only fields: a transaction has
+ * `events_by_id` and a top-level `migration_id`, while a reassignment has an
+ * `event` and carries its `migration_id` nested under that `event`.
+ */
+export type UpdateHistoryItemV2 = components["schemas"]["UpdateHistoryItemV2"];
+
+/** A transaction update: carries a top-level `migration_id` and `events_by_id`. */
+export type UpdateHistoryTransactionV2 = components["schemas"]["UpdateHistoryTransactionV2"];
+
+/**
+ * A contract reassignment between synchronizers. It has no top-level
+ * `migration_id`; the `migration_id` is nested under `event`.
+ */
+export type UpdateHistoryReassignment = components["schemas"]["UpdateHistoryReassignment"];
+
+/** The request body of `POST /v2/updates`. */
+export type GetUpdatesV2Request =
+  operations["getUpdateHistoryV2"]["requestBody"]["content"]["application/json"];
+
+/** The response of `POST /v2/updates`: `transactions` is a list of {@link UpdateHistoryItemV2}. */
+export type GetUpdatesV2Response =
+  operations["getUpdateHistoryV2"]["responses"]["200"]["content"]["application/json"];
