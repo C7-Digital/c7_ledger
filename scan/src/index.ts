@@ -60,4 +60,10 @@ export type {
   LookupTransferCommandStatusResponse,
   ListUnclaimedDevelopmentFundCouponsResponse,
   ListDsoRulesVoteRequestsResponse,
+  // updateHistory (POST /v2/updates)
+  GetUpdatesV2Request,
+  GetUpdatesV2Response,
+  UpdateHistoryItemV2,
+  UpdateHistoryTransactionV2,
+  UpdateHistoryReassignment,
 } from "./types.js";
