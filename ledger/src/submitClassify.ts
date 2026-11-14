@@ -30,8 +30,10 @@ const CONTRACT_GONE_CODES: ReadonlySet<string> = new Set([
   "LOCAL_VERDICT_INACTIVE_CONTRACTS",
 ]);
 
-// An earlier submit of this same change id (user id, command id, actAs, submission
-// id) is still being processed by the participant. Canton files this under
+// An earlier submit of this same change id (user id, command id, actAs) is still
+// being processed by the participant. The change id is those three fields only; a
+// later submission id does not make a new change, so a fresh retry attempt of the
+// same command can still meet the in-flight original. Canton files this under
 // `ContentionOnSharedResources` (category 2) but marks it `definiteAnswer = false`:
 // the outcome is NOT yet known, so it is the one contention code that is
 // indeterminate rather than "definitely did not commit" (see isSubmissionInFlight).
