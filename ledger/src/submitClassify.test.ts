@@ -4,6 +4,7 @@ import {
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,
+  isSubmissionInFlight,
   isConfirmedPermanentReject,
 } from "./submitClassify";
 import type { JsCantonError } from "./types";
@@ -73,6 +74,30 @@ describe("isRetriableSubmit", () => {
     // resourceMissing (11) is not retryable — the archive caller treats it as done.
     expect(isRetriableSubmit(rejectedWith(409, "CONTRACT_NOT_FOUND", 11))).toBe(false);
   });
+
+  it("is true for an in-flight submission (category 2, still retryable)", () => {
+    expect(
+      isRetriableSubmit(rejectedWith(409, "SUBMISSION_ALREADY_IN_FLIGHT", 2))
+    ).toBe(true);
+  });
+});
+
+describe("isSubmissionInFlight", () => {
+  it("is true only for SUBMISSION_ALREADY_IN_FLIGHT (keyed on code, not category)", () => {
+    expect(
+      isSubmissionInFlight(rejectedWith(409, "SUBMISSION_ALREADY_IN_FLIGHT", 2))
+    ).toBe(true);
+  });
+
+  it("is false for the other category-2 code that DID definitively not commit", () => {
+    expect(
+      isSubmissionInFlight(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
+    ).toBe(false);
+  });
+
+  it("is false for a transport error with no Canton payload", () => {
+    expect(isSubmissionInFlight(new LedgerApiError(503, "Service Unavailable"))).toBe(false);
+  });
 });
 
 describe("structural transport detection (survives duplicated package copies)", () => {
@@ -108,6 +133,15 @@ describe("isIndeterminateSubmit", () => {
     expect(
       isIndeterminateSubmit(rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2))
     ).toBe(false);
+  });
+
+  it("is true for an in-flight submission, though it shares category 2", () => {
+    // SUBMISSION_ALREADY_IN_FLIGHT is category 2 like LOCKED_CONTRACTS above, but
+    // its answer is not definite (definiteAnswer = false): the outcome is pending,
+    // so it is indeterminate, not "did not commit". Keyed on code for that reason.
+    expect(
+      isIndeterminateSubmit(rejectedWith(409, "SUBMISSION_ALREADY_IN_FLIGHT", 2))
+    ).toBe(true);
   });
 });
 

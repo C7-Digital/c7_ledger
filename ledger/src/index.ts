@@ -43,6 +43,7 @@ export {
   isAlreadyArchived,
   isRetriableSubmit,
   isIndeterminateSubmit,
+  isSubmissionInFlight,
   isConfirmedPermanentReject,
 } from "./submitClassify";
 export { type ValidationMode } from "./validation";
