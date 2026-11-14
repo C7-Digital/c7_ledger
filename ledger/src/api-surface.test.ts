@@ -63,6 +63,7 @@ describe("Public API surface", () => {
     "isAlreadyArchived",
     "isRetriableSubmit",
     "isIndeterminateSubmit",
+    "isSubmissionInFlight",
     "isConfirmedPermanentReject",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
