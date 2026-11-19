@@ -63,15 +63,52 @@ export function isAlreadyArchived(error: unknown): boolean {
   return canton !== null && CONTRACT_GONE_CODES.has(canton.code);
 }
 
+// The sequencer refuses a submission when the submitting node has no traffic
+// credit left.
+const OUT_OF_TRAFFIC_CODE = "SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT";
+// The participant wraps a failed send to the sequencer in this code.
+const SEQUENCER_REQUEST_FAILED_CODE = "SEQUENCER_REQUEST_FAILED";
+// The inner code id as a whole token, so a longer code that contains it does
+// not match.
+const OUT_OF_TRAFFIC_TOKEN = new RegExp(`(^|[^A-Z0-9_])${OUT_OF_TRAFFIC_CODE}([^A-Z0-9_]|$)`);
+
+/**
+ * The submitting node has no traffic credit: the sequencer refused the
+ * submission (`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT`, `AboveTrafficLimit`). The
+ * answer is definite (`definiteAnswer = true`), and a retry cannot succeed
+ * until the node buys traffic. A retry spends more of the traffic that the
+ * node gets back over time, so the caller must stop.
+ *
+ * The participant gives this to a submitter as `SEQUENCER_REQUEST_FAILED`
+ * (category `contention`, which is retryable) and puts the inner sequencer
+ * error only in `context.sendError`, as rendered text. Canton gives the inner
+ * code in no structured field. So this check reads that one context field and
+ * matches the inner code id as a whole token. This is the only place where a
+ * classifier reads rendered text; every other check reads `code` or
+ * `errorCategory`. A top-level `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` code also
+ * matches.
+ */
+export function isOutOfTraffic(error: unknown): boolean {
+  const canton = cantonErrorOf(error);
+  if (canton === null) return false;
+  if (canton.code === OUT_OF_TRAFFIC_CODE) return true;
+  if (canton.code !== SEQUENCER_REQUEST_FAILED_CODE) return false;
+  const sendError: unknown = (canton.context as Record<string, unknown>)["sendError"];
+  return typeof sendError === "string" && OUT_OF_TRAFFIC_TOKEN.test(sendError);
+}
+
 /**
  * Worth retrying: a transport transient (408 / 429 / 5xx, read via
  * `httpStatusOf`) or a Canton-retryable rejection (`isRetryable`, keyed off
- * `errorCategory`: contention, transient, deadline, seek-after-end).
+ * `errorCategory`: contention, transient, deadline, seek-after-end). A node
+ * with no traffic credit ({@link isOutOfTraffic}) is never worth retrying,
+ * although Canton files it under `contention`.
  *
  * Check {@link isIndeterminateSubmit} first: an indeterminate failure is also
  * retriable, but only with the same `commandId`.
  */
 export function isRetriableSubmit(error: unknown): boolean {
+  if (isOutOfTraffic(error)) return false;
   // Transport transient: 408, 429, or any 5xx (503 included — see
   // isIndeterminateSubmit for the same-commandId caveat).
   const status = httpStatusOf(error);
@@ -121,6 +158,8 @@ export function isSubmissionInFlight(error: unknown): boolean {
  * that the outcome is not yet determinate.
  */
 export function isIndeterminateSubmit(error: unknown): boolean {
+  // A refusal for lack of traffic is definite, whatever the HTTP status.
+  if (isOutOfTraffic(error)) return false;
   if (httpStatusOf(error) === 503) return true;
   if (isSubmissionInFlight(error)) return true;
   const canton = cantonErrorOf(error);
@@ -134,13 +173,17 @@ export function isIndeterminateSubmit(error: unknown): boolean {
  * Requires a Canton payload (`cantonErrorOf`); bare HTTP 4xx and plain client
  * Errors are **false** so ignore-and-proceed callers fail closed on unknowns.
  * Excludes {@link isAlreadyArchived} (already-applied / contract gone): those
- * are success for idempotent deletes, not permanent rejects.
+ * are success for idempotent deletes, not permanent rejects. Includes
+ * {@link isOutOfTraffic}: Canton files it as retryable, but the answer is
+ * definite and no retry can succeed until the node buys traffic.
  *
  * `!isRetriableSubmit` alone is not enough — that is also true for transport
  * 4xx with no Canton payload. Compose this fact into domain policy (e.g. mark
  * ignored and continue cutover); do not re-derive it in the consumer.
  */
 export function isConfirmedPermanentReject(error: unknown): boolean {
+  // Definite, and no retry can succeed until the node buys traffic.
+  if (isOutOfTraffic(error)) return true;
   if (isAlreadyArchived(error) || isRetriableSubmit(error)) {
     return false;
   }

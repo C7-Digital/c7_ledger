@@ -17,6 +17,7 @@ import {
 import {
   isAlreadyApplied,
   isIndeterminateSubmit,
+  isOutOfTraffic,
   isRetriableSubmit,
 } from "./submitClassify";
 import type { JsCantonError } from "./types";
@@ -31,7 +32,8 @@ type Answer =
   | { kind: "syncThrow" }
   | { kind: "plainReject" }
   | { kind: "http"; status: number }
-  | { kind: "canton"; status: number; code: string; category: number };
+  | { kind: "canton"; status: number; code: string; category: number }
+  | { kind: "noTraffic"; status: number };
 
 /** What one call to a hook does. */
 type HookBehavior = "return" | "throw" | "reject";
@@ -45,6 +47,12 @@ const answer: fc.Arbitrary<Answer> = fc.oneof(
     arbitrary: fc
       .constantFrom(400, 401, 403, 404, 408, 409, 429, 500, 502, 503, 504)
       .map((status) => ({ kind: "http" as const, status })),
+  },
+  {
+    weight: 2,
+    arbitrary: fc
+      .constantFrom(409, 500, 503)
+      .map((status) => ({ kind: "noTraffic" as const, status })),
   },
   {
     weight: 6,
@@ -97,6 +105,17 @@ function errorOf(a: Answer, attempt: number): unknown {
       return new Error(`attempt ${attempt} rejected`);
     case "http":
       return new LedgerApiError(a.status, "status");
+    case "noTraffic": {
+      const error = {
+        code: "SEQUENCER_REQUEST_FAILED",
+        cause: "Failed to send command",
+        errorCategory: 2,
+        definiteAnswer: true,
+        context: { sendError: "RequestRefused(GrpcRequestRefusedByServer: SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT(9,0))" },
+      };
+      const body: LedgerErrorBody = { kind: "canton", error: error as unknown as JsCantonError };
+      return new LedgerApiError(a.status, "rejected", body);
+    }
     case "canton": {
       const error = { code: a.code, cause: "test", errorCategory: a.category, context: {} };
       const body: LedgerErrorBody = { kind: "canton", error: error as JsCantonError };
@@ -206,6 +225,8 @@ describe("retrySubmit properties", () => {
           expect(e.attempt).toBe(i + 1);
           expect(e.error).toBe(errors[i]);
           expect(isAlreadyApplied(e.error)).toBe(false);
+          // The loop never waits to retry a node with no traffic.
+          expect(isOutOfTraffic(e.error)).toBe(false);
         });
 
         // The checks below depend on how the loop ended, so they collect the
@@ -243,7 +264,11 @@ describe("retrySubmit properties", () => {
           // A failure that the loop retries ends it only when the retry
           // budget is used up, before any settle phase.
           const callerRetries =
-            s.retryAlso === "401" && !settled && last instanceof LedgerApiError && last.status === 401;
+            s.retryAlso === "401" &&
+            !settled &&
+            !isOutOfTraffic(last) &&
+            last instanceof LedgerApiError &&
+            last.status === 401;
           const retried = isRetriableSubmit(last) || isIndeterminateSubmit(last) || callerRetries;
           if (retried && (calls !== s.retryAttempts || settled)) {
             broken.push("stopped on a retriable failure with budget left");

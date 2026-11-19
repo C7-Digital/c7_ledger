@@ -6,6 +6,7 @@ import {
   isIndeterminateSubmit,
   isSubmissionInFlight,
   isConfirmedPermanentReject,
+  isOutOfTraffic,
 } from "./submitClassify";
 import type { JsCantonError } from "./types";
 
@@ -170,3 +171,87 @@ describe("isConfirmedPermanentReject", () => {
     ).toBe(false);
   });
 });
+
+// The shape in which a participant gives a submit that the sequencer refused
+// for lack of traffic: the wrapper code, category 2, a definite answer, and the
+// inner sequencer error only as rendered text in `context.sendError`.
+const OUT_OF_TRAFFIC_SEND_ERROR = [
+  "RequestRefused(",
+  "  SendAsyncErrorGrpc(",
+  "    GrpcRequestRefusedByServer: FAILED_PRECONDITION/SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT(9,ff6f9e7e): " +
+    "Submission was rejected because no traffic is available: AboveTrafficLimit(member = PAR::node::1220aa, " +
+    "trafficCost = 2048, trafficState = TrafficState(extraTrafficLimit = 5999400, extraTrafficConsumed = 5999400))",
+  "  )",
+  ")",
+].join("\n");
+
+function sequencerRequestFailed(sendError: unknown, status = 409): LedgerApiError {
+  const error = {
+    code: "SEQUENCER_REQUEST_FAILED",
+    cause: "Failed to send command",
+    errorCategory: 2,
+    definiteAnswer: true,
+    context: { sendError },
+  } as unknown as JsCantonError;
+  const body: LedgerErrorBody = { kind: "canton", error };
+  return new LedgerApiError(status, "Conflict", body);
+}
+
+describe("isOutOfTraffic", () => {
+  it("is true for SEQUENCER_REQUEST_FAILED whose sendError names SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT", () => {
+    expect(isOutOfTraffic(sequencerRequestFailed(OUT_OF_TRAFFIC_SEND_ERROR))).toBe(true);
+  });
+
+  it("is true for a top-level SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT code", () => {
+    expect(isOutOfTraffic(rejectedWith(400, "SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT", 9))).toBe(true);
+  });
+
+  it("is true for the bare Canton payload, without the HTTP error around it", () => {
+    const error = cantonOf(sequencerRequestFailed(OUT_OF_TRAFFIC_SEND_ERROR));
+    expect(isOutOfTraffic(error)).toBe(true);
+  });
+
+  it.each([
+    ["another send error", "RequestRefused(SendAsyncErrorGrpc(GrpcServiceUnavailable: UNAVAILABLE))"],
+    ["a longer code that contains the id", "XSEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT_V2(9,0)"],
+    ["no sendError", undefined],
+    ["a sendError that is not a string", { code: "SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT" }],
+  ])("is false for SEQUENCER_REQUEST_FAILED with %s", (_name, sendError) => {
+    expect(isOutOfTraffic(sequencerRequestFailed(sendError))).toBe(false);
+  });
+
+  it("is false when another code carries the traffic text", () => {
+    const error = {
+      code: "LOCAL_VERDICT_LOCKED_CONTRACTS",
+      cause: "test",
+      errorCategory: 2,
+      context: { sendError: OUT_OF_TRAFFIC_SEND_ERROR },
+    } as unknown as JsCantonError;
+    expect(isOutOfTraffic(new LedgerApiError(409, "Conflict", { kind: "canton", error }))).toBe(false);
+  });
+
+  it("is false for a transport error and a plain Error", () => {
+    expect(isOutOfTraffic(new LedgerApiError(503, "Service Unavailable"))).toBe(false);
+    expect(isOutOfTraffic(new Error("SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT"))).toBe(false);
+  });
+});
+
+describe("a submit refused for lack of traffic", () => {
+  it.each([409, 500, 503])("is not retriable, not indeterminate, and is a permanent reject (HTTP %i)", (status) => {
+    const error = sequencerRequestFailed(OUT_OF_TRAFFIC_SEND_ERROR, status);
+    expect(isRetriableSubmit(error)).toBe(false);
+    expect(isIndeterminateSubmit(error)).toBe(false);
+    expect(isConfirmedPermanentReject(error)).toBe(true);
+  });
+
+  it("stays retriable when SEQUENCER_REQUEST_FAILED has another send error", () => {
+    const error = sequencerRequestFailed("RequestRefused(SendAsyncErrorGrpc(GrpcServiceUnavailable: UNAVAILABLE))");
+    expect(isRetriableSubmit(error)).toBe(true);
+    expect(isConfirmedPermanentReject(error)).toBe(false);
+  });
+});
+
+function cantonOf(error: LedgerApiError): JsCantonError {
+  if (error.body.kind !== "canton") throw new Error("test setup: not a Canton body");
+  return error.body.error;
+}

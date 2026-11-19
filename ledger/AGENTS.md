@@ -11,7 +11,7 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
-  submitClassify.ts  # Structured submit classifiers (isRetriableSubmit, isIndeterminateSubmit, isAlreadyApplied, isAlreadyArchived, isConfirmedPermanentReject)
+  submitClassify.ts  # Structured submit classifiers (isRetriableSubmit, isIndeterminateSubmit, isAlreadyApplied, isAlreadyArchived, isConfirmedPermanentReject, isOutOfTraffic)
   retrySubmit.ts     # Submit retry loop over the classifiers (same commandId, settle phase, SubmitUnsettledError)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
@@ -40,7 +40,7 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 |--------|----------------|
 | `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; `httpStatusOf(unknown)` reads the status structurally (survives duplicated package copies) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject` — compose transport + Canton, structured (no message regex) |
+| `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject`, `isOutOfTraffic` — compose transport + Canton, structured (no message regex; `isOutOfTraffic` alone reads `context.sendError`, the only place Canton gives the inner sequencer code) |
 | `retrySubmit.ts` | `retrySubmit`: the submit retry loop over those classifiers. The caller gives the command id and the budgets |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.

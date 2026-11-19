@@ -65,6 +65,7 @@ describe("Public API surface", () => {
     "isIndeterminateSubmit",
     "isSubmissionInFlight",
     "isConfirmedPermanentReject",
+    "isOutOfTraffic",
     // The submit retry loop over the classifiers above.
     "retrySubmit",
     "SubmitUnsettledError",

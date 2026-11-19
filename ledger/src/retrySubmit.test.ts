@@ -18,6 +18,34 @@ function rejectedWith(status: number, code: string, errorCategory: number): Ledg
 }
 
 const TRAFFIC = (): LedgerApiError => rejectedWith(400, "SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT", 9);
+// The shape in which a participant gives a submit that the sequencer refused
+// for lack of traffic: category 2 (retryable), a definite answer, and the inner
+// code only in `context.sendError`.
+const NO_TRAFFIC = (): LedgerApiError => {
+  const error = {
+    code: "SEQUENCER_REQUEST_FAILED",
+    cause: "Failed to send command",
+    errorCategory: 2,
+    definiteAnswer: true,
+    context: {
+      sendError:
+        "RequestRefused(\n  SendAsyncErrorGrpc(\n    GrpcRequestRefusedByServer: FAILED_PRECONDITION/" +
+        "SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT(9,ff6f9e7e): Submission was rejected because no traffic is " +
+        "available: AboveTrafficLimit(...)\n  )\n)",
+    },
+  } as unknown as JsCantonError;
+  return new LedgerApiError(409, "Conflict", { kind: "canton", error });
+};
+const SEND_FAILED = (): LedgerApiError => {
+  const error = {
+    code: "SEQUENCER_REQUEST_FAILED",
+    cause: "Failed to send command",
+    errorCategory: 2,
+    definiteAnswer: true,
+    context: { sendError: "RequestRefused(SendAsyncErrorGrpc(GrpcServiceUnavailable: UNAVAILABLE))" },
+  } as unknown as JsCantonError;
+  return new LedgerApiError(409, "Conflict", { kind: "canton", error });
+};
 const CONTENTION = (): LedgerApiError => rejectedWith(409, "LOCAL_VERDICT_LOCKED_CONTRACTS", 2);
 const IN_FLIGHT = (): LedgerApiError => rejectedWith(409, "SUBMISSION_ALREADY_IN_FLIGHT", 2);
 const DEADLINE = (): LedgerApiError => rejectedWith(504, "REQUEST_TIME_OUT", 3);
@@ -68,6 +96,7 @@ afterAll(() => setLogger(new ConsoleLogger()));
 type ThrowRow = [name: string, error: () => unknown];
 const THROWN_AT_ONCE: ThrowRow[] = [
   ["traffic credit (invalidState, category 9)", TRAFFIC],
+  ["SEQUENCER_REQUEST_FAILED for lack of traffic (category 2)", NO_TRAFFIC],
   ["contract not found (resourceMissing, 11)", () => rejectedWith(404, "CONTRACT_NOT_FOUND", 11)],
   ["permission denied (403, no Canton payload)", () => new LedgerApiError(403, "Forbidden")],
   ["a plain Error", () => new Error("boom")],
@@ -82,6 +111,7 @@ type OutcomeRow = [
 ];
 const OUTCOMES: OutcomeRow[] = [
   ["contention (category 2)", CONTENTION, "submitted", 2],
+  ["SEQUENCER_REQUEST_FAILED with another send error", SEND_FAILED, "submitted", 2],
   ["429 Too Many Requests", TOO_MANY, "submitted", 2],
   ["503 Service Unavailable (indeterminate)", UNAVAILABLE, "submitted", 2],
   ["deadline (category 3, indeterminate)", DEADLINE, "submitted", 2],
@@ -120,6 +150,25 @@ describe("retrySubmit", () => {
     expect(op).toHaveBeenCalledTimes(1);
     expect(waits).toEqual([]);
     expect(events).toEqual([]);
+  });
+
+  it("does not retry a send that failed for lack of traffic, also when retryAlso accepts it", async () => {
+    const noTraffic = NO_TRAFFIC();
+    const { opts, waits } = options({ retryAlso: () => true });
+    const op = vi.fn(async () => {
+      throw noTraffic;
+    });
+    await expect(retrySubmit(op, opts)).rejects.toBe(noTraffic);
+    expect(op).toHaveBeenCalledTimes(1);
+    expect(waits).toEqual([]);
+  });
+
+  it("stops in the settle phase when the node runs out of traffic", async () => {
+    const noTraffic = NO_TRAFFIC();
+    const { op, calls } = scripted([UNAVAILABLE, IN_FLIGHT, () => noTraffic]);
+    const { opts } = options();
+    await expect(retrySubmit(op, opts)).rejects.toBe(noTraffic);
+    expect(calls).toHaveLength(3);
   });
 
   it("retries contention with exponential backoff up to the retry budget, then throws the last failure", async () => {

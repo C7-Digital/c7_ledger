@@ -181,6 +181,14 @@ helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
   **or** the contract is already gone (`CONTRACT_NOT_FOUND`,
   `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app that archives; the
   *policy* of treating it as success stays with the caller.
+- **Is the node out of traffic?** `isOutOfTraffic(e)` — the sequencer refused the
+  submission because the node has no traffic credit
+  (`SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT`). The participant gives it as
+  `SEQUENCER_REQUEST_FAILED` (category `contention`, which is retryable), with
+  the inner code only as rendered text in `context.sendError`, so this check
+  reads that one field. The answer is definite, and a retry cannot succeed until
+  the node buys traffic: `isRetriableSubmit` and `isIndeterminateSubmit` are
+  `false` for it, and `isConfirmedPermanentReject` is `true`.
 - **Confirmed permanent hard fail?** `isConfirmedPermanentReject(e)` — structured
   Canton rejection that Canton marks non-retryable, and not already-archived.
   Bare HTTP 4xx / plain Errors are **false** (fail closed for ignore-and-proceed).
@@ -218,9 +226,10 @@ budgets; the loop gives Canton's meaning of each answer:
   command id.
 - Retriable (408, 429, 5xx, Canton `contention` / `transient`) — exponential
   backoff up to `retry.attempts`, then it throws the last failure.
-- Any other failure — it throws at once. A definite rejection, for example
-  `SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT` (category `invalidState`), is never
-  retried.
+- No traffic (`isOutOfTraffic`) — it throws at once, also when `retryAlso`
+  accepts the failure. A retry cannot succeed, and it spends more of the
+  node's traffic.
+- Any other failure — it throws at once.
 
 ```typescript
 const outcome = await retrySubmit(
@@ -249,6 +258,12 @@ the first attempt.
 it cannot emit a whole error page. The full value stays on `body`.
 
 ### Migrating to 0.0.50
+
+Adds `isOutOfTraffic(e)` (see above). `isRetriableSubmit` and
+`isIndeterminateSubmit` are now `false`, and `isConfirmedPermanentReject` is now
+`true`, for a submit that the sequencer refused for lack of traffic. Before,
+`isRetriableSubmit` was `true` for it, because Canton files the wrapper code
+`SEQUENCER_REQUEST_FAILED` under `contention`.
 
 Adds `retrySubmit` (see [Retry a submit](#retry-a-submit)), the error
 `SubmitUnsettledError`, and the types `RetrySubmitOptions`, `RetryBudget`,

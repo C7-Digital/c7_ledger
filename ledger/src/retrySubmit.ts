@@ -14,15 +14,17 @@
 //     until the participant gives a definite answer.
 //   - a retriable failure (isRetriableSubmit, or the caller's `retryAlso`): the
 //     loop waits with exponential backoff and tries again.
-//   - any other failure, for example a definite rejection such as
-//     SEQUENCER_NOT_ENOUGH_TRAFFIC_CREDIT (category `invalidState`): the loop
-//     throws it at once. A retry of a definite rejection cannot succeed.
+//   - a node with no traffic credit (isOutOfTraffic): the loop throws at once,
+//     also when `retryAlso` accepts the failure. Canton files it as retryable,
+//     but a retry cannot succeed and spends more of the node's traffic.
+//   - any other failure that is not retriable: the loop throws it at once.
 
 import { httpStatusOf } from "./error";
 import { logger } from "./logger";
 import {
   isAlreadyApplied,
   isIndeterminateSubmit,
+  isOutOfTraffic,
   isRetriableSubmit,
   isSubmissionInFlight,
 } from "./submitClassify";
@@ -87,8 +89,8 @@ export interface RetrySubmitOptions {
   /**
    * Other failures to retry in the retry phase, for example an expired access
    * token when the operation gets a new token on each attempt. The loop asks
-   * this only for a failure that is not already applied, not retriable and not
-   * indeterminate.
+   * this only for a failure that is not already applied, not retriable, not
+   * indeterminate and not a lack of traffic.
    */
   retryAlso?: (error: unknown) => boolean;
   /** Called before each wait. A throw or a rejection from it is logged and has no other effect. */
@@ -157,6 +159,7 @@ export async function retrySubmit<T>(
     if (isAlreadyApplied(error)) {
       return { kind: "alreadyApplied", attempts: attempt };
     }
+    if (isOutOfTraffic(error)) throw error;
     const indeterminate = isIndeterminateSubmit(error);
     const retriable =
       indeterminate ||
