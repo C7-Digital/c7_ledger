@@ -65,6 +65,9 @@ describe("Public API surface", () => {
     "isIndeterminateSubmit",
     "isSubmissionInFlight",
     "isConfirmedPermanentReject",
+    // The submit retry loop over the classifiers above.
+    "retrySubmit",
+    "SubmitUnsettledError",
   ])("exports function %s", (name) => {
     expect(typeof (LedgerPackage as any)[name]).toBe("function");
   });

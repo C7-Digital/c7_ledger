@@ -46,6 +46,17 @@ export {
   isSubmissionInFlight,
   isConfirmedPermanentReject,
 } from "./submitClassify";
+export {
+  retrySubmit,
+  SubmitUnsettledError,
+  type RetryBudget,
+  type SettleBudget,
+  type RetryPhase,
+  type RetryEvent,
+  type SubmitAttempt,
+  type RetrySubmitOptions,
+  type SubmitOutcome,
+} from "./retrySubmit";
 export { type ValidationMode } from "./validation";
 export { type Logger, ConsoleLogger, NoOpLogger, logger, setLogger } from "./logger";
 export * from "./types";
