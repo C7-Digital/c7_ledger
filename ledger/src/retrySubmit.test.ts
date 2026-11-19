@@ -207,6 +207,18 @@ describe("retrySubmit", () => {
     expect(calls.map((c) => c.commandId)).toEqual(["cmd-1", "cmd-1"]);
   });
 
+  it("keeps the outcome unsettled when the resubmit of a consuming exercise finds its contract gone", async () => {
+    // The participant interprets before it deduplicates: when the 503 hid a
+    // commit, the resubmit cannot find the contract that the commit archived.
+    const gone = rejectedWith(404, "CONTRACT_NOT_FOUND", 11);
+    const { op, calls } = scripted([UNAVAILABLE, () => gone]);
+    const { opts } = options();
+    const error = await retrySubmit(op, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubmitUnsettledError);
+    expect((error as SubmitUnsettledError).lastError).toBe(gone);
+    expect(calls.map((c) => c.commandId)).toEqual(["cmd-1", "cmd-1"]);
+  });
+
   it("waits the settle delay after an indeterminate failure, with a new budget", async () => {
     // Two retries use 2 of the 3 retry attempts. The 503 starts the settle
     // phase, which has 4 attempts of its own.

@@ -176,7 +176,9 @@ helpers over `unknown` compose the transport (`LedgerApiError`) and Canton
 - **Did my resubmit hit dedup?** `isAlreadyApplied(e)` — `DUPLICATE_COMMAND`: a
   retry with the *same* `commandId` found the participant already applied the
   prior (seemingly-lost) attempt. A caller retrying an indeterminate submit with a
-  stable `commandId` treats this as success.
+  stable `commandId` treats this as success. A resubmit of a command that archives a
+  contract gets `CONTRACT_NOT_FOUND` instead (see "Commands that archive a
+  contract").
 - **Is my archive already a no-op?** `isAlreadyArchived(e)` — `isAlreadyApplied`
   **or** the contract is already gone (`CONTRACT_NOT_FOUND`,
   `LOCAL_VERDICT_INACTIVE_CONTRACTS`). Reusable by any app that archives; the
@@ -224,7 +226,10 @@ one. The caller gives the command id and the budgets; the loop gives Canton's
 meaning of each answer:
 
 - `DUPLICATE_COMMAND` — an earlier attempt committed. The result is
-  `{ kind: "alreadyApplied" }`.
+  `{ kind: "alreadyApplied" }`. The participant interprets a command before it
+  checks for a duplicate, so only a command that still interprets gets this
+  answer: a create, or a non-consuming exercise. See "Commands that archive a
+  contract" below.
 - Indeterminate (503, Canton `deadline`, `SUBMISSION_ALREADY_IN_FLIGHT`) — the
   loop changes to the settle phase: a fixed delay, with its own budget, until
   the participant gives a definite answer. Only a success or
@@ -242,6 +247,24 @@ meaning of each answer:
 
 Before the settle phase, "stops" means it throws the failure itself. In the
 settle phase, it throws `SubmitUnsettledError`.
+
+#### Commands that archive a contract
+
+A consuming exercise or an archive uses a contract that its own commit
+archives. When an earlier attempt committed, the resubmit with the same command
+id fails while the participant interprets it, before the deduplication check.
+On a Splice 0.10.2 LocalNet participant, the answer is `404 CONTRACT_NOT_FOUND` (category
+11), not `DUPLICATE_COMMAND`. Thus:
+
+- The command does not apply two times: the contract is gone.
+- After an indeterminate failure, the loop throws `SubmitUnsettledError`, with
+  `CONTRACT_NOT_FOUND` as `lastError`. The error does not show whether this
+  command or a different one archived the contract.
+- To settle the outcome, read the ledger again: for example, look for the
+  contract that the choice creates, or let the next run of a sweep see the new
+  state. Do not treat `CONTRACT_NOT_FOUND` as success in general:
+  `isAlreadyArchived` is correct only when the command is an archive, and any
+  archive of the contract has the result that the caller wants.
 
 ```typescript
 const outcome = await retrySubmit(

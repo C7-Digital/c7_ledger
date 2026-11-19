@@ -11,7 +11,13 @@
 // Canton's meaning of each answer:
 //
 //   - `DUPLICATE_COMMAND` (isAlreadyApplied): an earlier attempt committed. The
-//     result is `alreadyApplied`.
+//     result is `alreadyApplied`. The participant interprets a command before
+//     it checks for a duplicate, so only a command that still interprets gets
+//     this answer. When the earlier attempt archived a contract that the
+//     command uses (a consuming exercise or an archive), the resubmit gets
+//     CONTRACT_NOT_FOUND. In the settle phase, that ends as
+//     SubmitUnsettledError, because the error does not show which submit
+//     archived the contract.
 //   - an indeterminate failure (isIndeterminateSubmit: 503, Canton `deadline`,
 //     SUBMISSION_ALREADY_IN_FLIGHT): the command can still commit. The loop
 //     changes to the settle phase, which waits a fixed time between attempts
@@ -156,6 +162,11 @@ export class SubmitUnsettledError extends Error {
  * indeterminate, throws {@link SubmitUnsettledError} for every end other than a
  * success or `alreadyApplied`. Throws a `RangeError` for an empty command id or
  * a budget that is not valid, before it runs `op`.
+ *
+ * A command that archives a contract (a consuming exercise or an archive)
+ * almost never gives `alreadyApplied`: when an earlier attempt committed, the
+ * resubmit fails with `CONTRACT_NOT_FOUND`, and the loop throws
+ * {@link SubmitUnsettledError}. To settle it, read the ledger again.
  */
 export async function retrySubmit<T>(
   op: (attempt: SubmitAttempt) => Promise<T>,
