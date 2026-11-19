@@ -76,6 +76,7 @@ function options(extra: Partial<RetrySubmitOptions> = {}) {
   const events: RetryEvent[] = [];
   const opts: RetrySubmitOptions = {
     commandId: "cmd-1",
+    deduplicationMs: 600_000,
     retry: { attempts: 3, initialDelayMs: 100, maxDelayMs: 1_000 },
     settle: { attempts: 4, delayMs: 5_000 },
     onRetry: (e) => {
@@ -167,7 +168,9 @@ describe("retrySubmit", () => {
     const noTraffic = NO_TRAFFIC();
     const { op, calls } = scripted([UNAVAILABLE, IN_FLIGHT, () => noTraffic]);
     const { opts } = options();
-    await expect(retrySubmit(op, opts)).rejects.toBe(noTraffic);
+    const error = await retrySubmit(op, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubmitUnsettledError);
+    expect((error as SubmitUnsettledError).lastError).toBe(noTraffic);
     expect(calls).toHaveLength(3);
   });
 
@@ -233,12 +236,76 @@ describe("retrySubmit", () => {
     expect(calls).toHaveLength(4);
   });
 
-  it("throws a definite rejection in the settle phase at once", async () => {
+  it("stops at once on a definite rejection in the settle phase, and keeps the outcome unsettled", async () => {
     const traffic = TRAFFIC();
     const { op, calls } = scripted([UNAVAILABLE, () => traffic]);
     const { opts } = options();
-    await expect(retrySubmit(op, opts)).rejects.toBe(traffic);
+    const error = await retrySubmit(op, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubmitUnsettledError);
+    expect((error as SubmitUnsettledError).lastError).toBe(traffic);
+    expect((error as SubmitUnsettledError).attempts).toBe(2);
     expect(calls).toHaveLength(2);
+  });
+
+  it("keeps the outcome unsettled when a 401 follows a 503, also when retryAlso accepts it", async () => {
+    const unauthorized = new LedgerApiError(401, "Unauthorized");
+    const { op, calls } = scripted([UNAVAILABLE, () => unauthorized]);
+    const { opts } = options({ retryAlso: (e) => e === unauthorized });
+    const error = await retrySubmit(op, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubmitUnsettledError);
+    expect((error as SubmitUnsettledError).lastError).toBe(unauthorized);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("does not resubmit when the next attempt can start after the deduplication period", async () => {
+    let clock = 0;
+    const { op, calls } = scripted(Array.from({ length: 10 }, () => UNAVAILABLE));
+    const { opts, waits } = options({
+      deduplicationMs: 12_000,
+      now: () => clock,
+      sleep: async (ms) => {
+        waits.push(ms);
+        clock += ms;
+      },
+    });
+    const error = await retrySubmit(op, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SubmitUnsettledError);
+    // Attempts start at 0, 5 000 and 10 000; an attempt at 15 000 is past 12 000.
+    expect(calls).toHaveLength(3);
+    expect(waits).toEqual([5_000, 5_000]);
+  });
+
+  it("counts the deduplication period from the attempt that went indeterminate", async () => {
+    let clock = 0;
+    const { op, calls } = scripted([CONTENTION, CONTENTION, UNAVAILABLE, UNAVAILABLE]);
+    const { opts } = options({
+      deduplicationMs: 10_001,
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+    });
+    // The contention waits (100, 200) come before the 503, so they do not count.
+    await expect(retrySubmit(op, opts)).resolves.toMatchObject({ kind: "submitted", attempts: 5 });
+    expect(calls).toHaveLength(5);
+  });
+
+  it("rejects an empty commandId before it runs the operation", async () => {
+    for (const commandId of ["", "   "]) {
+      const op = vi.fn(async () => "ok");
+      await expect(retrySubmit(op, options({ commandId }).opts)).rejects.toBeInstanceOf(RangeError);
+      expect(op).not.toHaveBeenCalled();
+    }
+  });
+
+  it("gives a zero delay, not NaN, after more than 1024 failures with a zero backoff", async () => {
+    const { op } = scripted(Array.from({ length: 1_030 }, () => TOO_MANY));
+    const { opts, waits } = options({
+      retry: { attempts: 1_030, initialDelayMs: 0, maxDelayMs: 0 },
+    });
+    await expect(retrySubmit(op, opts)).rejects.toBeInstanceOf(LedgerApiError);
+    expect(waits).toHaveLength(1_029);
+    expect(waits.every((ms) => ms === 0)).toBe(true);
   });
 
   it("without a settle budget, settles with the retry attempts and maxDelayMs", async () => {
@@ -259,8 +326,8 @@ describe("retrySubmit", () => {
     const unauthorized = await retrySubmit(settling.op, options({ retryAlso }).opts).catch(
       (e: unknown) => e,
     );
-    expect(unauthorized).toBeInstanceOf(LedgerApiError);
-    expect((unauthorized as LedgerApiError).status).toBe(401);
+    expect(unauthorized).toBeInstanceOf(SubmitUnsettledError);
+    expect(((unauthorized as SubmitUnsettledError).lastError as LedgerApiError).status).toBe(401);
     expect(settling.calls).toHaveLength(2);
   });
 
@@ -316,6 +383,8 @@ describe("retrySubmit", () => {
     ["maxDelayMs below initialDelayMs", { retry: { attempts: 2, initialDelayMs: 10, maxDelayMs: 5 } }],
     ["settle.attempts -1", { settle: { attempts: -1, delayMs: 0 } }],
     ["settle.delayMs NaN", { settle: { attempts: 2, delayMs: Number.NaN } }],
+    ["deduplicationMs 0", { deduplicationMs: 0 }],
+    ["deduplicationMs Infinity", { deduplicationMs: Infinity }],
   ] as const)("rejects a budget that is not valid: %s", async (_name, extra) => {
     const op = vi.fn(async () => "ok");
     await expect(retrySubmit(op, options(extra).opts)).rejects.toBeInstanceOf(RangeError);
@@ -328,9 +397,31 @@ describe("retrySubmit", () => {
       const { op, calls } = scripted([TOO_MANY]);
       const pending = retrySubmit(op, {
         commandId: "cmd-1",
+        deduplicationMs: 600_000,
         retry: { attempts: 2, initialDelayMs: 1_000, maxDelayMs: 1_000 },
       });
       await vi.advanceTimersByTimeAsync(999);
+      expect(calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject({ kind: "submitted", attempts: 2 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits the full delay when it is longer than one setTimeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      const { op, calls } = scripted([TOO_MANY]);
+      const pending = retrySubmit(op, {
+        commandId: "cmd-1",
+        deduplicationMs: 600_000,
+        retry: { attempts: 2, initialDelayMs: thirtyDays, maxDelayMs: thirtyDays },
+      });
+      await vi.advanceTimersByTimeAsync(2_147_483_647);
+      expect(calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(thirtyDays - 2_147_483_647 - 1);
       expect(calls).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(1);
       await expect(pending).resolves.toMatchObject({ kind: "submitted", attempts: 2 });

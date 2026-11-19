@@ -176,6 +176,10 @@ describe("retrySubmit properties", () => {
 
         const result: { ok: SubmitOutcome<string> } | { error: unknown } = await retrySubmit(op, {
           commandId: "cmd",
+          // A fixed clock and the longest period keep the deduplication check
+          // out of this property; the unit tests cover it.
+          deduplicationMs: Number.MAX_VALUE,
+          now: () => 0,
           retry: {
             attempts: s.retryAttempts,
             initialDelayMs: s.initialDelayMs,
@@ -261,6 +265,11 @@ describe("retrySubmit properties", () => {
         } else {
           // Any other rejection is the operation's own last failure.
           if (result.error !== last) broken.push("rejected with another value");
+          // After an indeterminate failure, the loop never ends with a plain
+          // failure: that would hide that the command can have committed.
+          if (errors.some((e) => isIndeterminateSubmit(e))) {
+            broken.push("a plain failure hides an unknown outcome");
+          }
           // A failure that the loop retries ends it only when the retry
           // budget is used up, before any settle phase.
           const callerRetries =

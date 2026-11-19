@@ -213,23 +213,35 @@ try {
 
 `retrySubmit(op, options)` runs the loop that the classifiers above describe.
 It gives the same `commandId` to every attempt (pass it to `Ledger.submit`, which
-takes a command id), so the participant's command
-deduplication stops a second apply. The caller gives the command id and the
-budgets; the loop gives Canton's meaning of each answer:
+takes a command id), so the participant's command deduplication stops a second
+apply. Deduplication holds only when every attempt goes to the same participant
+with the same change id (user id, `actAs` and command id), and only inside the
+deduplication period. So pass `actAs` explicitly, and give the period as
+`deduplicationMs`: the period that the submit sets, or the participant's maximum
+deduplication duration when the submit sets none (`Ledger.submit` sets none).
+The command id must not be empty: `Ledger.submit` makes a new id for an empty
+one. The caller gives the command id and the budgets; the loop gives Canton's
+meaning of each answer:
 
 - `DUPLICATE_COMMAND` — an earlier attempt committed. The result is
   `{ kind: "alreadyApplied" }`.
 - Indeterminate (503, Canton `deadline`, `SUBMISSION_ALREADY_IN_FLIGHT`) — the
   loop changes to the settle phase: a fixed delay, with its own budget, until
-  the participant gives a definite answer. When the settle budget ends, it
-  throws `SubmitUnsettledError`. Do not submit that command again with a new
-  command id.
+  the participant gives a definite answer. Only a success or
+  `DUPLICATE_COMMAND` settles it. The loop throws `SubmitUnsettledError` (with
+  the last failure as `lastError`) when the settle budget ends, when the next
+  attempt can start after the deduplication period (counted from the attempt
+  that went indeterminate), or when a later attempt fails in any other way. Do
+  not submit that command again with a new command id.
 - Retriable (408, 429, 5xx, Canton `contention` / `transient`) — exponential
   backoff up to `retry.attempts`, then it throws the last failure.
-- No traffic (`isOutOfTraffic`) — it throws at once, also when `retryAlso`
+- No traffic (`isOutOfTraffic`) — it stops at once, also when `retryAlso`
   accepts the failure. A retry cannot succeed, and it spends more of the
   node's traffic.
-- Any other failure — it throws at once.
+- Any other failure — it stops at once.
+
+Before the settle phase, "stops" means it throws the failure itself. In the
+settle phase, it throws `SubmitUnsettledError`.
 
 ```typescript
 const outcome = await retrySubmit(
@@ -237,6 +249,8 @@ const outcome = await retrySubmit(
     getLedger().submit([exerciseCmd(cid, MyChoice, arg)], [party], commandId),
   {
     commandId: crypto.randomUUID(),
+    // The participant's maximum deduplication duration (Ledger.submit sets no period).
+    deduplicationMs: 24 * 60 * 60 * 1000,
     retry: { attempts: 3, initialDelayMs: 500, maxDelayMs: 5_000 },
     settle: { attempts: 8, delayMs: 5_000 },
     // Optional: also retry an expired token, when getLedger() gives a new one.
@@ -251,8 +265,10 @@ The operation runs again on each attempt, so it can get a new `Ledger` (and a
 new token) each time. `retryAlso` applies only before the loop settles. A throw
 from `retryAlso` or `onRetry` is logged and does not stop the loop. A budget
 that is not valid (attempts below 1 or not an integer, a negative or infinite
-delay, `maxDelayMs` below `initialDelayMs`) rejects with a `RangeError` before
-the first attempt.
+delay, `maxDelayMs` below `initialDelayMs`, a `deduplicationMs` that is not
+above 0 or not finite), or an empty command id, rejects with a `RangeError`
+before the first attempt. The default sleep waits the full delay, also a delay
+longer than one `setTimeout` allows.
 
 `message` carries a summary of the body bounded to 120 characters, so logging
 it cannot emit a whole error page. The full value stays on `body`.

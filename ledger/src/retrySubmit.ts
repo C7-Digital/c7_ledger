@@ -2,16 +2,23 @@
 //
 // The loop composes the submit classifiers (`submitClassify.ts`). It keeps one
 // `commandId` for all attempts, so the participant's command deduplication
-// stops a second apply when an earlier attempt committed. The caller gives the
-// command id and the attempt budgets. The loop gives Canton's meaning of each
-// answer:
+// stops a second apply when an earlier attempt committed. This holds only when
+// every attempt goes to the same participant with the same change id (user id,
+// `actAs` and command id), and only inside the deduplication period. So the
+// caller gives the deduplication period, and the loop does not resubmit after
+// an indeterminate failure when the period can end before the next attempt.
+// The caller gives the command id and the attempt budgets. The loop gives
+// Canton's meaning of each answer:
 //
 //   - `DUPLICATE_COMMAND` (isAlreadyApplied): an earlier attempt committed. The
 //     result is `alreadyApplied`.
 //   - an indeterminate failure (isIndeterminateSubmit: 503, Canton `deadline`,
 //     SUBMISSION_ALREADY_IN_FLIGHT): the command can still commit. The loop
 //     changes to the settle phase, which waits a fixed time between attempts
-//     until the participant gives a definite answer.
+//     until the participant gives a definite answer. In the settle phase, only
+//     a success or DUPLICATE_COMMAND settles the outcome. Every other end of
+//     the loop throws SubmitUnsettledError, because a later failure does not
+//     show whether the earlier attempt committed.
 //   - a retriable failure (isRetriableSubmit, or the caller's `retryAlso`): the
 //     loop waits with exponential backoff and tries again.
 //   - a node with no traffic credit (isOutOfTraffic): the loop throws at once,
@@ -29,7 +36,7 @@ import {
   isSubmissionInFlight,
 } from "./submitClassify";
 
-/** The longest delay that `setTimeout` accepts. */
+/** The longest delay that `setTimeout` accepts. A longer wait uses more timers. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /** The budget for retriable failures: exponential backoff. */
@@ -77,8 +84,17 @@ export interface SubmitAttempt {
 }
 
 export interface RetrySubmitOptions {
-  /** The command id for all attempts. */
+  /** The command id for all attempts. It must not be empty. */
   commandId: string;
+  /**
+   * The deduplication period of the command, in milliseconds: the period that
+   * the submit sets, or the participant's maximum deduplication duration when
+   * the submit sets none. After an indeterminate failure, the loop does not
+   * resubmit when the next attempt can start after this period, counted from
+   * the start of the attempt that went indeterminate. It throws
+   * SubmitUnsettledError instead.
+   */
+  deduplicationMs: number;
   /** The budget for retriable failures. */
   retry: RetryBudget;
   /**
@@ -97,6 +113,8 @@ export interface RetrySubmitOptions {
   onRetry?: (event: RetryEvent) => unknown;
   /** Waits `ms` milliseconds. The default uses `setTimeout`. Tests give their own. */
   sleep?: (ms: number) => Promise<void>;
+  /** The current time in milliseconds. The default is `Date.now`. Tests give their own. */
+  now?: () => number;
 }
 
 /** The result of a submit that did not fail. */
@@ -105,9 +123,12 @@ export type SubmitOutcome<T> =
   | { kind: "alreadyApplied"; attempts: number };
 
 /**
- * The settle phase used all its attempts, and the participant gave no definite
- * answer. The command can still commit. Do not submit it again with a new
- * command id: that can apply it twice.
+ * An attempt went indeterminate, and the loop ended before the participant
+ * gave a definite answer: the settle budget or the deduplication period ended,
+ * or a later attempt failed in a way that does not settle the outcome. The
+ * command can still have committed, or can still commit. Do not submit it again
+ * with a new command id: that can apply it twice. `lastError` is the failure
+ * of the last attempt.
  */
 export class SubmitUnsettledError extends Error {
   readonly commandId: string;
@@ -130,25 +151,33 @@ export class SubmitUnsettledError extends Error {
  * The operation runs again on each attempt, so it can get a new `Ledger` (with
  * a new token) each time.
  *
- * Throws the last failure when it is not retriable or when the retry budget
- * ends. Throws {@link SubmitUnsettledError} when the settle budget ends.
- * Throws a `RangeError` for a budget that is not valid.
+ * Before any attempt went indeterminate, throws the last failure when it is
+ * not retriable or when the retry budget ends. After an attempt went
+ * indeterminate, throws {@link SubmitUnsettledError} for every end other than a
+ * success or `alreadyApplied`. Throws a `RangeError` for an empty command id or
+ * a budget that is not valid, before it runs `op`.
  */
 export async function retrySubmit<T>(
   op: (attempt: SubmitAttempt) => Promise<T>,
   options: RetrySubmitOptions,
 ): Promise<SubmitOutcome<T>> {
+  const commandId = checkedCommandId(options.commandId);
   const retry = checkedRetry(options.retry);
   const settle = checkedSettle(options.settle, retry);
+  const deduplicationMs = checkedDuration("deduplicationMs", options.deduplicationMs);
   const sleep = options.sleep ?? defaultSleep;
-  const { commandId } = options;
+  const now = options.now ?? Date.now;
 
   let attempt = 0;
   let phaseAttempt = 0;
   let phase: RetryPhase = "retry";
+  // The start of the attempt that went indeterminate first. The command can
+  // have committed from this time, so the deduplication period counts from it.
+  let settleFrom = 0;
   while (true) {
     attempt += 1;
     phaseAttempt += 1;
+    const startedAt = now();
     let error: unknown;
     try {
       const value = await op({ commandId, attempt });
@@ -159,28 +188,32 @@ export async function retrySubmit<T>(
     if (isAlreadyApplied(error)) {
       return { kind: "alreadyApplied", attempts: attempt };
     }
-    if (isOutOfTraffic(error)) throw error;
     const indeterminate = isIndeterminateSubmit(error);
     const retriable =
-      indeterminate ||
-      isRetriableSubmit(error) ||
-      (phase === "retry" && callerRetries(options.retryAlso, error));
-    if (!retriable) throw error;
+      !isOutOfTraffic(error) &&
+      (indeterminate ||
+        isRetriableSubmit(error) ||
+        (phase === "retry" && callerRetries(options.retryAlso, error)));
     // The first indeterminate failure starts the settle phase with its own
     // budget, so the retries before it do not make the settle window shorter.
     if (phase === "retry" && indeterminate) {
       phase = "settle";
       phaseAttempt = 1;
+      settleFrom = startedAt;
     }
+    // In the settle phase, an end of the loop does not settle the outcome.
+    const fail = (): unknown =>
+      phase === "settle" ? new SubmitUnsettledError(commandId, attempt, error) : error;
+    if (!retriable) throw fail();
     const attempts = phase === "settle" ? settle.attempts : retry.attempts;
-    if (phaseAttempt >= attempts) {
-      if (phase === "settle") throw new SubmitUnsettledError(commandId, attempt, error);
-      throw error;
-    }
+    if (phaseAttempt >= attempts) throw fail();
     const delayMs =
       phase === "settle"
         ? settle.delayMs
         : backoffDelay(retry, phaseAttempt);
+    if (phase === "settle" && now() + delayMs - settleFrom >= deduplicationMs) {
+      throw fail();
+    }
     await notify(options.onRetry, {
       attempt,
       phase,
@@ -219,12 +252,36 @@ async function notify(
 }
 
 function backoffDelay(retry: RetryBudget, phaseAttempt: number): number {
+  // 0 * Infinity is NaN, so a zero delay stays zero before the power.
+  if (retry.initialDelayMs === 0) return 0;
   // 2 ** 1024 is Infinity, and Math.min then gives maxDelayMs.
   return Math.min(retry.initialDelayMs * 2 ** (phaseAttempt - 1), retry.maxDelayMs);
 }
 
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.min(ms, MAX_TIMER_DELAY_MS)));
+/** Waits the full `ms`, in steps that `setTimeout` accepts. */
+async function defaultSleep(ms: number): Promise<void> {
+  let remaining = ms;
+  do {
+    const step = Math.min(remaining, MAX_TIMER_DELAY_MS);
+    await new Promise<void>((resolve) => setTimeout(resolve, step));
+    remaining -= step;
+  } while (remaining > 0);
+}
+
+function checkedCommandId(commandId: string): string {
+  if (typeof commandId !== "string" || commandId.trim() === "") {
+    // Ledger.submit makes a new command id for an empty one, so each attempt
+    // would be a new command, and deduplication could not stop a second apply.
+    throw new RangeError("commandId must not be empty");
+  }
+  return commandId;
+}
+
+function checkedDuration(name: string, ms: number): number {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    throw new RangeError(`${name} must be a finite number above 0, not ${ms}`);
+  }
+  return ms;
 }
 
 function checkedAttempts(name: string, attempts: number): number {

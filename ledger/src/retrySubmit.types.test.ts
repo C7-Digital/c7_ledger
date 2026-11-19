@@ -18,24 +18,26 @@ describe("RetrySubmitOptions", () => {
     const hooks = () => {
       const lines: string[] = [];
       const options: RetrySubmitOptions[] = [
-        { commandId: "c", retry },
-        { commandId: "c", retry, settle: { attempts: 8, delayMs: 5_000 } },
-        { commandId: "c", retry, onRetry: () => {} },
-        { commandId: "c", retry, onRetry: async () => {} },
+        { commandId: "c", deduplicationMs: 600_000, retry },
+        { commandId: "c", deduplicationMs: 600_000, retry, settle: { attempts: 8, delayMs: 5_000 } },
+        { commandId: "c", deduplicationMs: 600_000, retry, onRetry: () => {} },
+        { commandId: "c", deduplicationMs: 600_000, retry, onRetry: async () => {} },
         // Array.push returns a number.
-        { commandId: "c", retry, onRetry: (e: RetryEvent) => lines.push(e.phase) },
-        { commandId: "c", retry, retryAlso: () => false },
-        { commandId: "c", retry, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
+        { commandId: "c", deduplicationMs: 600_000, retry, onRetry: (e: RetryEvent) => lines.push(e.phase) },
+        { commandId: "c", deduplicationMs: 600_000, retry, retryAlso: () => false },
+        { commandId: "c", deduplicationMs: 600_000, retry, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
       ];
       // @ts-expect-error commandId is required
-      const noCommandId: RetrySubmitOptions = { retry };
+      const noCommandId: RetrySubmitOptions = { deduplicationMs: 600_000, retry };
+      // @ts-expect-error deduplicationMs is required
+      const noDeduplication: RetrySubmitOptions = { commandId: "c", retry };
       // @ts-expect-error retry is required
-      const noRetry: RetrySubmitOptions = { commandId: "c" };
+      const noRetry: RetrySubmitOptions = { commandId: "c", deduplicationMs: 600_000 };
       // @ts-expect-error retryAlso returns a boolean
-      const asyncPredicate: RetrySubmitOptions = { commandId: "c", retry, retryAlso: async () => true };
+      const asyncPredicate: RetrySubmitOptions = { commandId: "c", deduplicationMs: 600_000, retry, retryAlso: async () => true };
       // @ts-expect-error the settle budget has a fixed delay, not a backoff
-      const settleBackoff: RetrySubmitOptions = { commandId: "c", retry, settle: retry };
-      return [options, noCommandId, noRetry, asyncPredicate, settleBackoff];
+      const settleBackoff: RetrySubmitOptions = { commandId: "c", deduplicationMs: 600_000, retry, settle: retry };
+      return [options, noCommandId, noDeduplication, noRetry, asyncPredicate, settleBackoff];
     };
     expect(typeof hooks).toBe("function");
   });
@@ -45,7 +47,7 @@ describe("retrySubmit", () => {
   it("returns the operation's value only in the submitted case", () => {
     const use = async () => {
       const op = async ({ commandId, attempt }: SubmitAttempt) => `${commandId}-${attempt}`;
-      const outcome: SubmitOutcome<string> = await retrySubmit(op, { commandId: "c", retry });
+      const outcome: SubmitOutcome<string> = await retrySubmit(op, { commandId: "c", deduplicationMs: 600_000, retry });
       if (outcome.kind === "submitted") {
         const value: string = outcome.value;
         return value;
@@ -59,7 +61,7 @@ describe("retrySubmit", () => {
   it("needs an operation that returns a promise", () => {
     const use = () => {
       // @ts-expect-error the operation must be async
-      void retrySubmit(() => "value", { commandId: "c", retry });
+      void retrySubmit(() => "value", { commandId: "c", deduplicationMs: 600_000, retry });
     };
     expect(typeof use).toBe("function");
   });
