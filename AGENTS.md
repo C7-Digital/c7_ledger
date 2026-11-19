@@ -57,11 +57,12 @@ Always run `pnpm build && pnpm typecheck && pnpm lint && pnpm test` at repo root
 
 ## Error handling boundary
 
-Generic JSON Ledger API result classification belongs **here**, not in consumer apps. Read Canton's *structured* answer — never regex the rendered message. Three layers:
+Generic JSON Ledger API result classification belongs **here**, not in consumer apps. Read Canton's *structured* answer — never regex the rendered message. Four layers:
 
 - **Canton payload vocabulary** — `cantonErrorOf`, `categoryOf`, `isRetryable`, `resourcesOf` (`ledger/src/cantonError.ts`). Keyed off the `errorCategory` integer.
 - **Transport status** — `httpStatusOf(unknown)` (`ledger/src/error.ts`): the HTTP status carried by a `LedgerApiError`-shaped value, read **structurally** (numeric `status` + string `statusText`), not via `instanceof` — so it survives duplicated package copies. A 503 is the only submit signal Canton's payload cannot carry alone.
-- **Submit classifiers** — `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject` (`ledger/src/submitClassify.ts`). Free functions over `unknown` that compose the two layers above, so a consumer imports one call (no `instanceof`, no hand-rolled combination). `isAlreadyArchived` matches on `code` (the "already gone" set has no clean category); the retriable/indeterminate checks use `httpStatusOf` + `errorCategory`; `isConfirmedPermanentReject` requires a Canton payload and excludes already-archived.
+- **Submit classifiers** — `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject`, `isOutOfTraffic` (`ledger/src/submitClassify.ts`). Free functions over `unknown` that compose the two layers above, so a consumer imports one call (no `instanceof`, no hand-rolled combination). `isAlreadyArchived` matches on `code` (the "already gone" set has no clean category); the retriable/indeterminate checks use `httpStatusOf` + `errorCategory`; `isConfirmedPermanentReject` requires a Canton payload and excludes already-archived. `isOutOfTraffic` is the one check that reads rendered text: the participant wraps a sequencer refusal for lack of traffic as `SEQUENCER_REQUEST_FAILED` (category `contention`) and gives the inner code only in `context.sendError`. The retriable, indeterminate and permanent checks all apply it first.
+- **Submit retry loop** — `retrySubmit` (`ledger/src/retrySubmit.ts`). Composes the submit classifiers into one loop: the same `commandId` on every attempt, `alreadyApplied` on `DUPLICATE_COMMAND`, a settle phase after an indeterminate failure (which ends only in success, `alreadyApplied` or `SubmitUnsettledError`, and never resubmits past the caller's deduplication period), backoff for a retriable one, and an immediate stop for a lack of traffic or any other failure. It has no default budget, makes no command id and rejects an empty one: the caller gives the command id, the budgets and the deduplication period.
 
 A consumer imports these and keeps only its own domain **policy**: retry budgets, stable command ids, ACS liveness checks, and *what to do* with the answer (stop as success, wait, back off). The lib states the fact; the app applies the judgement. Do not add a second error taxonomy — or any message-regex classifier — in a consumer.
 
@@ -94,7 +95,7 @@ A consumer imports these and keeps only its own domain **policy**: retry budgets
 
 - Commit secrets, JWTs, or participant URLs into tests/docs.
 - Re-derive Canton `errorCategory` from `code` string allow-lists when the payload already carries the integer.
-- Add app-specific retry budgets or domain command-id schemes to this repo — those stay in consumers.
+- Add app-specific retry budgets or domain command-id schemes to this repo — those stay in consumers. `retrySubmit` takes both from its caller.
 
 ## Agent skills
 

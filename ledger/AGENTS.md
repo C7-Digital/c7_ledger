@@ -11,7 +11,8 @@ src/
   websocket.ts       # ACS / updates / completions streams
   error.ts           # LedgerApiError, readErrorBody, tagged LedgerErrorBody
   cantonError.ts     # Canton payload vocabulary (categoryOf, isRetryable, …)
-  submitClassify.ts  # Structured submit classifiers (isRetriableSubmit, isIndeterminateSubmit, isAlreadyApplied, isAlreadyArchived, isConfirmedPermanentReject)
+  submitClassify.ts  # Structured submit classifiers (isRetriableSubmit, isIndeterminateSubmit, isAlreadyApplied, isAlreadyArchived, isConfirmedPermanentReject, isOutOfTraffic)
+  retrySubmit.ts     # Submit retry loop over the classifiers (same commandId, settle phase, SubmitUnsettledError)
   types.ts           # JsCantonError, wire types, isCantonError guard
   generated/         # OpenAPI + AsyncAPI codegen (gitignored — produced by build)
   api-surface.test.ts  # Public export contract — update when adding exports
@@ -39,7 +40,8 @@ Details: [BUILD.md](BUILD.md), [README.md](README.md#versioning).
 |--------|----------------|
 | `error.ts` | HTTP non-OK → `LedgerApiError` with tagged body; `httpStatusOf(unknown)` reads the status structurally (survives duplicated package copies) |
 | `cantonError.ts` | Interpret structured Canton rejections (`errorCategory`, retryable, resources) |
-| `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject` — compose transport + Canton, structured (no message regex) |
+| `submitClassify.ts` | Submit-outcome classifiers over `unknown`: `isRetriableSubmit`, `isIndeterminateSubmit`, `isAlreadyApplied`, `isAlreadyArchived`, `isConfirmedPermanentReject`, `isOutOfTraffic` — compose transport + Canton, structured (no message regex; `isOutOfTraffic` alone reads `context.sendError`, the only place Canton gives the inner sequencer code) |
+| `retrySubmit.ts` | `retrySubmit`: the submit retry loop over those classifiers. The caller gives the command id, the budgets and the deduplication period |
 
 `ScanApiError` in `@c7-digital/scan` mirrors `LedgerApiError` field shapes for shared `catch` blocks.
 
@@ -52,6 +54,7 @@ pnpm test -- error                           # transport retry signals
 pnpm test -- api-surface                     # export contract
 pnpm test -- clientCredentials               # issuer conformance table
 pnpm test -- property                        # fast-check invariants
+pnpm test -- retrySubmit                     # submit retry loop
 pnpm typecheck                               # from the repo root; vitest does not typecheck
 ```
 
