@@ -53,6 +53,7 @@ import {
   ExerciseCommand,
   Event,
   GetPreferredPackagesRequest,
+  PackageReference,
   GetPreferredPackagesResponse,
   Interface,
   LedgerOffset,
@@ -75,6 +76,11 @@ import { matchesPartiallyQualified } from "./util";
 import { activeContractsRequest, interfaceFilter, templateFilter } from "./requests";
 import { ValidationMode } from "./validation";
 import * as translate from "./translate";
+import {
+  isNoPreferredPackage,
+  preferredReferenceOf,
+  type PreferredPackage,
+} from "./preferredPackage";
 import {
   createLedgerString,
   createPartyIdString,
@@ -2068,6 +2074,30 @@ export class Ledger {
     request: GetPreferredPackagesRequest,
   ): Promise<GetPreferredPackagesResponse> {
     return this.client.getPreferredPackages(request);
+  }
+
+  /**
+   * The preferred package of one package name: the highest version that every
+   * participant hosting `parties` has vetted. When the parties cannot use a
+   * package of that name, the answer is `{ kind: "none" }`, not an error.
+   *
+   * @throws {LedgerApiError} on another non-OK HTTP response from the ledger
+   * @throws {Error} when the answer has no reference for `packageName`
+   */
+  async getPreferredPackage(
+    packageName: string,
+    parties: readonly Party[],
+  ): Promise<PreferredPackage> {
+    let packageReferences: PackageReference[];
+    try {
+      ({ packageReferences } = await this.client.getPreferredPackages({
+        packageVettingRequirements: [{ parties: [...parties], packageName }],
+      }));
+    } catch (error) {
+      if (isNoPreferredPackage(error)) return { kind: "none" };
+      throw error;
+    }
+    return { kind: "vetted", reference: preferredReferenceOf(packageReferences, packageName) };
   }
 
   private initClient(): WebSocketClient {
