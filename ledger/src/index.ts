@@ -39,6 +39,11 @@ export {
   cantonErrorOf,
 } from "./cantonError";
 export {
+  type PreferredPackage,
+  isNoPreferredPackage,
+  preferredReferenceOf,
+} from "./preferredPackage";
+export {
   isAlreadyApplied,
   isAlreadyArchived,
   isRetriableSubmit,

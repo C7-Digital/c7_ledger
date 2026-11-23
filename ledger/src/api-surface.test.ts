@@ -57,6 +57,9 @@ describe("Public API surface", () => {
     "isRetryable",
     "resourcesOf",
     "cantonErrorOf",
+    // The preferred package of one package name: "none" is a case, not an error.
+    "isNoPreferredPackage",
+    "preferredReferenceOf",
     // Submit-outcome classification (structured; transport + Canton payload).
     "httpStatusOf",
     "isAlreadyApplied",
