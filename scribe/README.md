@@ -251,7 +251,7 @@ The `versionedRegistry` function is structurally compatible with `VersionedRegis
 2. **Discover** -- scan input directory, classify packages as main/vendor/stdlib
 3. **Analyze** -- extract `packageId`, modules, templates, and interfaces from each package's `.d.ts` files
 4. **Generate** -- produce `index.js` (imports, exports, registry), `index.d.ts`, `version.js`, `version.d.ts`
-5. **Bundle** -- Vite/Rollup build: CJS->ESM, import fixups, `registerTemplate` stripping, self-reference resolution
+5. **Bundle** -- Vite build (Rollup on Vite 5-7, Rolldown on Vite 8): CJS->ESM, import fixups, `registerTemplate` stripping, self-reference resolution
 
 ### Architecture
 
@@ -334,5 +334,5 @@ Both must match the `@daml/types` dev dependency of the other packages (currentl
 
 - Node.js >= 18.0.0
 - pnpm >= 8.0.0
-- Vite 5.x or 6.x (optional, for bundling and the companion plugin)
+- Vite 5.x, 6.x, 7.x or 8.x (optional, for bundling and the companion plugin)
 - `dpm` or `daml` CLI (optional, for e2e tests only)

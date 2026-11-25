@@ -17,37 +17,20 @@ export async function bundle(
   outputDir: string
 ): Promise<void> {
   // Dynamic import so vite is only required when bundling
-  const { build } = await import("vite");
-  const { nodeResolve } = await import("@rollup/plugin-node-resolve");
-  const commonjsMod = await import("@rollup/plugin-commonjs");
-  const commonjs = (commonjsMod as any).default ?? commonjsMod;
+  const vite = await import("vite");
+  // Vite 8 (and rolldown-vite) builds with Rolldown, which resolves modules
+  // and converts CJS to ESM itself. The Rollup plugins do not finish under
+  // Rolldown. A Rolldown Vite exports `rolldownVersion`.
+  const rolldown = "rolldownVersion" in vite;
 
   await mkdir(outputDir, { recursive: true });
 
-  await build({
+  await vite.build({
     configFile: false,
     logLevel: "warn",
     plugins: [
       resolveSelfReferences(srcDir),
-      nodeResolve({
-        browser: true,
-        preferBuiltins: true,
-        mainFields: ["module", "main"],
-        extensions: [".js", ".json"],
-      }),
-      commonjs({
-        include: ["**/*.js"],
-        extensions: [".js", ".cjs"],
-        requireReturnsDefault: "namespace",
-        transformMixedEsModules: true,
-        exclude: [
-          "@mojotech/json-type-validation",
-          "@daml/types",
-          "@daml/ledger",
-        ],
-        ignoreDynamicRequires: false,
-        ignoreGlobal: false,
-      }),
+      ...(rolldown ? [] : await rollupCjsPlugins()),
     ],
     build: {
       sourcemap: false,
@@ -60,21 +43,22 @@ export async function bundle(
         fileName: "codegen",
       },
       rollupOptions: {
-        external: [
-          "@mojotech/json-type-validation",
-          "@daml/types",
-          "@daml/ledger",
-        ],
+        // Under Rolldown the external-imports plugin owns these packages.
+        external: rolldown ? [] : [...EXTERNALS],
         output: {
           format: "es",
           exports: "named",
           preserveModules: false,
-          inlineDynamicImports: true,
+          // One output file. Rolldown (Vite 8) names the option `codeSplitting`.
+          ...(rolldown ? { codeSplitting: false } : { inlineDynamicImports: true }),
           manualChunks: undefined,
           dir: outputDir,
           entryFileNames: "codegen.js",
         },
-        plugins: [fixImports()],
+        plugins: [
+          ...(rolldown ? [rolldownExternalImports(vite)] : []),
+          fixImports(),
+        ],
       },
     },
   });
@@ -93,6 +77,50 @@ export async function bundle(
     resolve(outputDir, "version.js"),
     "export { PACKAGE_VERSION } from './codegen.js';\n"
   );
+}
+
+/** The packages that the bundle imports and does not contain. */
+const EXTERNALS = [
+  "@mojotech/json-type-validation",
+  "@daml/types",
+  "@daml/ledger",
+] as const;
+
+/**
+ * Rolldown keeps a `require()` of an external package as a call that throws
+ * in an ES module. This plugin makes each one an `import`.
+ */
+function rolldownExternalImports(vite: typeof import("vite")) {
+  if (typeof vite.esmExternalRequirePlugin !== "function") {
+    throw new Error(
+      `scribe: this Rolldown Vite (${vite.version}) has no esmExternalRequirePlugin; use Vite 8 or later`
+    );
+  }
+  return vite.esmExternalRequirePlugin({ external: [...EXTERNALS] });
+}
+
+/** Module resolution and the CJS -> ESM conversion for Vite 5 to 7 (Rollup). */
+async function rollupCjsPlugins() {
+  const { nodeResolve } = await import("@rollup/plugin-node-resolve");
+  const commonjsMod = await import("@rollup/plugin-commonjs");
+  const commonjs = (commonjsMod as any).default ?? commonjsMod;
+  return [
+    nodeResolve({
+      browser: true,
+      preferBuiltins: true,
+      mainFields: ["module", "main"],
+      extensions: [".js", ".json"],
+    }),
+    commonjs({
+      include: ["**/*.js"],
+      extensions: [".js", ".cjs"],
+      requireReturnsDefault: "namespace",
+      transformMixedEsModules: true,
+      exclude: [...EXTERNALS],
+      ignoreDynamicRequires: false,
+      ignoreGlobal: false,
+    }),
+  ];
 }
 
 /**
@@ -118,15 +146,14 @@ function resolveSelfReferences(srcDir: string) {
         if (existsSync(withLib)) return withLib;
       }
 
-      // Strategy 2: Strip package prefix and try to resolve against srcDir.
-      // Scoped: @scope/name/subpath -> skip first two segments
-      // Unscoped: name/subpath -> skip first segment
-      // Note: @rollup/plugin-commonjs may strip the '@' from scoped names
-      // (e.g. @my-org/codegen/foo -> my-org/codegen/foo),
-      // so we progressively try stripping more segments until a match is found.
+      // Strategy 2: Strip the package prefix and try to resolve against srcDir.
+      // The prefix is one or more leading segments: `@scope/name/subpath`,
+      // `name/subpath`, or the default codegen-js name `@daml.js/<package>`.
+      // @rollup/plugin-commonjs may strip the '@' from scoped names
+      // (e.g. @my-org/codegen/foo -> my-org/codegen/foo), so we strip one
+      // more segment at a time until a match is found.
       const parts = source.split("/");
-      const startIdx = source.startsWith("@") ? 2 : 1;
-      for (let i = startIdx; i < parts.length; i++) {
+      for (let i = 1; i < parts.length; i++) {
         const subpath = parts.slice(i).join("/");
         const resolvedDir = resolve(srcDir, subpath);
         if (existsSync(resolvedDir)) {
