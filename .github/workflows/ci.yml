@@ -91,3 +91,32 @@ jobs:
 
       - name: Scribe E2E Tests
         run: pnpm --filter @c7-digital/scribe test:e2e
+
+  # @c7-digital/react builds and tests with React 19, and its peer range also
+  # accepts React 18. This job runs its tests and typecheck with React 18.
+  react-18-compat:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @c7-digital/ledger --filter @c7-digital/react build
+
+      - name: Use React 18
+        run: pnpm --filter @c7-digital/react add -D react@^18.3.1 react-dom@^18.3.1 @types/react@^18.3.12 @types/react-dom@^18.3.1 --ignore-scripts
+
+      - name: Typecheck with React 18 types
+        run: pnpm --filter @c7-digital/react exec tsgo --noEmit -p tsconfig.json
+
+      - name: Tests with React 18
+        run: pnpm --filter @c7-digital/react test
