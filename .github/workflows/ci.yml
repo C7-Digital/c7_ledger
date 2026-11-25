@@ -49,3 +49,45 @@ jobs:
 
       - name: Scribe E2E Tests
         run: pnpm --filter @c7-digital/scribe test:e2e
+
+  # Scribe builds against Vite 8 types and supports Vite 5 to 8 at run time.
+  # Vite 5 to 7 bundle with Rollup and its plugins; Vite 8 bundles with
+  # Rolldown. This job runs the scribe tests with each older Vite.
+  scribe-vite-compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vite: ["5", "6", "7"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dpm (Daml Package Manager)
+        run: |
+          curl -sSL https://get.digitalasset.com/install/install.sh | sh
+          echo "$HOME/.dpm/bin" >> $GITHUB_PATH
+
+      - name: Install Daml SDK via dpm
+        run: $HOME/.dpm/bin/dpm install 3.5.2
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Use Vite ${{ matrix.vite }}
+        run: pnpm --filter @c7-digital/scribe add -D "vite@^${{ matrix.vite }}" --ignore-scripts
+
+      - name: Scribe tests
+        run: pnpm --filter @c7-digital/scribe test
+
+      - name: Scribe E2E Tests
+        run: pnpm --filter @c7-digital/scribe test:e2e

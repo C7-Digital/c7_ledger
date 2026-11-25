@@ -11,6 +11,7 @@ import {
   readdir,
 } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { loadConfig } from "../src/config.js";
 import { discoverPackages } from "../src/discover.js";
@@ -166,6 +167,20 @@ describe.skipIf(!DAML_CLI)(
         ].join("\n")
       );
 
+      // The bundle entry imports the bundled output, as an app does at run
+      // time. The type check above reads the staged types in `.scribe/`.
+      await writeFile(
+        join(consumerDir, "bundle-entry.ts"),
+        [
+          'import { TestModel, versionedRegistry, PACKAGE_VERSION } from "../dist/index.js";',
+          "",
+          "export const templateId: string = TestModel.Asset.templateId;",
+          "export const lookup = versionedRegistry(templateId);",
+          "export const version: string = PACKAGE_VERSION;",
+          "",
+        ].join("\n")
+      );
+
       await writeFile(
         join(consumerDir, "tsconfig.json"),
         JSON.stringify(
@@ -224,6 +239,23 @@ describe.skipIf(!DAML_CLI)(
       expect(content).toContain("PACKAGE_VERSION");
     });
 
+    it("scribe output loads as an ES module and decodes a template", async () => {
+      const output = await import(
+        pathToFileURL(join(outputDir, "index.js")).href
+      );
+      const asset = output.TestModel.Asset;
+      expect(asset.templateId).toMatch(/TestModel:Asset$/);
+      // A decoder runs the bundled @daml/types and json-type-validation code.
+      const decoded = asset.decoder.run({
+        owner: "alice::1220",
+        description: "a painting",
+        value: "7",
+      });
+      expect(decoded.ok).toBe(true);
+      expect(asset.decoder.run({ owner: "alice::1220" }).ok).toBe(false);
+      expect(typeof output.versionedRegistry).toBe("function");
+    });
+
     it("scribe output exports TestModel module", async () => {
       const content = await readFile(join(outputDir, "codegen.js"), "utf-8");
       expect(content).toContain("TestModel");
@@ -255,7 +287,7 @@ describe.skipIf(!DAML_CLI)(
         plugins: [damlCodegenPlugin({ nodeModulesPath: tmpDir })],
         build: {
           lib: {
-            entry: join(consumerDir, "consumer.ts"),
+            entry: join(consumerDir, "bundle-entry.ts"),
             formats: ["es"],
             fileName: "consumer",
           },

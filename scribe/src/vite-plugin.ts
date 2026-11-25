@@ -18,7 +18,18 @@ export function damlCodegenPlugin(options: DamlCodegenPluginOptions = {}) {
   return {
     name: "@c7-digital/scribe:daml-plugin",
 
-    config() {
+    async config(this: { meta?: { viteVersion?: string } } | void) {
+      // A Rolldown Vite (Vite 8, rolldown-vite) pre-bundles with Rolldown and
+      // takes `rolldownOptions`; Vite 5 to 7 pre-bundle with esbuild and take
+      // `esbuildOptions`. Vite 7 and later describe the running Vite in
+      // `this.meta`; for Vite 5 and 6 the imported Vite tells.
+      const meta = this ? this.meta : undefined;
+      const rolldown =
+        meta && meta.viteVersion
+          ? "rolldownVersion" in meta
+          : "rolldownVersion" in (await import("vite"));
+      const mainFields = ["module", "main"];
+      const extensions = [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"];
       return {
         resolve: {
           alias: {
@@ -39,10 +50,14 @@ export function damlCodegenPlugin(options: DamlCodegenPluginOptions = {}) {
             "jose",
             "isomorphic-ws",
           ],
-          esbuildOptions: {
-            mainFields: ["module", "main"],
-            resolveExtensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"],
-          },
+          ...(rolldown
+            ? { rolldownOptions: { resolve: { mainFields, extensions } } }
+            : {
+                esbuildOptions: {
+                  mainFields,
+                  resolveExtensions: extensions,
+                },
+              }),
         },
       };
     },
